@@ -256,18 +256,28 @@ async function resolveBundleContext(rawBundleContext = {}, submittedItems = []) 
             throw new Error('组合中的规格不存在或已下架');
         }
 
-        const expectedQuantity = Math.max(1, Math.floor(toNumber(matchingOption.option.default_qty, 1)));
-        const submittedQuantity = Math.max(1, Math.floor(toNumber(selection.quantity || selection.qty, expectedQuantity)));
-        if (submittedQuantity !== expectedQuantity) {
-            throw new Error('组合商品数量与模板配置不一致，请重新选择');
+        const repeatable = isEnabled(matchingOption.option.repeatable ?? matchingOption.option.allow_repeat, false);
+        const maxQtyPerOrder = repeatable
+            ? Math.max(1, Math.floor(toNumber(matchingOption.option.max_qty_per_order ?? matchingOption.option.max_qty, 1)))
+            : 1;
+        const defaultQuantity = Math.min(
+            maxQtyPerOrder,
+            Math.max(1, Math.floor(toNumber(matchingOption.option.default_qty, 1)))
+        );
+        const submittedQuantity = Math.max(1, Math.floor(toNumber(selection.quantity || selection.qty, defaultQuantity)));
+        if (submittedQuantity > maxQtyPerOrder) {
+            throw new Error('组合商品数量超过可选上限，请重新选择');
+        }
+        if (!repeatable && submittedQuantity !== 1) {
+            throw new Error('该组合商品每单只能选择 1 件');
         }
 
-        const selectionKey = `${groupKey}:${lookupId(product)}:${lookupId(matchingOption.resolvedSku)}`;
+        const selectionKey = `${groupKey}:${pickString(matchingOption.option.option_key)}:${lookupId(product)}:${lookupId(matchingOption.resolvedSku)}`;
         if (selectionKeys.has(selectionKey)) {
             throw new Error('组合中存在重复商品选择');
         }
         selectionKeys.add(selectionKey);
-        groupSelectionCount.set(groupKey, (groupSelectionCount.get(groupKey) || 0) + 1);
+        groupSelectionCount.set(groupKey, (groupSelectionCount.get(groupKey) || 0) + submittedQuantity);
 
         const directCommissionMap = normalizeFixedCommissionMap(matchingOption.option.direct_commission_fixed_by_role);
         const indirectCommissionMap = normalizeFixedCommissionMap(matchingOption.option.indirect_commission_fixed_by_role);
@@ -288,7 +298,7 @@ async function resolveBundleContext(rawBundleContext = {}, submittedItems = []) 
             group_title: pickString(group.group_title || group.title || groupKey),
             product,
             sku: matchingOption.resolvedSku,
-            quantity: expectedQuantity,
+            quantity: submittedQuantity,
             product_price: resolveSkuPrice(matchingOption.resolvedSku, resolveProductPrice(product)),
             product_image: resolveProductImage(product, matchingOption.resolvedSku),
             product_name: pickString(product.name || product.title || ''),

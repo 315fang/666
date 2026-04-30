@@ -1,8 +1,7 @@
 /* ══ 整体背景 ══ */
 .container {
   min-height: 100vh;
-  background: linear-gradient(180deg, #E8E0F0 0%, #F0EBF8 20%, #F7F5FF 44%, #FFFFFF 100%);
-  /* 自定义 TabBar 固定底部，须预留高度（约图标+文案+内边距），否则最后一屏被挡住 */
+  background: #f8f7f4;
   padding-bottom: calc(120rpx + env(safe-area-inset-bottom));
 }
 
@@ -16,10 +15,7 @@
 .hero-bg {
   position: absolute;
   left: 0; right: 0; top: 0; bottom: 0;
-  background:
-    linear-gradient(118deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0) 34%),
-    linear-gradient(135deg, #667eea 0%, #764ba2 50%, #a78bfa 100%);
-  background-size: 200% 200%;
+  background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
 }
 
 .hero-inner {
@@ -237,18 +233,18 @@
 }
 
 .hero-member-pill-consume {
-  background: linear-gradient(135deg, rgba(198, 161, 110, 0.30) 0%, rgba(198, 161, 110, 0.14) 100%);
-  border: 1rpx solid rgba(198, 161, 110, 0.42);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.3) 0%, rgba(37, 99, 235, 0.15) 100%);
+  border: 1rpx solid rgba(37, 99, 235, 0.4);
 }
 
 .hero-member-pill-agent {
-  background: linear-gradient(135deg, rgba(111, 159, 196, 0.30) 0%, rgba(36, 95, 147, 0.18) 100%);
-  border: 1rpx solid rgba(111, 159, 196, 0.42);
+  background: linear-gradient(135deg, rgba(30, 58, 95, 0.3) 0%, rgba(30, 58, 95, 0.18) 100%);
+  border: 1rpx solid rgba(30, 58, 95, 0.4);
 }
 
 .hero-member-pill-store {
-  background: linear-gradient(135deg, rgba(45, 212, 191, 0.32) 0%, rgba(15, 118, 110, 0.22) 100%);
-  border: 1rpx solid rgba(45, 212, 191, 0.45);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.3) 0%, rgba(16, 185, 129, 0.18) 100%);
+  border: 1rpx solid rgba(16, 185, 129, 0.4);
 }
 
 .member-pill-icon {
@@ -390,9 +386,7 @@
 
 /* 核心资产卡 VIP Card */
 .vip-card {
-  background:
-    linear-gradient(135deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0) 32%),
-    linear-gradient(135deg, #667eea 0%, #764ba2 50%, #a78bfa 100%);
+  background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 100%);
 }
 
 .vip-card-header {
@@ -448,7 +442,7 @@
 
 .growth-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #DBC08A 0%, #C6A16E 52%, #9A7348 100%);
+  background: linear-gradient(90deg, #60a5fa 0%, #3b82f6 50%, #2563eb 100%);
   border-radius: 4rpx;
   transition: width 0.3s ease;
 }
@@ -467,13 +461,13 @@
 .vip-card-promo {
   display: flex;
   align-items: center;
-  background: rgba(247, 251, 255, 0.92);
+  background: rgba(255, 255, 255, 0.15);
   border-radius: 12rpx 0 0 12rpx;
   padding: 12rpx 16rpx;
   gap: 16rpx;
-  border-left: 1rpx solid rgba(198, 161, 110, 0.20);
-  border-top: 1rpx solid rgba(198, 161, 110, 0.12);
-  border-bottom: 1rpx solid rgba(198, 161, 110, 0.12);
+  border-left: 1rpx solid rgba(255, 255, 255, 0.15);
+  border-top: 1rpx solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.1);
 }
 
 .promo-block {
@@ -483,33 +477,33 @@
 
 .promo-title {
   font-size: 24rpx;
-  color: #3D6BB3;
+  color: #fff;
   font-weight: 600;
 }
 
 .promo-subtitle {
   font-size: 20rpx;
-  color: #6B7F91;
+  color: rgba(255,255,255,0.7);
   margin-top: 4rpx;
 }
 
 .promo-highlight {
-  color: #9A7348;
+  color: #93c5fd;
 }
 
 .promo-arrow {
-  color: #C0C0C0;
+  color: rgba(255,255,255,0.5);
   font-size: 20rpx;
 }
 
 .promo-divider {
   width: 1rpx;
   height: 40rpx;
-  background: #D2E0EA;
+  background: rgba(255,255,255,0.2);
 }
 
 .promo-btn-red {
-  background: #3D6BB3;
+  background: #2563eb;
   color: #fff;
   padding: 8rpx 12rpx;
   border-radius: 8rpx;
@@ -646,14 +640,12 @@
 
 /* ══ 通用 section-card ══ */
 .section-card {
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(16px) saturate(160%);
-  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  background: #fff;
   border-radius: 24rpx;
   margin: 0 24rpx 16rpx;
   overflow: hidden;
-  box-shadow: 0 8rpx 32rpx rgba(102, 126, 234, 0.08);
-  border: 1rpx solid rgba(255, 255, 255, 0.5);
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  border: 1rpx solid rgba(0, 0, 0, 0.04);
 }
 
 .section-card--orders {
@@ -757,12 +749,12 @@
   line-height: 58rpx;
   padding: 0 22rpx;
   border-radius: 999rpx;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: #2563eb;
   color: #FFFFFF;
   font-size: 24rpx;
   font-weight: 700;
   text-align: center;
-  box-shadow: 0 10rpx 22rpx rgba(102, 126, 234, 0.25);
+  box-shadow: 0 4rpx 12rpx rgba(37, 99, 235, 0.2);
 }
 
 .account-cart-body {
@@ -837,7 +829,7 @@
 .account-cart-price {
   flex-shrink: 0;
   font-size: 27rpx;
-  color: #9A7348;
+  color: #dc2626;
   font-weight: 800;
 }
 
@@ -1098,7 +1090,7 @@
   width: 72rpx;
   height: 72rpx;
   border-radius: 50%;
-  background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.06) 100%);
+  background: #f0f4f8;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1129,7 +1121,7 @@
 
 /* 小蓝点+数字（新鲜标记，点击即消） */
 .order-tab-dot {
-  background: #667eea;
+  background: #2563eb;
 }
 
 .order-tab-alert-dot {
@@ -1137,9 +1129,9 @@
   min-width: 18rpx;
   height: 18rpx;
   padding: 0;
-  background: #667eea;
+  background: #2563eb;
   border: 4rpx solid #fff;
-  box-shadow: 0 6rpx 14rpx rgba(102, 126, 234, 0.24);
+  box-shadow: 0 2rpx 6rpx rgba(37, 99, 235, 0.2);
 }
 
 .order-tab-text {
@@ -1256,8 +1248,8 @@
   line-height: 96rpx !important;
   padding: 0 !important;
   margin: 0 0 20rpx 0 !important;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
-  color: #fffdf8 !important;
+  background: #2563eb !important;
+  color: #fff !important;
   font-size: 30rpx;
   font-weight: 600;
   border-radius: 999rpx !important;
@@ -1341,6 +1333,6 @@
 }
 
 .nick-modal-btn-ok {
-  color: #fffdf8;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  background: #2563eb;
 }

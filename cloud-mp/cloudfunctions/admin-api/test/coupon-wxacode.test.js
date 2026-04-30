@@ -465,6 +465,52 @@ test('coupon update persists edited amount instead of creating a duplicate row',
     assert.equal(rows[0].coupon_value, 66.6);
 });
 
+test('coupon create persists poster sharing activity limits', async () => {
+    const app = express();
+    const deps = createDeps({ initialCollections: { coupons: [] } });
+    registerMarketingRoutes(app, deps);
+
+    const response = await invoke(app, {
+        method: 'POST',
+        path: '/admin/api/coupons',
+        body: {
+            name: '海报专属券',
+            type: 'fixed',
+            value: 9,
+            min_purchase: 0,
+            scope: 'products',
+            scope_ids: ['product-1'],
+            valid_days: 7,
+            stock: -1,
+            total_claim_limit: 100,
+            daily_claim_limit: 20,
+            per_user_limit: 1,
+            activity_enabled: 1,
+            activity_start_at: '2026-04-29T00:00:00.000Z',
+            activity_end_at: '2026-04-30T00:00:00.000Z',
+            share_poster_enabled: 1,
+            poster_badge_text: '扫码领 9 元券',
+            is_active: 1
+        }
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.code, 0);
+    assert.equal(response.body.data.share_poster_enabled, 1);
+    assert.equal(response.body.data.poster_badge_text, '扫码领 9 元券');
+    assert.equal(response.body.data.total_claim_limit, 100);
+    assert.equal(response.body.data.daily_claim_limit, 20);
+    assert.equal(response.body.data.per_user_limit, 1);
+    assert.equal(response.body.data.activity_enabled, 1);
+    assert.equal(response.body.data.activity_start_at, '2026-04-29T00:00:00.000Z');
+    assert.equal(response.body.data.activity_end_at, '2026-04-30T00:00:00.000Z');
+
+    const [saved] = deps.getCollection('coupons');
+    assert.equal(saved.share_poster_enabled, 1);
+    assert.equal(saved.poster_badge_text, '扫码领 9 元券');
+    assert.equal(saved.total_claim_limit, 100);
+});
+
 test('coupon list keeps fourth and fifth created coupons instead of reverting to the initial three', async () => {
     const app = express();
     const deps = createDeps({

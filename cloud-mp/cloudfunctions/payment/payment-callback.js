@@ -1451,7 +1451,7 @@ async function ensurePointsAwarded(orderId, order) {
     }
     if (order.is_test_order === true || order.is_test_order === 1 || order.is_test_order === '1') {
         await db.collection('orders').doc(orderId).update({
-            data: { points_awarded_at: db.serverDate(), points_earned: 0, updated_at: db.serverDate() },
+            data: { points_awarded_at: db.serverDate(), points_earned: 0, growth_earned: 0, updated_at: db.serverDate() },
         });
         return { skipped: true, reason: 'test_order', awarded: 0, growth: 0, multiplier: 0, buyerRole: 0 };
     }
@@ -1469,7 +1469,7 @@ async function ensurePointsAwarded(orderId, order) {
     const payAmount = getOrderTotalAmount(order);
     if (payAmount <= 0 || !order.openid) {
         await db.collection('orders').doc(orderId).update({
-            data: { points_awarded_at: db.serverDate(), updated_at: db.serverDate() },
+            data: { points_awarded_at: db.serverDate(), points_earned: 0, growth_earned: 0, updated_at: db.serverDate() },
         });
         return { awarded: 0 };
     }
@@ -1497,7 +1497,7 @@ async function ensurePointsAwarded(orderId, order) {
 
     if (pointsEarned <= 0 && growthEarned <= 0) {
         await db.collection('orders').doc(orderId).update({
-            data: { points_awarded_at: db.serverDate(), updated_at: db.serverDate() },
+            data: { points_awarded_at: db.serverDate(), points_earned: 0, growth_earned: 0, updated_at: db.serverDate() },
         });
         return { awarded: 0 };
     }
@@ -1528,7 +1528,7 @@ async function ensurePointsAwarded(orderId, order) {
     }
 
     await db.collection('orders').doc(orderId).update({
-        data: { points_earned: pointsEarned, updated_at: db.serverDate() },
+        data: { points_earned: pointsEarned, growth_earned: growthEarned, updated_at: db.serverDate() },
     });
     return { awarded: pointsEarned, growth: growthEarned, multiplier: purchasePointsPerHundred, buyerRole };
 }
@@ -2498,7 +2498,9 @@ function buildOrderPatchAfterRefund(order = {}, refund = {}) {
         };
     });
     const totalPointsEarned = Math.max(0, toNumber(order.points_earned, 0));
-    const totalGrowthEarned = Math.max(0, Math.floor(getOrderTotalAmount(order)));
+    const totalGrowthEarned = Math.max(0, Math.floor(
+        order.growth_earned != null ? toNumber(order.growth_earned, 0) : getOrderTotalAmount(order)
+    ));
     const rewardPointsClawedBefore = Math.max(0, toNumber(order.reward_points_clawback_total, 0));
     const growthClawedBefore = Math.max(0, toNumber(order.growth_clawback_total, 0));
     const rewardPointsClawback = isFullRefund

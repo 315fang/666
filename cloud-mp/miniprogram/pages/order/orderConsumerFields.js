@@ -153,6 +153,18 @@ function normalizeOrderConsumer(order = {}) {
         points_discount: pointsDiscount,
         bundle_discount: bundleDiscount
     });
+    const paidLikeStatus = ['paid', 'pending_group', 'pickup_pending', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed', 'refunding', 'refunded']
+        .includes(String(order.status || ''));
+    const rawGrowthEarned = order.growth_earned;
+    const fallbackGrowthEarned = paidLikeStatus || order.points_awarded_at ? Math.max(0, Math.floor(payAmount)) : 0;
+    const growthEarned = Math.max(0, Math.floor(
+        rawGrowthEarned != null ? toNumber(rawGrowthEarned, 0) : fallbackGrowthEarned
+    ));
+    const growthClawbackTotal = Math.max(0, Math.floor(toNumber(order.growth_clawback_total, 0)));
+    const growthNet = Math.max(0, growthEarned - growthClawbackTotal);
+    const displayGrowthRewardText = growthEarned > 0
+        ? (growthClawbackTotal > 0 ? `+${growthNet}（已扣回${growthClawbackTotal}）` : `+${growthEarned}`)
+        : '';
     const refundedCashTotal = toNumber(order.refunded_cash_total);
     const remainingRefundableCash = toNumber(order.remaining_refundable_cash);
     const statusText = refundFailed ? '退款失败' : (order.status_text || getOrderStatusText(order.status));
@@ -181,6 +193,9 @@ function normalizeOrderConsumer(order = {}) {
         coupon_discount: couponDiscount,
         points_discount: pointsDiscount,
         bundle_discount: bundleDiscount,
+        growth_earned: growthEarned,
+        growth_clawback_total: growthClawbackTotal,
+        growth_net: growthNet,
         refunded_cash_total: refundedCashTotal,
         remaining_refundable_cash: remainingRefundableCash,
         has_partial_refund: !!order.has_partial_refund,
@@ -198,6 +213,10 @@ function normalizeOrderConsumer(order = {}) {
         display_coupon_discount: toMoney(couponDiscount),
         display_points_discount: toMoney(pointsDiscount),
         display_bundle_discount: toMoney(bundleDiscount),
+        display_growth_earned: String(growthEarned),
+        display_growth_clawback_total: String(growthClawbackTotal),
+        display_growth_net: String(growthNet),
+        display_growth_reward_text: displayGrowthRewardText,
         display_refunded_cash_total: toMoney(refundedCashTotal),
         display_remaining_refundable_cash: toMoney(remainingRefundableCash)
     };

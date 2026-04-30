@@ -1,17 +1,17 @@
 export const ADMIN_GROUP_ORDER = [
-  '经营与策略',
-  '交易与履约',
-  '商品与营销',
-  '用户与渠道',
+  '今日处理',
+  '商品货架',
+  '营销活动',
+  '会员渠道',
   '页面与内容',
-  '平台与运维',
-  '其他'
+  '平台运维',
+  '其他入口'
 ]
 
 export const ADMIN_SHORTCUTS = [
   {
     key: 'pending-ship',
-    label: '待发货订单',
+    label: '待发货',
     path: '/orders',
     query: { status_group: 'pending_ship' },
     permission: 'orders',
@@ -20,7 +20,7 @@ export const ADMIN_SHORTCUTS = [
   },
   {
     key: 'pending-refunds',
-    label: '待退款审核',
+    label: '待退款',
     path: '/refunds',
     query: { status: 'pending' },
     permission: 'refunds',
@@ -28,107 +28,164 @@ export const ADMIN_SHORTCUTS = [
     surface: 'topbar'
   },
   {
-    key: 'page-design-topbar',
-    label: '页面装修',
-    path: '/home-sections',
-    permission: 'content',
+    key: 'pending-withdrawals',
+    label: '待提现',
+    path: '/withdrawals',
+    query: { status: 'pending' },
+    permission: 'withdrawals',
     priority: 30,
     surface: 'topbar'
   },
   {
-    key: 'activity-resources-topbar',
-    label: '活动资源',
-    path: '/activities',
-    permission: 'products',
+    key: 'goods-fund-topbar',
+    label: '货款审核',
+    path: '/goods-fund-transfers',
+    query: { status: 'pending' },
+    permission: 'commissions',
     priority: 40,
     surface: 'topbar'
   },
   {
-    key: 'settings-topbar',
-    label: '运营参数',
-    path: '/settings',
-    permission: 'settings_manage',
+    key: 'coupons-topbar',
+    label: '今日领券',
+    path: '/coupons',
+    permission: 'products',
     priority: 50,
     surface: 'topbar'
   },
   {
-    key: 'finance-dashboard',
-    label: '财务看板',
-    path: '/finance',
-    permission: 'statistics',
+    key: 'orders-dashboard',
+    label: '待发货处理',
+    path: '/orders',
+    query: { status_group: 'pending_ship' },
+    permission: 'orders',
     priority: 10,
     surface: 'dashboard',
-    icon: 'Money',
-    iconBg: 'rgba(16,185,129,0.12)'
-  },
-  {
-    key: 'orders-dashboard',
-    label: '订单履约',
-    path: '/orders',
-    permission: 'orders',
-    priority: 20,
-    surface: 'dashboard',
     icon: 'Van',
-    iconBg: 'rgba(20,184,166,0.12)'
+    iconBg: 'rgba(197,154,69,0.14)'
   },
   {
     key: 'refunds-dashboard',
     label: '退款审核',
     path: '/refunds',
+    query: { status: 'pending' },
     permission: 'refunds',
-    priority: 30,
+    priority: 20,
     surface: 'dashboard',
     icon: 'RefreshLeft',
-    iconBg: 'rgba(99,102,241,0.12)'
+    iconBg: 'rgba(216,52,58,0.12)'
+  },
+  {
+    key: 'withdrawals-dashboard',
+    label: '提现审核',
+    path: '/withdrawals',
+    query: { status: 'pending' },
+    permission: 'withdrawals',
+    priority: 30,
+    surface: 'dashboard',
+    icon: 'Money',
+    iconBg: 'rgba(197,154,69,0.14)'
+  },
+  {
+    key: 'goods-fund-dashboard',
+    label: '货款审核',
+    path: '/goods-fund-transfers',
+    query: { status: 'pending' },
+    permission: 'commissions',
+    priority: 40,
+    surface: 'dashboard',
+    icon: 'Wallet',
+    iconBg: 'rgba(216,52,58,0.10)'
+  },
+  {
+    key: 'coupons-dashboard',
+    label: '今日领券',
+    path: '/coupons',
+    permission: 'products',
+    priority: 50,
+    surface: 'dashboard',
+    icon: 'Ticket',
+    iconBg: 'rgba(216,52,58,0.12)'
+  },
+  {
+    key: 'activity-dashboard',
+    label: '活动效果',
+    path: '/activities',
+    permission: 'products',
+    priority: 60,
+    surface: 'dashboard',
+    icon: 'Promotion',
+    iconBg: 'rgba(31,41,55,0.08)'
   },
   {
     key: 'page-design-dashboard',
     label: '页面装修',
     path: '/home-sections',
     permission: 'content',
-    priority: 40,
+    priority: 70,
     surface: 'dashboard',
     icon: 'Notification',
-    iconBg: 'rgba(245,158,11,0.12)'
-  },
-  {
-    key: 'activity-resources-dashboard',
-    label: '活动资源',
-    path: '/activities',
-    permission: 'products',
-    priority: 50,
-    surface: 'dashboard',
-    icon: 'MagicStick',
-    iconBg: 'rgba(236,72,153,0.12)'
-  },
-  {
-    key: 'settings-dashboard',
-    label: '运营参数',
-    path: '/settings',
-    permission: 'settings_manage',
-    priority: 60,
-    surface: 'dashboard',
-    icon: 'Setting',
-    iconBg: 'rgba(59,130,246,0.12)'
+    iconBg: 'rgba(197,154,69,0.14)'
   },
   {
     key: 'membership-dashboard',
     label: '会员策略',
     path: '/membership',
     permission: 'settings_manage',
-    priority: 70,
+    priority: 80,
     surface: 'dashboard',
     icon: 'UserFilled',
-    iconBg: 'rgba(99,102,241,0.12)'
+    iconBg: 'rgba(31,41,55,0.08)'
   }
 ]
 
-const DEFAULT_GROUP = '其他'
+const DEFAULT_GROUP = '其他入口'
 const DEFAULT_SECTION = '未分组'
 const GROUP_ORDER_MAP = ADMIN_GROUP_ORDER.reduce((acc, name, index) => {
   acc[name] = index
   return acc
 }, {})
+
+const ADMIN_NAV_OVERRIDES = {
+  '/dashboard': { group: '今日处理', section: '经营总览', sectionOrder: 1, order: 1 },
+  '/orders': { group: '今日处理', section: '订单履约', sectionOrder: 2, order: 1 },
+  '/refunds': { group: '今日处理', section: '售后资金', sectionOrder: 3, order: 1 },
+  '/withdrawals': { group: '今日处理', section: '售后资金', sectionOrder: 3, order: 2 },
+  '/goods-fund-transfers': { group: '今日处理', section: '售后资金', sectionOrder: 3, order: 3 },
+  '/commissions': { group: '今日处理', section: '售后资金', sectionOrder: 3, order: 4 },
+  '/deposit-orders': { group: '今日处理', section: '售后资金', sectionOrder: 3, order: 5 },
+  '/finance': { group: '今日处理', section: '资金看板', sectionOrder: 4, order: 1 },
+  '/pickup-stations': { group: '今日处理', section: '门店履约', sectionOrder: 5, order: 1 },
+  '/pickup-procurements': { group: '今日处理', section: '门店履约', sectionOrder: 5, order: 2 },
+  '/pickup-inventory': { group: '今日处理', section: '门店履约', sectionOrder: 5, order: 3 },
+  '/warehouse-overview': { group: '今日处理', section: '门店履约', sectionOrder: 5, order: 4 },
+
+  '/products': { group: '商品货架', section: '商品基础', sectionOrder: 1, order: 1 },
+  '/categories': { group: '商品货架', section: '商品基础', sectionOrder: 1, order: 2 },
+  '/product-bundles': { group: '商品货架', section: '组合价规则', sectionOrder: 2, order: 1 },
+  '/limited-sales': { group: '商品货架', section: '限时货架', sectionOrder: 3, order: 1 },
+
+  '/coupons': { group: '营销活动', section: '优惠与券', sectionOrder: 1, order: 1 },
+  '/activities': { group: '营销活动', section: '活动玩法', sectionOrder: 2, order: 1 },
+  '/group-buys': { group: '营销活动', section: '活动玩法', sectionOrder: 2, order: 2 },
+
+  '/users': { group: '会员渠道', section: '用户运营', sectionOrder: 1, order: 1 },
+  '/membership': { group: '会员渠道', section: '会员策略', sectionOrder: 1, order: 2 },
+  '/dealers': { group: '会员渠道', section: '渠道管理', sectionOrder: 2, order: 1 },
+  '/branch-agents': { group: '会员渠道', section: '渠道管理', sectionOrder: 2, order: 2 },
+  '/directed-invites': { group: '会员渠道', section: '渠道管理', sectionOrder: 2, order: 3 },
+
+  '/home-sections': { group: '页面与内容', section: '页面装修', sectionOrder: 1, order: 1 },
+  '/content': { group: '页面与内容', section: '内容资源', sectionOrder: 2, order: 1 },
+  '/materials': { group: '页面与内容', section: '内容资源', sectionOrder: 2, order: 2 },
+  '/reviews': { group: '页面与内容', section: '内容资源', sectionOrder: 2, order: 3 },
+  '/mass-message': { group: '页面与内容', section: '消息触达', sectionOrder: 3, order: 1 },
+
+  '/settings': { group: '平台运维', section: '运营配置', sectionOrder: 1, order: 1 },
+  '/admins': { group: '平台运维', section: '权限治理', sectionOrder: 2, order: 1 },
+  '/ops-monitor': { group: '平台运维', section: '运维排障', sectionOrder: 3, order: 1 },
+  '/logs': { group: '平台运维', section: '运维排障', sectionOrder: 3, order: 2, permission: 'super_admin' }
+}
 
 function getRootChildren(routes = []) {
   return routes.find((item) => item.path === '/')?.children || []
@@ -151,18 +208,22 @@ export function getAdminRouteEntries(routes = [], { includeHidden = false } = {}
       if (!includeHidden && item.meta?.nav === false) return false
       return true
     })
-    .map((item) => ({
-      key: item.name || item.path,
-      path: normalizePath(item.path),
-      title: item.meta?.title,
-      icon: item.meta?.icon,
-      group: item.meta?.group || DEFAULT_GROUP,
-      section: item.meta?.section || DEFAULT_SECTION,
-      sectionOrder: Number(item.meta?.sectionOrder || 999),
-      order: Number(item.meta?.order || 999),
-      permission: item.meta?.permission || '',
-      navHidden: item.meta?.nav === false
-    }))
+    .map((item) => {
+      const path = normalizePath(item.path)
+      const override = ADMIN_NAV_OVERRIDES[path] || {}
+      return {
+        key: item.name || item.path,
+        path,
+        title: item.meta?.title,
+        icon: item.meta?.icon,
+        group: override.group || item.meta?.group || DEFAULT_GROUP,
+        section: override.section || item.meta?.section || DEFAULT_SECTION,
+        sectionOrder: Number(override.sectionOrder ?? item.meta?.sectionOrder ?? 999),
+        order: Number(override.order ?? item.meta?.order ?? 999),
+        permission: override.permission || item.meta?.permission || '',
+        navHidden: item.meta?.nav === false
+      }
+    })
 }
 
 export function buildAdminNavigationTree(routes = [], hasPermission = () => true) {
@@ -203,7 +264,13 @@ export function buildAdminNavigationTree(routes = [], hasPermission = () => true
 }
 
 export function buildAdminBreadcrumbs(route) {
-  return [route?.meta?.group, route?.meta?.section, route?.meta?.title]
+  const path = normalizePath(route?.path || '')
+  const override = ADMIN_NAV_OVERRIDES[path] || {}
+  return [
+    override.group || route?.meta?.group,
+    override.section || route?.meta?.section,
+    route?.meta?.title
+  ]
     .filter((item, index, list) => item && list.indexOf(item) === index)
 }
 

@@ -5,7 +5,10 @@ Component({
         type: {
             type: String,
             optionalTypes: [Number, Boolean],
-            value: ''
+            value: '',
+            observer: function() {
+                this._syncDisplayState();
+            }
         },
         // 提现金额
         amount: {
@@ -17,13 +20,19 @@ Component({
         teamName: {
             type: String,
             optionalTypes: [Number],
-            value: ''
+            value: '',
+            observer: function() {
+                this._syncDisplayState();
+            }
         },
         // 等级名称（晋级动画用）
         levelName: {
             type: String,
             optionalTypes: [Number],
-            value: ''
+            value: '',
+            observer: function() {
+                this._syncDisplayState();
+            }
         },
         // 飞入购物袋的图片
         flyImage: {
@@ -44,17 +53,65 @@ Component({
         slideOut: false,
         slideOutCard: false,
         cartBounce: false,
-        addCount: 1
+        addCount: 1,
+        overlayClass: 'brand-animation-overlay',
+        toastCheckClass: 'toast-check',
+        cartBounceClass: 'cart-badge-bounce',
+        displayBrandName: '问兰',
+        displayTeamName: '问兰大家庭',
+        displayLevelName: '',
+        displayToastText: '已复制',
+        displayAddCount: 1,
+        isWithdraw: false,
+        isPayment: false,
+        isJoinTeam: false,
+        isWelcome: false,
+        isLevelUp: false
     },
 
     attached() {
         const app = getApp();
         if (app && app.globalData.brandName) {
-            this.setData({ brandName: app.globalData.brandName });
+            this._setDisplayData({ brandName: app.globalData.brandName });
+            return;
         }
+        this._syncDisplayState();
     },
 
     methods: {
+        _buildDisplayPatch(patch = {}) {
+            const next = Object.assign({}, this.data, patch);
+            const type = String(next.type || '');
+            const brandName = String(next.brandName || '问兰').trim() || '问兰';
+            const teamName = String(next.teamName || '').trim() || (brandName + '大家庭');
+            const levelName = String(next.levelName || '');
+            const toastText = String(next.toastText || '已复制').trim() || '已复制';
+            const addCount = Number(next.addCount || 1) || 1;
+            return {
+                overlayClass: next.show ? 'brand-animation-overlay show' : 'brand-animation-overlay',
+                toastCheckClass: next.showToastCheck ? 'toast-check show' : 'toast-check',
+                cartBounceClass: next.cartBounce ? 'cart-badge-bounce bounce' : 'cart-badge-bounce',
+                displayBrandName: brandName,
+                displayTeamName: teamName,
+                displayLevelName: levelName,
+                displayToastText: toastText,
+                displayAddCount: addCount,
+                isWithdraw: type === 'withdraw',
+                isPayment: type === 'payment',
+                isJoinTeam: type === 'joinTeam',
+                isWelcome: type === 'welcome',
+                isLevelUp: type === 'levelUp'
+            };
+        },
+
+        _setDisplayData(patch) {
+            this.setData(Object.assign({}, patch, this._buildDisplayPatch(patch)));
+        },
+
+        _syncDisplayState() {
+            this.setData(this._buildDisplayPatch());
+        },
+
         // ====== 层级一：全屏品牌动画 ======
 
         /**
@@ -63,7 +120,7 @@ Component({
          * @param {object} options - 可选参数 { amount, teamName, levelName }
          */
         show(type, options = {}) {
-            this.setData({
+            this._setDisplayData({
                 show: true,
                 type: type || this.data.type,
                 amount: options.amount || '0.00',
@@ -86,7 +143,7 @@ Component({
                 clearTimeout(this._autoCloseTimer);
                 this._autoCloseTimer = null;
             }
-            this.setData({ show: false });
+            this._setDisplayData({ show: false });
             this.triggerEvent('close');
         },
 
@@ -144,12 +201,12 @@ Component({
          * @param {string} text - 提示文字，默认"已复制"
          */
         showCopySuccess(text) {
-            this.setData({
+            this._setDisplayData({
                 showToastCheck: true,
                 toastText: text || '已复制'
             });
             setTimeout(() => {
-                this.setData({ showToastCheck: false });
+                this._setDisplayData({ showToastCheck: false });
             }, 800);
         },
 
@@ -168,12 +225,12 @@ Component({
          * @param {number} count - 添加的数量
          */
         showCartBounce(count) {
-            this.setData({
+            this._setDisplayData({
                 cartBounce: true,
                 addCount: count || 1
             });
             setTimeout(() => {
-                this.setData({ cartBounce: false });
+                this._setDisplayData({ cartBounce: false });
             }, 600);
         }
     }

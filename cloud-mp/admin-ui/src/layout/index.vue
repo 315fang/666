@@ -323,19 +323,19 @@ const handlePasswordSubmit = async () => {
    参考: ui-ux-pro-max 设计系统推荐
 ============================================================ */
 .admin-layout {
-  --sidebar-bg: #0F172A;
+  --sidebar-bg: #111827;
   --sidebar-border: rgba(148, 163, 184, 0.08);
   --sidebar-w: 228px;
   --sidebar-w-collapsed: 64px;
   --topbar-h: 56px;
-  --nav-item-active-bg: rgba(99, 102, 241, 0.15);
-  --nav-item-active-color: #818CF8;
+  --nav-item-active-bg: rgba(197, 154, 69, 0.14);
+  --nav-item-active-color: #F5D08A;
   --nav-item-hover-bg: rgba(148, 163, 184, 0.08);
   --nav-text: #94A3B8;
   --nav-text-hover: #E2E8F0;
-  --accent: #6366F1;
-  --accent-glow: rgba(99, 102, 241, 0.4);
-  --page-bg: #F8FAFC;
+  --accent: #C59A45;
+  --accent-glow: rgba(197, 154, 69, 0.28);
+  --page-bg: #F6F7F9;
 
   display: flex;
   height: 100vh;
@@ -376,7 +376,7 @@ const handlePasswordSubmit = async () => {
 .logo-icon {
   width: 32px;
   height: 32px;
-  background: linear-gradient(135deg, var(--accent) 0%, #8B5CF6 100%);
+  background: #C59A45;
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -558,9 +558,9 @@ const handlePasswordSubmit = async () => {
 .context-pill {
   font-size: 11px;
   font-weight: 700;
-  color: #4F46E5;
-  background: rgba(99, 102, 241, 0.08);
-  border: 1px solid rgba(99, 102, 241, 0.16);
+  color: #8A5F14;
+  background: rgba(197, 154, 69, 0.12);
+  border: 1px solid rgba(197, 154, 69, 0.22);
   border-radius: 999px;
   padding: 4px 10px;
 }
@@ -585,9 +585,9 @@ const handlePasswordSubmit = async () => {
 }
 
 .topbar-shortcut:hover {
-  border-color: #C7D2FE;
-  color: #4338CA;
-  background: #EEF2FF;
+  border-color: rgba(197, 154, 69, 0.42);
+  color: #8A5F14;
+  background: rgba(197, 154, 69, 0.10);
 }
 
 .user-avatar {
@@ -610,7 +610,7 @@ const handlePasswordSubmit = async () => {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent) 0%, #8B5CF6 100%);
+  background: #1F2937;
   color: white;
   font-size: 14px;
   font-weight: 700;

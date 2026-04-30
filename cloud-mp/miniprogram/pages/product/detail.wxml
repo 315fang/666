@@ -33,6 +33,23 @@
     </view>
   </view>
 
+  <view
+    class="share-coupon-float share-coupon-status-{{shareCouponBar.status}}"
+    wx:if="{{shareCouponBar}}"
+    style="top: {{navTopPadding + navBarHeight + 10}}px;"
+  >
+    <view class="share-coupon-float-copy">
+      <text class="share-coupon-float-kicker">扫码福利</text>
+      <text class="share-coupon-float-title">{{shareCouponBar.valueText}} · {{shareCouponBar.display_desc}}</text>
+    </view>
+    <view
+      class="share-coupon-float-btn {{shareCouponBar.button_disabled ? 'share-coupon-btn-disabled' : ''}}"
+      bindtap="onClaimShareCoupon"
+    >
+      {{shareCouponBar.button_text}}
+    </view>
+  </view>
+
   <view class="gallery-section">
     <view class="gallery-aspect-wrap">
       <view class="gallery-aspect-inner">
@@ -76,6 +93,22 @@
         </view>
       </view>
     </scroll-view>
+
+    <view class="share-coupon-bar share-coupon-status-{{shareCouponBar.status}}" wx:if="{{shareCouponBar}}">
+      <view class="share-coupon-copy">
+        <text class="share-coupon-value">{{shareCouponBar.valueText}}</text>
+        <view class="share-coupon-texts">
+          <text class="share-coupon-title">{{shareCouponBar.title}}</text>
+          <text class="share-coupon-desc">{{shareCouponBar.display_desc}}</text>
+        </view>
+      </view>
+      <view
+        class="share-coupon-btn {{shareCouponBar.button_disabled ? 'share-coupon-btn-disabled' : ''}}"
+        bindtap="onClaimShareCoupon"
+      >
+        {{shareCouponBar.button_text}}
+      </view>
+    </view>
 
     <view class="summary-top-row">
       <view class="summary-price-wrap">
@@ -313,6 +346,27 @@
     <view class="share-panel-head">
       <text class="share-panel-title">分享商品</text>
       <text class="share-panel-subtitle">转发卡片、朋友圈或生成商品海报</text>
+    </view>
+    <view class="poster-coupon-picker" wx:if="{{showPosterCouponPicker}}">
+      <view class="poster-coupon-head">
+        <text class="poster-coupon-title">附带优惠券</text>
+        <text class="poster-coupon-clear" wx:if="{{selectedPosterCouponId}}" bindtap="clearPosterCoupon">不带券</text>
+      </view>
+      <scroll-view class="poster-coupon-scroll" scroll-x="{{true}}" enhanced="{{true}}" show-scrollbar="{{false}}" wx:if="{{posterCouponOptions.length > 0}}">
+        <view class="poster-coupon-track">
+          <view
+            class="poster-coupon-chip {{item.selected ? 'poster-coupon-chip-active' : ''}}"
+            wx:for="{{posterCouponOptions}}"
+            wx:key="id"
+            data-coupon-id="{{item.id}}"
+            bindtap="onSelectPosterCoupon"
+          >
+            <text class="poster-coupon-chip-value">{{item.valueText}}</text>
+            <text class="poster-coupon-chip-name">{{item.displayName}}</text>
+          </view>
+        </view>
+      </scroll-view>
+      <text class="poster-coupon-loading" wx:elif="{{posterCouponLoading}}">可带券加载中...</text>
     </view>
     <view class="share-panel-options">
       <button class="share-panel-option" open-type="share">

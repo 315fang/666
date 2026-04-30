@@ -191,3 +191,27 @@ test('creating product bundle rejects fixed commission above explicit pool', asy
     assert.match(response.body.message, /固定佣金池不能小于 80 元/);
     assert.equal(deps.getCollection('product_bundles').length, 0);
 });
+
+test('creating product bundle accepts repeatable option capacity above option count', async () => {
+    const app = express();
+    const deps = createDeps();
+    const payload = createPayload();
+    payload.groups[0].min_select = 3;
+    payload.groups[0].max_select = 3;
+    payload.groups[0].options[0].repeatable = 1;
+    payload.groups[0].options[0].max_qty_per_order = 3;
+
+    registerProductBundleRoutes(app, deps);
+
+    const response = await invoke(app, {
+        method: 'POST',
+        path: '/admin/api/product-bundles',
+        body: payload
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.code, 0);
+    const option = deps.getCollection('product_bundles')[0].groups[0].options[0];
+    assert.equal(option.repeatable, 1);
+    assert.equal(option.max_qty_per_order, 3);
+});

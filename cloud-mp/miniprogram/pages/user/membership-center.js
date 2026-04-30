@@ -37,6 +37,37 @@ function sanitizeTierDesc(desc) {
         .replace(/积分/g, '成长值');
 }
 
+function normalizeUpgradeProgress(raw) {
+    if (!raw || raw.visible === false) {
+        return {
+            visible: false,
+            state: 'hidden',
+            title: '',
+            summary: '',
+            statusText: '',
+            statusClass: '',
+            effective_order_days: 0,
+            recommended_path: null,
+            other_paths: []
+        };
+    }
+    const recommendedPath = raw.recommended_path || null;
+    const otherPaths = Array.isArray(raw.other_paths) ? raw.other_paths : [];
+    const state = String(raw.state || 'pending');
+    return {
+        ...raw,
+        visible: true,
+        state,
+        statusText: state === 'ready' ? '已满足' : (state === 'max_auto_level' ? '当前最高' : '进行中'),
+        statusClass: state === 'ready' ? 'upgrade-status-ready' : (state === 'max_auto_level' ? 'upgrade-status-max' : 'upgrade-status-pending'),
+        effective_order_days: Number(raw.effective_order_days || 0),
+        recommended_path: recommendedPath,
+        other_paths: otherPaths,
+        bestPercent: recommendedPath ? Math.max(0, Math.min(100, Number(recommendedPath.percent || 0))) : 100,
+        showOtherPaths: otherPaths.length > 0
+    };
+}
+
 Page({
     data: {
         loading: true,
@@ -57,7 +88,8 @@ Page({
         cardReady: false,
         consumeCardSummary: {},
         agentCardSummary: {},
-        currentCardMeta: {}
+        currentCardMeta: {},
+        agentUpgradeProgress: normalizeUpgradeProgress(null)
     },
 
     onLoad() {
@@ -156,6 +188,16 @@ Page({
                 currentRoleLevel: roleLevel,
                 currentRoleName: roleName
             });
+            const agentUpgradeProgress = normalizeUpgradeProgress(meta.agent_upgrade_progress);
+            if (agentUpgradeProgress.visible && agentUpgradeProgress.state !== 'max_auto_level') {
+                cardViewModel.activeCard = 'agent';
+                cardViewModel.cardSwiperCurrent = 1;
+                cardViewModel.currentCardMeta = getMembershipCardMeta({
+                    activeCard: 'agent',
+                    consumeCardSummary: cardViewModel.consumeCardSummary,
+                    agentCardSummary: cardViewModel.agentCardSummary
+                });
+            }
 
             this.setData({
                 loading: false,
@@ -171,6 +213,7 @@ Page({
                 currentRoleLevel: roleLevel,
                 currentRoleName: roleName,
                 ...cardViewModel,
+                agentUpgradeProgress,
                 cardReady: true
             });
         } catch (e) {

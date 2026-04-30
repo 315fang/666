@@ -126,7 +126,7 @@ async function submitOrder(page, app, brandAnimation) {
         }
 
         // 代理商选择货款支付：直接在创单时扣款，无需跳支付页
-        const useGoodsFund = !!(!exchangeMode && page.data.useWallet && page.data.isAgent);
+        const useGoodsFund = !!(!exchangeMode && !bundleOrder && page.data.useWallet && page.data.isAgent);
         if (useGoodsFund) {
             const portalPassword = await promptPortalPassword({
                 title: '货款支付验证',

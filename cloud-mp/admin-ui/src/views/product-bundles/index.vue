@@ -106,7 +106,7 @@
       :close-on-click-modal="false"
     >
       <el-form ref="formRef" :model="form" label-width="92px" class="bundle-form">
-        <div class="form-section-title">基础信息</div>
+        <div class="form-section-title">组合价规则</div>
         <el-form-item label="套装名称">
           <el-input v-model="form.title" maxlength="40" placeholder="如：399 体验搭配套装" />
         </el-form-item>
@@ -147,7 +147,7 @@
         </el-form-item>
 
         <div class="form-section-title section-row">
-          <span>选择步骤</span>
+          <span>商品池设置</span>
           <el-button size="small" type="primary" plain @click="addGroup">新增步骤</el-button>
         </div>
         <el-alert
@@ -155,7 +155,7 @@
           :closable="false"
           show-icon
           class="form-alert"
-          title="配置方式：先添加选择步骤，再给每一步放候选商品。用户按步骤选完后，用上方套装价下单；组合商品佣金在财务规则中统一设置。"
+          title="配置方式：每个步骤表示用户要选的一组商品。默认每个候选只能选 1 次；如果需要同一商品多件，改成可重复选并设置最多数量。"
         />
 
         <div v-if="form.groups.length === 0" class="groups-empty">暂无选择步骤，请先新增至少一个步骤。</div>
@@ -191,7 +191,10 @@
           </div>
 
           <div class="group-options-head">
-            <span>候选商品</span>
+            <div class="group-options-title">
+              <span>候选商品</span>
+              <span class="group-options-note">高价商品一般保持“仅选一次”，需要同款多件时再开启“可重复选”。</span>
+            </div>
             <el-button size="small" plain @click="addOption(groupIndex)">新增候选</el-button>
           </div>
           <div v-if="group.options.length === 0" class="group-options-empty">该步骤还没有候选商品。</div>
@@ -235,14 +238,36 @@
                   />
                 </el-select>
               </el-form-item>
-              <el-form-item label="数量" label-width="44px" class="option-form-item option-form-item--qty">
-                <el-input-number v-model="option.default_qty" :min="1" :precision="0" style="width: 100%" />
+              <el-form-item label="默认数量" label-width="72px" class="option-form-item option-form-item--qty">
+                <el-input-number
+                  v-model="option.default_qty"
+                  :min="1"
+                  :precision="0"
+                  style="width: 100%"
+                  @change="() => onOptionDefaultQtyChange(option)"
+                />
+              </el-form-item>
+              <el-form-item label="选择次数" label-width="72px" class="option-form-item option-form-item--repeat">
+                <el-select v-model="option.repeatable" style="width: 100%" @change="() => onOptionRepeatableChange(option)">
+                  <el-option label="仅选一次" :value="0" />
+                  <el-option label="可重复选" :value="1" />
+                </el-select>
+              </el-form-item>
+              <el-form-item v-if="option.repeatable === 1" label="最多数量" label-width="72px" class="option-form-item option-form-item--max">
+                <el-input-number
+                  v-model="option.max_qty_per_order"
+                  :min="Math.max(1, Number(option.default_qty || 1))"
+                  :precision="0"
+                  style="width: 100%"
+                  @change="() => normalizeOptionQtyRule(option)"
+                />
               </el-form-item>
             </div>
             <div class="option-meta-row">
               <div class="option-meta-text">
                 <span>{{ option.product_name || '未选商品' }}</span>
                 <span v-if="optionSkuDisplay(option)"> / {{ optionSkuDisplay(option) }}</span>
+                <span class="option-rule-text">{{ optionRuleText(option) }}</span>
               </div>
               <div class="option-actions">
                 <el-switch v-model="option.enabled" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" />
@@ -366,6 +391,41 @@ const groupRuleSummary = (group = {}) => {
   return `用户至少选 ${rule.min} 件，最多 ${rule.max} 件`
 }
 
+const normalizeOptionQtyRule = (option = {}) => {
+  option.default_qty = Math.max(1, Math.floor(Number(option.default_qty || 1)))
+  option.repeatable = Number(option.repeatable || 0) === 1 ? 1 : 0
+  if (option.repeatable === 1) {
+    option.max_qty_per_order = Math.max(
+      option.default_qty,
+      Math.floor(Number(option.max_qty_per_order || option.default_qty || 1))
+    )
+  } else {
+    option.default_qty = 1
+    option.max_qty_per_order = 1
+  }
+}
+
+const onOptionDefaultQtyChange = (option = {}) => {
+  option.default_qty = Math.max(1, Math.floor(Number(option.default_qty || 1)))
+  if (option.default_qty > 1) {
+    option.repeatable = 1
+  }
+  normalizeOptionQtyRule(option)
+}
+
+const onOptionRepeatableChange = (option = {}) => {
+  normalizeOptionQtyRule(option)
+}
+
+const optionRuleText = (option = {}) => {
+  const defaultQty = Math.max(1, Number(option.default_qty || 1))
+  if (Number(option.repeatable || 0) === 1) {
+    const maxQty = Math.max(defaultQty, Number(option.max_qty_per_order || defaultQty))
+    return `默认 ${defaultQty} 件，用户最多可选 ${maxQty} 件`
+  }
+  return '用户只能选择 1 件'
+}
+
 const buildAutoGroupKey = (group = {}, groupIndex = 0, seen = new Set()) => {
   const base = String(group.group_key || '').trim() || `step_${groupIndex + 1}`
   let key = base
@@ -383,6 +443,8 @@ const createOption = () => ({
   product_id: '',
   sku_id: '',
   default_qty: 1,
+  repeatable: 0,
+  max_qty_per_order: 1,
   sort_order: 0,
   enabled: 1,
   product_name: '',
@@ -624,7 +686,11 @@ const hydrateBundleForm = async (bundle = {}) => {
         local_key: `option-${groupIndex}-${optionIndex}-${Date.now()}`,
         product_id: String(option.product_id || ''),
         sku_id: String(option.sku_id || ''),
-        default_qty: Number(option.default_qty || 1),
+        default_qty: Number(option.repeatable || 0) === 1 ? Number(option.default_qty || 1) : 1,
+        repeatable: Number(option.repeatable || 0) === 1 ? 1 : 0,
+        max_qty_per_order: Number(option.repeatable || 0) === 1
+          ? Math.max(Number(option.default_qty || 1), Number(option.max_qty_per_order || option.default_qty || 1))
+          : 1,
         sort_order: Number(option.sort_order || optionIndex),
         enabled: Number(option.enabled || 0) === 0 ? 0 : 1,
         product_name: option.product_name || '',
@@ -736,8 +802,12 @@ const validateForm = () => {
     if (Number(group.max_select || 0) < Number(group.min_select || 0)) return `步骤「${group.group_title}」的最多数量不能小于最少数量`
     const enabledOptionCount = group.options.filter((option) => Number(option.enabled || 0) !== 0).length
     if (enabledOptionCount === 0) return `步骤「${group.group_title}」至少需要启用 1 个候选商品`
-    if (Number(group.min_select || 0) > enabledOptionCount) return `步骤「${group.group_title}」的必选数量不能超过已启用候选商品数`
-    if (Number(group.max_select || 0) > enabledOptionCount) return `步骤「${group.group_title}」的最多数量不能超过已启用候选商品数`
+    group.options.forEach(normalizeOptionQtyRule)
+    const enabledCapacity = group.options
+      .filter((option) => Number(option.enabled || 0) !== 0)
+      .reduce((sum, option) => sum + (Number(option.repeatable || 0) === 1 ? Math.max(Number(option.default_qty || 1), Number(option.max_qty_per_order || option.default_qty || 1)) : 1), 0)
+    if (Number(group.min_select || 0) > enabledCapacity) return `步骤「${group.group_title}」的必选数量不能超过已启用候选商品上限`
+    if (Number(group.max_select || 0) > enabledCapacity) return `步骤「${group.group_title}」的最多数量不能超过已启用候选商品上限`
     for (const option of group.options) {
       if (!String(option.product_id || '').trim()) return `步骤「${group.group_title}」存在未选择商品的候选项`
     }
@@ -775,7 +845,11 @@ const buildPayload = () => ({
         options: group.options.map((option, optionIndex) => ({
           product_id: option.product_id,
           sku_id: option.sku_id || '',
-          default_qty: Number(option.default_qty || 1),
+          default_qty: Number(option.repeatable || 0) === 1 ? Math.max(1, Number(option.default_qty || 1)) : 1,
+          repeatable: Number(option.repeatable || 0) === 1 ? 1 : 0,
+          max_qty_per_order: Number(option.repeatable || 0) === 1
+            ? Math.max(Number(option.default_qty || 1), Number(option.max_qty_per_order || option.default_qty || 1))
+            : 1,
           sort_order: Number(option.sort_order || optionIndex),
           enabled: Number(option.enabled || 0) === 0 ? 0 : 1,
           commission_mode: FIXED_BUNDLE_COMMISSION_MODE,
@@ -949,6 +1023,20 @@ fetchBundles()
   color: #111827;
 }
 
+.group-options-title {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.group-options-note {
+  font-size: 12px;
+  font-weight: 400;
+  color: #6b7280;
+}
+
 .group-rule-summary {
   margin-left: 10px;
   font-size: 12px;
@@ -981,7 +1069,7 @@ fetchBundles()
 
 .option-form-grid {
   display: grid;
-  grid-template-columns: minmax(280px, 1.8fr) minmax(190px, 1fr) minmax(150px, 0.5fr);
+  grid-template-columns: minmax(300px, 1.6fr) minmax(180px, 0.9fr) minmax(150px, 0.55fr) minmax(150px, 0.6fr) minmax(150px, 0.55fr);
   gap: 12px;
   align-items: flex-start;
 }
@@ -1018,6 +1106,11 @@ fetchBundles()
   white-space: nowrap;
   font-size: 12px;
   color: #6b7280;
+}
+
+.option-rule-text {
+  margin-left: 10px;
+  color: #8a5f14;
 }
 
 .option-actions {

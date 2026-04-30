@@ -124,6 +124,18 @@ function normalizeDailyClaimLimit(coupon = {}) {
     return limit < 0 ? -1 : limit;
 }
 
+function normalizeTotalClaimLimit(coupon = {}) {
+    if (!hasValue(coupon.total_claim_limit)) return -1;
+    const limit = Math.floor(toNumber(coupon.total_claim_limit, -1));
+    return limit < 0 ? -1 : limit;
+}
+
+function normalizePerUserLimit(coupon = {}) {
+    if (!hasValue(coupon.per_user_limit)) return 1;
+    const limit = Math.floor(toNumber(coupon.per_user_limit, 1));
+    return limit < 1 ? 1 : limit;
+}
+
 function isEnabledFlag(value, fallback = false) {
     if (value === undefined || value === null || value === '') return fallback;
     if (value === true || value === 1 || value === '1') return true;
@@ -135,6 +147,10 @@ function isEnabledFlag(value, fallback = false) {
 
 function shouldShowInCouponCenter(coupon = {}) {
     return isEnabledFlag(coupon.show_in_coupon_center, false);
+}
+
+function shouldAllowSharePoster(coupon = {}) {
+    return isEnabledFlag(coupon.share_poster_enabled, false);
 }
 
 function isActiveCouponTemplate(coupon = {}) {
@@ -245,6 +261,53 @@ function buildTimeWindowState(coupon = {}, nowParts = getChinaNowParts()) {
     };
 }
 
+function buildActivityWindowState(coupon = {}, nowTs = Date.now()) {
+    const activityEnabled = isEnabledFlag(coupon.activity_enabled, true);
+    const startDate = parseDate(coupon.activity_start_at || coupon.activity_start_time || coupon.start_at || '');
+    const endDate = parseDate(coupon.activity_end_at || coupon.activity_end_time || coupon.end_at || '');
+    const startTs = startDate ? startDate.getTime() : 0;
+    const endTs = endDate ? endDate.getTime() : 0;
+
+    if (!activityEnabled) {
+        return {
+            enabled: false,
+            inWindow: false,
+            state: 'inactive',
+            message: '此活动已结束',
+            start_at: startDate ? startDate.toISOString() : '',
+            end_at: endDate ? endDate.toISOString() : ''
+        };
+    }
+    if (startTs && nowTs < startTs) {
+        return {
+            enabled: true,
+            inWindow: false,
+            state: 'not_started',
+            message: '活动未开始',
+            start_at: startDate.toISOString(),
+            end_at: endDate ? endDate.toISOString() : ''
+        };
+    }
+    if (endTs && nowTs > endTs) {
+        return {
+            enabled: true,
+            inWindow: false,
+            state: 'activity_ended',
+            message: '活动已结束',
+            start_at: startDate ? startDate.toISOString() : '',
+            end_at: endDate.toISOString()
+        };
+    }
+    return {
+        enabled: true,
+        inWindow: true,
+        state: 'active',
+        message: '',
+        start_at: startDate ? startDate.toISOString() : '',
+        end_at: endDate ? endDate.toISOString() : ''
+    };
+}
+
 function buildCouponTemplateView(coupon = {}, availability = null) {
     const templateId = hasValue(coupon.id) ? coupon.id : coupon._id;
     const type = coupon.type || coupon.coupon_type || 'fixed';
@@ -254,9 +317,13 @@ function buildCouponTemplateView(coupon = {}, availability = null) {
     const stock = coupon.stock == null ? -1 : toNumber(coupon.stock, -1);
     const issuedCount = Math.max(0, toNumber(coupon.issued_count, 0));
     const stockRemaining = stock === -1 ? -1 : Math.max(0, stock - issuedCount);
+    const totalClaimLimit = normalizeTotalClaimLimit(coupon);
+    const totalClaimRemaining = totalClaimLimit === -1 ? -1 : Math.max(0, totalClaimLimit - issuedCount);
+    const perUserLimit = normalizePerUserLimit(coupon);
     const dailyClaimLimit = normalizeDailyClaimLimit(coupon);
     const claimedTodayCount = availability ? availability.claimedTodayCount : getClaimedTodayCount(coupon);
     const timeWindow = availability ? availability.timeWindow : buildTimeWindowState(coupon);
+    const activityWindow = availability ? availability.activityWindow : buildActivityWindowState(coupon);
 
     return {
         id: templateId,
@@ -274,16 +341,25 @@ function buildCouponTemplateView(coupon = {}, availability = null) {
         updated_at: coupon.updated_at || '',
         stock,
         stock_remaining: stockRemaining,
+        total_claim_limit: totalClaimLimit,
+        total_claim_remaining: totalClaimRemaining,
+        per_user_limit: perUserLimit,
         is_active: isActive ? 1 : 0,
+        activity_enabled: isEnabledFlag(coupon.activity_enabled, true) ? 1 : 0,
+        activity_start_at: activityWindow.start_at,
+        activity_end_at: activityWindow.end_at,
         scope: coupon.scope || 'all',
         scope_ids: Array.isArray(coupon.scope_ids) ? coupon.scope_ids : [],
         show_in_coupon_center: shouldShowInCouponCenter(coupon) ? 1 : 0,
+        share_poster_enabled: shouldAllowSharePoster(coupon) ? 1 : 0,
+        poster_badge_text: coupon.poster_badge_text || '',
         daily_claim_limit: dailyClaimLimit,
         claimed_today_count: claimedTodayCount,
         claim_time_enabled: claimTimeEnabled,
         claim_start_time: normalizeClockText(coupon.claim_start_time, '00:00'),
         claim_end_time: normalizeClockText(coupon.claim_end_time, '23:59'),
         claim_window_text: timeWindow.label,
+        activity_state: activityWindow.state,
         can_claim: availability ? availability.canClaim : false,
         claim_status: availability ? availability.state : 'unknown',
         claim_message: availability ? availability.message : ''
@@ -292,22 +368,30 @@ function buildCouponTemplateView(coupon = {}, availability = null) {
 
 function resolveTemplateClaimAvailability(coupon = {}, options = {}) {
     const nowParts = options.nowParts || getChinaNowParts();
+    const nowTs = options.nowTs || Date.now();
     const alreadyOwned = !!options.alreadyOwned;
+    const ownedCount = Math.max(0, Math.floor(toNumber(options.ownedCount, alreadyOwned ? 1 : 0)));
     const type = String(coupon.type || coupon.coupon_type || 'fixed').toLowerCase();
     const stock = coupon.stock == null ? -1 : toNumber(coupon.stock, -1);
     const issuedCount = Math.max(0, toNumber(coupon.issued_count, 0));
+    const totalClaimLimit = normalizeTotalClaimLimit(coupon);
+    const perUserLimit = normalizePerUserLimit(coupon);
     const dailyClaimLimit = normalizeDailyClaimLimit(coupon);
     const claimedTodayCount = getClaimedTodayCount(coupon, nowParts);
     const timeWindow = buildTimeWindowState(coupon, nowParts);
+    const activityWindow = buildActivityWindowState(coupon, nowTs);
 
     const result = {
         state: 'claimable',
         message: '',
         canClaim: true,
         claimedTodayCount,
+        totalClaimLimit,
+        perUserLimit,
         dailyClaimLimit,
         dayKey: nowParts.dayKey,
-        timeWindow
+        timeWindow,
+        activityWindow
     };
 
     if (type === 'exchange') {
@@ -317,7 +401,7 @@ function resolveTemplateClaimAvailability(coupon = {}, options = {}) {
         return result;
     }
 
-    if (alreadyOwned) {
+    if (ownedCount >= perUserLimit) {
         result.state = 'already_owned';
         result.message = '你已领取过这张券';
         result.canClaim = false;
@@ -331,7 +415,21 @@ function resolveTemplateClaimAvailability(coupon = {}, options = {}) {
         return result;
     }
 
+    if (!activityWindow.inWindow) {
+        result.state = activityWindow.state;
+        result.message = activityWindow.message || '活动暂不可领取';
+        result.canClaim = false;
+        return result;
+    }
+
     if (stock !== -1 && issuedCount >= stock) {
+        result.state = 'out_of_stock';
+        result.message = '此券已被领完';
+        result.canClaim = false;
+        return result;
+    }
+
+    if (totalClaimLimit !== -1 && issuedCount >= totalClaimLimit) {
         result.state = 'out_of_stock';
         result.message = '此券已被领完';
         result.canClaim = false;
@@ -676,18 +774,20 @@ async function listCoupons(openid, status = 'unused') {
     }
 }
 
-async function listCouponCenter(openid) {
+async function listCouponCenter(openid, options = {}) {
     const identity = await getCouponIdentity(openid);
     const ownedTemplateIds = await getOwnedCouponTemplateIds(identity);
     const rows = await getAllRecords(db, 'coupons').catch(() => []);
     const nowParts = getChinaNowParts();
+    const sharePosterOnly = !!options.sharePosterOnly;
+    const ignoreOwned = !!options.ignoreOwned;
 
     const coupons = (Array.isArray(rows) ? rows : [])
-        .filter((coupon) => shouldShowInCouponCenter(coupon))
+        .filter((coupon) => sharePosterOnly ? shouldAllowSharePoster(coupon) : shouldShowInCouponCenter(coupon))
         .filter((coupon) => String(coupon.type || coupon.coupon_type || 'fixed').toLowerCase() !== 'exchange')
         .map((coupon) => {
             const couponId = hasValue(coupon.id) ? coupon.id : coupon._id;
-            const alreadyOwned = ownedTemplateIds.has(String(couponId));
+            const alreadyOwned = ignoreOwned ? false : ownedTemplateIds.has(String(couponId));
             const availability = resolveTemplateClaimAvailability(coupon, {
                 alreadyOwned,
                 nowParts

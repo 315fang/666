@@ -10,7 +10,28 @@ Component({
     },
     fullscreen: {
       type: Boolean,
-      value: true
+      value: true,
+      observer: function() {
+        this._syncRootClass();
+      }
+    }
+  },
+
+  data: {
+    rootClass: 'page-loading fullscreen'
+  },
+
+  lifetimes: {
+    attached() {
+      this._syncRootClass();
+    }
+  },
+
+  methods: {
+    _syncRootClass() {
+      this.setData({
+        rootClass: this.data.fullscreen ? 'page-loading fullscreen' : 'page-loading'
+      });
     }
   }
 });

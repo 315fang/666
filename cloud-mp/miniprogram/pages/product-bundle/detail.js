@@ -18,6 +18,63 @@ function cloneSelectedMap(source = {}) {
     return result;
 }
 
+function cloneSelectedQtyMap(source = {}) {
+    const result = {};
+    Object.keys(source || {}).forEach((key) => {
+        const qty = Math.max(0, Math.floor(Number(source[key] || 0)));
+        if (qty > 0) result[key] = qty;
+    });
+    return result;
+}
+
+function selectionQtyKey(groupKey, optionKey) {
+    return `${groupKey}::${optionKey}`;
+}
+
+function isRepeatableOption(option = {}) {
+    return option.repeatable === true || option.repeatable === 1 || option.repeatable === '1';
+}
+
+function getOptionMaxQty(option = {}) {
+    return isRepeatableOption(option)
+        ? Math.max(1, Math.floor(Number(option.max_qty_per_order || option.max_qty || option.default_qty || 1)))
+        : 1;
+}
+
+function getOptionDefaultQty(option = {}) {
+    return Math.min(
+        getOptionMaxQty(option),
+        Math.max(1, Math.floor(Number(option.default_qty || 1)))
+    );
+}
+
+function getGroupSelectedTotal(groupKey, selectedKeys = [], selectedQtyMap = {}) {
+    return (Array.isArray(selectedKeys) ? selectedKeys : []).reduce((sum, optionKey) => {
+        return sum + Math.max(1, Number(selectedQtyMap[selectionQtyKey(groupKey, optionKey)] || 1));
+    }, 0);
+}
+
+function buildInitialSelection(groups = []) {
+    const selectedMap = {};
+    const selectedQtyMap = {};
+    groups.forEach((group) => {
+        const options = Array.isArray(group.options) ? group.options : [];
+        const minSelect = Math.max(0, Number(group.min_select || 0));
+        let remaining = minSelect;
+        selectedMap[group.group_key] = [];
+        for (const option of options) {
+            if (remaining <= 0) break;
+            const maxQty = getOptionMaxQty(option);
+            const qty = Math.min(maxQty, remaining);
+            if (qty <= 0) continue;
+            selectedMap[group.group_key].push(option.option_key);
+            selectedQtyMap[selectionQtyKey(group.group_key, option.option_key)] = qty;
+            remaining -= qty;
+        }
+    });
+    return { selectedMap, selectedQtyMap };
+}
+
 function appendImageCandidates(target, value) {
     if (!value) return;
     if (Array.isArray(value)) {
@@ -110,6 +167,7 @@ Page({
         bottomProgressText: '',
         bottomActionText: '去结算',
         selectedMap: {},
+        selectedQtyMap: {},
         selectedCount: 0,
         totalQuantity: 0,
         originalAmount: 0,
@@ -173,15 +231,11 @@ Page({
             wx.setNavigationBarTitle({
                 title: bundle.scene_type === 'flex_bundle' ? '特惠随心选' : '组合套装'
             });
-            const selectedMap = {};
-            groups.forEach((group) => {
-                const options = Array.isArray(group.options) ? group.options : [];
-                const minSelect = Math.max(0, Number(group.min_select || 0));
-                selectedMap[group.group_key] = options.slice(0, minSelect).map((option) => option.option_key);
-            });
+            const { selectedMap, selectedQtyMap } = buildInitialSelection(groups);
             this.setData({
                 bundle,
                 selectedMap,
+                selectedQtyMap,
                 activeGroupKey: groups[0] ? groups[0].group_key : '',
                 loading: false,
                 loadError: false
@@ -197,6 +251,7 @@ Page({
         const bundle = this.data.bundle;
         if (!bundle) return;
         const selectedMap = cloneSelectedMap(this.data.selectedMap || {});
+        const selectedQtyMap = cloneSelectedQtyMap(this.data.selectedQtyMap || {});
         const orderItems = [];
         const sourceGroups = Array.isArray(bundle.groups) ? bundle.groups : [];
         let activeGroupKey = this.data.activeGroupKey || (sourceGroups[0] && sourceGroups[0].group_key) || '';
@@ -224,32 +279,44 @@ Page({
             const selectedOptions = (group.options || []).filter((option) => {
                 const selected = selectedKeys.includes(option.option_key);
                 option.selected = selected;
+                const qtyKey = selectionQtyKey(group.group_key, option.option_key);
+                const selectedQty = selected
+                    ? Math.min(getOptionMaxQty(option), Math.max(1, Number(selectedQtyMap[qtyKey] || getOptionDefaultQty(option))))
+                    : 0;
+                option.selected_quantity = selectedQty;
+                option.max_select_quantity = getOptionMaxQty(option);
+                option.show_qty_stepper = selected && isRepeatableOption(option);
+                option.quantity_text = `×${selected ? selectedQty : getOptionDefaultQty(option)}`;
+                option.select_text = selected ? '已选' : '选这个';
                 return selected;
             });
             const minSelect = Math.max(0, Number(group.min_select || 0));
             const maxSelect = Math.max(minSelect || 1, Number(group.max_select || minSelect || 1));
-            const groupComplete = selectedOptions.length >= minSelect && selectedOptions.length <= maxSelect;
-            const maxReached = selectedOptions.length >= maxSelect;
-            group.selected_count = selectedOptions.length;
+            const selectedTotal = selectedOptions.reduce((sum, option) => sum + Math.max(1, Number(option.selected_quantity || 1)), 0);
+            const groupComplete = selectedTotal >= minSelect && selectedTotal <= maxSelect;
+            const maxReached = selectedTotal >= maxSelect;
+            group.selected_count = selectedTotal;
             group.min_select_count = minSelect;
             group.max_select_count = maxSelect;
             group.complete = groupComplete;
             group.max_reached = maxReached;
             group.rule_text = buildGroupRuleText(group);
-            group.status_text = buildGroupStatusText(selectedOptions.length, minSelect, maxSelect);
-            group.progress_text = `${selectedOptions.length}/${maxSelect}`;
+            group.status_text = buildGroupStatusText(selectedTotal, minSelect, maxSelect);
+            group.progress_text = `${selectedTotal}/${maxSelect}`;
             group.options = (group.options || []).map((option) => ({
                 ...option,
-                disabled_by_limit: !option.selected && maxReached
+                disabled_by_limit: !option.selected && maxReached,
+                increase_disabled: option.selected && (Number(option.selected_quantity || 0) >= Number(option.max_select_quantity || 1) || maxReached),
+                select_text: option.selected ? '已选' : (maxReached ? '已满' : '选这个')
             }));
             requiredTotalCount += minSelect;
-            requiredSelectedCount += Math.min(selectedOptions.length, minSelect);
+            requiredSelectedCount += Math.min(selectedTotal, minSelect);
             if (groupComplete) completedGroupCount += 1;
-            if (selectedOptions.length < minSelect || selectedOptions.length > maxSelect) {
+            if (selectedTotal < minSelect || selectedTotal > maxSelect) {
                 selectionValid = false;
             }
             selectedOptions.forEach((option) => {
-                const qty = Math.max(1, Number(option.default_qty || 1));
+                const qty = Math.max(1, Number(option.selected_quantity || 1));
                 const unitPrice = roundMoney(option.product && option.product.retail_price);
                 const imageCandidates = uniqImageCandidates([option.sku, option.product, option.image, option.image_url]);
                 const image = imageCandidates[0] || '';
@@ -306,15 +373,16 @@ Page({
         const selectionSlots = nextBundle.groups.map((group, index) => {
             const selectedOptions = (group.options || []).filter((option) => option.selected);
             const firstOption = selectedOptions[0] || null;
+            const selectedQtyTotal = selectedOptions.reduce((sum, option) => sum + Math.max(1, Number(option.selected_quantity || 1)), 0);
             return {
                 group_key: group.group_key,
                 group_title: group.group_title,
                 index: index + 1,
                 active: group.active,
                 complete: group.complete,
-                selected_count: selectedOptions.length,
+                selected_count: selectedQtyTotal,
                 image: firstOption ? getOptionImage(firstOption) : '',
-                extra_count: Math.max(0, selectedOptions.length - 1),
+                extra_count: Math.max(0, selectedQtyTotal - (firstOption ? Math.max(1, Number(firstOption.selected_quantity || 1)) : 0)),
                 status_text: group.status_text
             };
         });
@@ -367,22 +435,82 @@ Page({
         const group = (bundle.groups || []).find((item) => item.group_key === groupKey);
         if (!group) return;
         const selectedMap = cloneSelectedMap(this.data.selectedMap || {});
+        const selectedQtyMap = cloneSelectedQtyMap(this.data.selectedQtyMap || {});
         const current = Array.isArray(selectedMap[groupKey]) ? selectedMap[groupKey].slice() : [];
         const exists = current.includes(optionKey);
         const maxSelect = Math.max(1, Number(group.max_select || 1));
+        const qtyKey = selectionQtyKey(groupKey, optionKey);
+        const currentSelectedTotal = getGroupSelectedTotal(groupKey, current, selectedQtyMap);
+        const option = (group.options || []).find((item) => item.option_key === optionKey);
+        const remaining = Math.max(0, maxSelect - currentSelectedTotal);
         if (maxSelect === 1) {
             selectedMap[groupKey] = exists ? [] : [optionKey];
+            Object.keys(selectedQtyMap).forEach((key) => {
+                if (key.indexOf(`${groupKey}::`) === 0) delete selectedQtyMap[key];
+            });
+            if (!exists) selectedQtyMap[qtyKey] = 1;
         } else if (exists) {
             selectedMap[groupKey] = current.filter((item) => item !== optionKey);
+            delete selectedQtyMap[qtyKey];
         } else {
-            if (current.length >= maxSelect) {
+            if (remaining <= 0) {
                 wx.showToast({ title: `该分组最多选择 ${maxSelect} 项`, icon: 'none' });
                 return;
             }
+            selectedQtyMap[qtyKey] = Math.min(getOptionDefaultQty(option), getOptionMaxQty(option), remaining);
             selectedMap[groupKey] = current.concat(optionKey);
         }
-        this.setData({ selectedMap });
+        this.setData({ selectedMap, selectedQtyMap });
         this.recalcSelection({ autoAdvance: !exists });
+    },
+
+    onIncreaseOptionQty(e) {
+        const groupKey = e.currentTarget.dataset.groupKey;
+        const optionKey = e.currentTarget.dataset.optionKey;
+        const bundle = this.data.bundle;
+        if (!bundle || !groupKey || !optionKey) return;
+        const group = (bundle.groups || []).find((item) => item.group_key === groupKey);
+        const option = group && (group.options || []).find((item) => item.option_key === optionKey);
+        if (!group || !option || !option.selected || !isRepeatableOption(option)) return;
+        const selectedMap = cloneSelectedMap(this.data.selectedMap || {});
+        const selectedQtyMap = cloneSelectedQtyMap(this.data.selectedQtyMap || {});
+        const current = Array.isArray(selectedMap[groupKey]) ? selectedMap[groupKey] : [];
+        const maxSelect = Math.max(1, Number(group.max_select || 1));
+        const qtyKey = selectionQtyKey(groupKey, optionKey);
+        const currentQty = Math.max(1, Number(selectedQtyMap[qtyKey] || option.selected_quantity || 1));
+        if (currentQty >= getOptionMaxQty(option)) {
+            wx.showToast({ title: '已达该商品上限', icon: 'none' });
+            return;
+        }
+        if (getGroupSelectedTotal(groupKey, current, selectedQtyMap) >= maxSelect) {
+            wx.showToast({ title: `该分组最多选择 ${maxSelect} 件`, icon: 'none' });
+            return;
+        }
+        selectedQtyMap[qtyKey] = currentQty + 1;
+        this.setData({ selectedQtyMap });
+        this.recalcSelection();
+    },
+
+    onDecreaseOptionQty(e) {
+        const groupKey = e.currentTarget.dataset.groupKey;
+        const optionKey = e.currentTarget.dataset.optionKey;
+        const bundle = this.data.bundle;
+        if (!bundle || !groupKey || !optionKey) return;
+        const group = (bundle.groups || []).find((item) => item.group_key === groupKey);
+        const option = group && (group.options || []).find((item) => item.option_key === optionKey);
+        if (!group || !option || !option.selected || !isRepeatableOption(option)) return;
+        const selectedMap = cloneSelectedMap(this.data.selectedMap || {});
+        const selectedQtyMap = cloneSelectedQtyMap(this.data.selectedQtyMap || {});
+        const qtyKey = selectionQtyKey(groupKey, optionKey);
+        const currentQty = Math.max(1, Number(selectedQtyMap[qtyKey] || option.selected_quantity || 1));
+        if (currentQty <= 1) {
+            selectedMap[groupKey] = (selectedMap[groupKey] || []).filter((item) => item !== optionKey);
+            delete selectedQtyMap[qtyKey];
+        } else {
+            selectedQtyMap[qtyKey] = currentQty - 1;
+        }
+        this.setData({ selectedMap, selectedQtyMap });
+        this.recalcSelection();
     },
 
     onRetry() {

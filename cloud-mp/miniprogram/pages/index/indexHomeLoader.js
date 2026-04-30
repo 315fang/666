@@ -164,6 +164,8 @@ function normalizeBrandZone(configs = {}) {
     const coverFileId = pickString(configs.brand_zone_cover_file_id);
     const coverImage = normalizeAssetUrl(coverFileId || configs.brand_zone_cover || '');
     const storyBody = pickString(configs.brand_story_body);
+    const welcomeTitle = pickString(configs.brand_zone_welcome_title, defaults.welcomeTitle);
+    const welcomeSubtitle = pickString(configs.brand_zone_welcome_subtitle, defaults.welcomeSubtitle);
 
     return {
         ...defaults,
@@ -173,8 +175,9 @@ function normalizeBrandZone(configs = {}) {
         title: pickString(configs.brand_zone_title, defaults.title),
         coverImage,
         coverFileId,
-        welcomeTitle: pickString(configs.brand_zone_welcome_title, defaults.welcomeTitle),
-        welcomeSubtitle: pickString(configs.brand_zone_welcome_subtitle, defaults.welcomeSubtitle),
+        welcomeTitle,
+        welcomeSubtitle,
+        showWelcome: !!(welcomeTitle || welcomeSubtitle),
         cards,
         certifications,
         story: {
@@ -235,11 +238,19 @@ function pickDisplayName(record = {}) {
     return record.nickName || record.nickname || '';
 }
 
+function setHomePageData(page, patch, callback) {
+    if (page && typeof page._setHomeData === 'function') {
+        page._setHomeData(patch, callback);
+        return;
+    }
+    page.setData(patch, callback);
+}
+
 async function loadData(page, forceRefresh = false) {
     const cacheKey = 'home_config_cache';
     const cacheTtl = 5 * 60 * 1000;
     const now = Date.now();
-    page.setData({ loading: true });
+    setHomePageData(page, { loading: true });
     try {
         let data = null;
 
@@ -270,7 +281,7 @@ async function loadData(page, forceRefresh = false) {
             if (canonicalPayload && Object.keys(canonicalPayload).length) {
                 data = canonicalPayload;
                 page.homeResources = canonicalPayload.resources || null;
-                page.setData({ pageLayout: canonicalPayload.layout || canonicalPayload.resources?.layout || null });
+                setHomePageData(page, { pageLayout: canonicalPayload.layout || canonicalPayload.resources?.layout || null });
             } else {
                 const res = await get('/homepage-config').catch(() => ({ data: {} }));
                 data = res.data || {};
@@ -295,7 +306,7 @@ async function loadData(page, forceRefresh = false) {
         loadCoupons(page);
     } catch (err) {
         console.error('[Index] 获取首页配置失败:', err);
-        page.setData({ loading: false });
+        setHomePageData(page, { loading: false });
     }
 }
 
@@ -363,6 +374,9 @@ async function loadFeaturedProducts(page, options = {}) {
                 ...processed,
                 cover_image: coverImage,
                 image: coverImage,
+                cardImage: coverImage,
+                hasCardImage: !!coverImage,
+                soldOut: Number(product.stock) === 0 || Number(processed.stock) === 0,
                 retail_price: displayPrice,
                 price: displayPrice,
                 market_price: marketPrice > displayPrice ? marketPrice : 0,
@@ -370,7 +384,7 @@ async function loadFeaturedProducts(page, options = {}) {
                 heat_label: heatLabel
             };
         });
-        page.setData({ featuredProducts: products });
+        setHomePageData(page, { featuredProducts: products });
         if (typeof page._setupScrollReveal === 'function') {
             wx.nextTick(() => page._setupScrollReveal());
         }
@@ -392,7 +406,7 @@ async function loadPosters(page, options = {}) {
     try {
         const layoutBanners = page.homeResources ? page.homeResources.banners || null : null;
         if (layoutBanners) {
-            page.setData({
+            setHomePageData(page, {
                 midPosters: mapBanners(layoutBanners.home_mid || []),
                 bottomPosters: mapBanners(layoutBanners.home_bottom || [])
             });
@@ -417,7 +431,7 @@ async function loadPosters(page, options = {}) {
         ]);
         const midList = midRes?.data?.list ?? midRes?.list ?? midRes?.data ?? [];
         const bottomList = bottomRes?.data?.list ?? bottomRes?.list ?? bottomRes?.data ?? [];
-        page.setData({
+        setHomePageData(page, {
             midPosters: mapBanners(Array.isArray(midList) ? midList : []),
             bottomPosters: mapBanners(Array.isArray(bottomList) ? bottomList : [])
         });
@@ -443,7 +457,7 @@ async function loadBubbles(page) {
             const action = { order: '购买了', group_buy: '拼团了', slash: '砍价了', lottery: '抽中了' }[bubble.type] || '购买了';
             return `${pickDisplayName(bubble)} ${action} ${bubble.product_name}`;
         });
-        page.setData({ bubbles, currentBubble: bubbles[0] });
+        setHomePageData(page, { bubbles, currentBubble: bubbles[0] });
         page._bubbleIdx = 0;
         page._startBubbleRotation();
     } catch (_) { }
@@ -483,12 +497,18 @@ function applyHomeConfig(page, data) {
     const configs = data.configs || data.resources?.configs || {};
     const showBrandLogo = configs.show_brand_logo !== 'false' && configs.show_brand_logo !== false;
     const brandZone = normalizeBrandZone(configs);
-page.setData({
+    const navBrandTitle = configs.nav_brand_title || brandConfig.nav_brand_title || '问兰镜像';
+    const navBrandSub = configs.nav_brand_sub || brandConfig.nav_sub || '品牌甄选';
+    setHomePageData(page, {
         homeConfigs: configs,
         showBrandLogo,
         brandLogo: configs.brand_logo || '',
-        navBrandTitle: configs.nav_brand_title || brandConfig.nav_brand_title || '问兰镜像',
-        navBrandSub: configs.nav_brand_sub || brandConfig.nav_sub || '品牌甄选',
+        navBrandTitle,
+        navBrandSub,
+        couponZoneTitle: configs.coupon_zone_title || '优惠券中心',
+        couponZoneSubtitle: configs.coupon_zone_subtitle || '领券后下单可用',
+        brandZoneCoverKicker: navBrandSub || '品牌甄选',
+        brandZoneCoverTitle: navBrandTitle || brandZone.title || '品牌专区',
         latestActivity: page._normalizeLatestActivity(data.latestActivity || data.resources?.latest_activity || {}),
         brandZone,
         heroBanners,
@@ -505,14 +525,16 @@ page.setData({
             ...popupAd,
             file_id: popupAd.file_id || '',
             image_url: pickImageSource(popupAd), // deprecated: use file_id instead
-            url: pickImageSource(popupAd)
+            url: pickImageSource(popupAd),
+            displayImage: pickImageSource(popupAd),
+            hasImage: !!pickImageSource(popupAd)
         });
     }
 }
 
 async function loadCoupons(page) {
     if (!app.globalData.isLoggedIn) {
-        page.setData({ homeCoupons: [], homeCouponHasMore: false, unusedCouponCount: 0 });
+        setHomePageData(page, { homeCoupons: [], homeCouponHasMore: false, unusedCouponCount: 0 });
         return;
     }
     try {
@@ -546,7 +568,7 @@ async function loadCoupons(page) {
                     expire_at_formatted: formatCouponExpire(c.expire_at)
                 };
             });
-            page.setData({
+            setHomePageData(page, {
                 homeCoupons: coupons.slice(0, HOME_COUPON_PREVIEW_LIMIT),
                 homeCouponHasMore: coupons.length > HOME_COUPON_PREVIEW_LIMIT,
                 unusedCouponCount: coupons.length

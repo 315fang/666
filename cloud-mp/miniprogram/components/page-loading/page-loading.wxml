@@ -1,4 +1,4 @@
-<view wx:if="{{show}}" class="page-loading {{fullscreen ? 'fullscreen' : ''}}">
+<view wx:if="{{show}}" class="{{rootClass}}">
   <view class="loading-card">
     <view class="loading-spinner"></view>
     <text class="loading-text">{{text}}</text>

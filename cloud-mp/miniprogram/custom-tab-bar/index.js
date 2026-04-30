@@ -47,8 +47,8 @@ Component({
   data: {
     list: [],
     selected: 0,
-    color: '#94A3B8',
-    selectedColor: '#667eea',
+    color: '#9ca3af',
+    selectedColor: '#2563eb',
     backgroundColor: '#FFFFFF',
     borderStyle: 'white',
     hidden: false
@@ -67,6 +67,20 @@ Component({
   },
 
   methods: {
+    _decorateList: function(list, selected, color, selectedColor) {
+      var normalColor = color || this.data.color || '#94A3B8';
+      var activeColor = selectedColor || this.data.selectedColor || '#667eea';
+      return (Array.isArray(list) ? list : []).map(function(item, index) {
+        var active = Number(selected) === index;
+        return Object.assign({}, item, {
+          active: active,
+          itemClass: active ? 'tab-bar-item tab-bar-item-active' : 'tab-bar-item',
+          displayIconPath: active ? item.selectedIconPath : item.iconPath,
+          textColor: active ? activeColor : normalColor
+        });
+      });
+    },
+
     setHidden: function(hide) {
       this._overlayHidden = !!hide;
       this.setData({ hidden: !!hide });
@@ -102,10 +116,12 @@ Component({
       if (!showActivity) {
         list.splice(2, 1);
       }
+      var color = tb.color || '#94A3B8';
+      var selectedColor = tb.selectedColor || '#667eea';
       this.setData({
-        list: list,
-        color: tb.color || '#94A3B8',
-        selectedColor: tb.selectedColor || '#667eea',
+        list: this._decorateList(list, this.data.selected || 0, color, selectedColor),
+        color: color,
+        selectedColor: selectedColor,
         backgroundColor: tb.backgroundColor || 'rgba(255,255,255,0.72)',
         borderStyle: tb.borderStyle
       });
@@ -121,7 +137,10 @@ Component({
         if (list[i].pagePath === route) { idx = i; break; }
       }
       if (idx >= 0) {
-        this.setData({ selected: idx });
+        this.setData({
+          selected: idx,
+          list: this._decorateList(list, idx)
+        });
       }
     },
 

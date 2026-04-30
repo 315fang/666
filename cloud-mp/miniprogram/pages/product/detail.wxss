@@ -1233,6 +1233,150 @@
 .explosive-notice { margin-bottom: 12rpx; padding: 12rpx 16rpx; background: #FFF2F0; border-radius: 8rpx; }
 .explosive-notice-text { font-size: 24rpx; color: #F5222D; }
 
+.share-coupon-bar {
+  margin: 0 0 22rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 18rpx;
+  background: #fff2f1;
+  border: 1rpx solid rgba(216, 52, 58, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  box-sizing: border-box;
+}
+
+.share-coupon-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.share-coupon-value {
+  flex-shrink: 0;
+  min-width: 90rpx;
+  color: #d8343a;
+  font-size: 34rpx;
+  font-weight: 800;
+}
+
+.share-coupon-texts {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5rpx;
+}
+
+.share-coupon-title {
+  font-size: 25rpx;
+  color: #1f2933;
+  font-weight: 700;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.share-coupon-desc {
+  font-size: 22rpx;
+  color: #8a3b40;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.share-coupon-btn {
+  flex-shrink: 0;
+  min-width: 106rpx;
+  height: 54rpx;
+  padding: 0 18rpx;
+  border-radius: 999rpx;
+  background: #d8343a;
+  color: #ffffff;
+  font-size: 23rpx;
+  font-weight: 700;
+  line-height: 54rpx;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+.share-coupon-btn-disabled {
+  background: #f2c5c8;
+}
+
+.share-coupon-status-success,
+.share-coupon-status-already_owned,
+.share-coupon-status-claimed {
+  background: #fff7f0;
+  border-color: rgba(216, 52, 58, 0.26);
+}
+
+.share-coupon-status-success .share-coupon-desc,
+.share-coupon-status-already_owned .share-coupon-desc,
+.share-coupon-status-claimed .share-coupon-desc {
+  color: #b45335;
+  font-weight: 600;
+}
+
+.share-coupon-float {
+  position: fixed;
+  left: 24rpx;
+  right: 24rpx;
+  z-index: 360;
+  min-height: 76rpx;
+  padding: 12rpx 14rpx 12rpx 18rpx;
+  border-radius: 18rpx;
+  background: rgba(255, 244, 242, 0.96);
+  border: 1rpx solid rgba(216, 52, 58, 0.2);
+  box-shadow: 0 14rpx 36rpx rgba(145, 55, 46, 0.14);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  box-sizing: border-box;
+  backdrop-filter: blur(12rpx);
+}
+
+.share-coupon-float-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.share-coupon-float-kicker {
+  font-size: 20rpx;
+  color: #d8343a;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.share-coupon-float-title {
+  font-size: 24rpx;
+  color: #182331;
+  font-weight: 700;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.share-coupon-float-btn {
+  flex-shrink: 0;
+  min-width: 104rpx;
+  height: 48rpx;
+  padding: 0 18rpx;
+  border-radius: 999rpx;
+  background: #d8343a;
+  color: #fff;
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 48rpx;
+  text-align: center;
+  box-sizing: border-box;
+}
+
 .share-panel-mask {
   position: fixed;
   left: 0;
@@ -1280,6 +1424,84 @@
 .share-panel-subtitle {
   font-size: 24rpx;
   color: #6B7F91;
+}
+
+.poster-coupon-picker {
+  margin-bottom: 22rpx;
+  padding: 18rpx;
+  border-radius: 18rpx;
+  background: #f7f8fa;
+  border: 1rpx solid rgba(210, 224, 234, 0.78);
+  box-sizing: border-box;
+}
+
+.poster-coupon-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14rpx;
+}
+
+.poster-coupon-title {
+  font-size: 24rpx;
+  color: #1f2933;
+  font-weight: 700;
+}
+
+.poster-coupon-clear {
+  font-size: 22rpx;
+  color: #6B7F91;
+}
+
+.poster-coupon-scroll {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.poster-coupon-track {
+  display: inline-flex;
+  gap: 12rpx;
+  padding-right: 2rpx;
+}
+
+.poster-coupon-chip {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  width: 210rpx;
+  min-height: 86rpx;
+  padding: 12rpx 16rpx;
+  border-radius: 14rpx;
+  background: #ffffff;
+  border: 2rpx solid #edf1f5;
+  box-sizing: border-box;
+  vertical-align: top;
+}
+
+.poster-coupon-chip-active {
+  border-color: #d8343a;
+  background: #fff4f3;
+}
+
+.poster-coupon-chip-value {
+  font-size: 27rpx;
+  color: #d8343a;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.poster-coupon-chip-name {
+  margin-top: 6rpx;
+  font-size: 21rpx;
+  color: #6B7F91;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.poster-coupon-loading {
+  font-size: 22rpx;
+  color: #8a94a6;
 }
 
 .share-panel-options {

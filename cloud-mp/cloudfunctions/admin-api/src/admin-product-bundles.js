@@ -151,11 +151,21 @@ function registerProductBundleRoutes(app, deps) {
             direct: directCommissionMap,
             indirect: indirectCommissionMap
         });
+        const repeatable = toBoolean(raw.repeatable ?? raw.allow_repeat ?? raw.repeat_enabled, false) ? 1 : 0;
+        const maxQtyPerOrder = repeatable
+            ? Math.max(1, Math.floor(toNumber(raw.max_qty_per_order ?? raw.maxQtyPerOrder ?? raw.max_qty ?? raw.default_qty ?? raw.quantity, 1)))
+            : 1;
+        const defaultQty = Math.min(
+            maxQtyPerOrder,
+            Math.max(1, Math.floor(toNumber(raw.default_qty ?? raw.quantity, 1)))
+        );
         return {
             option_key: normalizeKey(raw.option_key || raw.optionKey, `option_${index + 1}`),
             product_id: lookupId(product),
             sku_id: sku ? lookupId(sku) : '',
-            default_qty: Math.max(1, Math.floor(toNumber(raw.default_qty ?? raw.quantity, 1))),
+            default_qty: defaultQty,
+            repeatable,
+            max_qty_per_order: maxQtyPerOrder,
             sort_order: toNumber(raw.sort_order, index),
             enabled: toBoolean(raw.enabled ?? raw.status ?? raw.is_active, true) ? 1 : 0,
             commission_mode: FIXED_BUNDLE_COMMISSION_MODE,
@@ -180,8 +190,14 @@ function registerProductBundleRoutes(app, deps) {
         }
         const minSelect = Math.max(0, Math.floor(toNumber(raw.min_select, 1)));
         const maxSelect = Math.max(minSelect || 1, Math.floor(toNumber(raw.max_select, minSelect || 1)));
-        if (maxSelect > options.length) {
-            throw new Error(`组合分组「${groupTitle}」最多选择数不能超过候选商品数`);
+        const enabledCapacity = options
+            .filter((option) => toBoolean(option.enabled, true))
+            .reduce((sum, option) => sum + (toBoolean(option.repeatable, false) ? Math.max(1, toNumber(option.max_qty_per_order, 1)) : 1), 0);
+        if (minSelect > enabledCapacity) {
+            throw new Error(`组合分组「${groupTitle}」最少选择数不能超过已启用候选商品上限`);
+        }
+        if (maxSelect > enabledCapacity) {
+            throw new Error(`组合分组「${groupTitle}」最多选择数不能超过已启用候选商品上限`);
         }
         return {
             group_key: normalizeKey(raw.group_key || raw.groupKey || groupTitle, `group_${index + 1}`),
@@ -273,6 +289,8 @@ function registerProductBundleRoutes(app, deps) {
                         spec: buildSkuSpecText(sku)
                     } : null,
                     commission_mode: pickString(option.commission_mode || FIXED_BUNDLE_COMMISSION_MODE, FIXED_BUNDLE_COMMISSION_MODE),
+                    repeatable: toBoolean(option.repeatable, false) ? 1 : 0,
+                    max_qty_per_order: Math.max(1, Math.floor(toNumber(option.max_qty_per_order, 1))),
                     commission_source: pickString(option.commission_source || FIXED_BUNDLE_COMMISSION_SOURCE, FIXED_BUNDLE_COMMISSION_SOURCE),
                     commission_pool_amount: roundMoney(option.commission_pool_amount),
                     solo_commission_fixed_by_role: normalizeFixedCommissionMap(option.solo_commission_fixed_by_role),

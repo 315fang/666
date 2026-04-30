@@ -93,9 +93,14 @@
               <view class="option-bottom">
                 <view class="option-price-wrap">
                   <text class="option-price">¥{{option.product.retail_price}}</text>
-                  <text class="option-qty">×{{option.default_qty}}</text>
+                  <text class="option-qty">{{option.quantity_text}}</text>
                 </view>
-                <text class="select-pill {{option.selected ? 'select-pill-active' : ''}}">{{option.selected ? '已选' : (option.disabled_by_limit ? '已满' : '选这个')}}</text>
+                <view class="option-qty-stepper" wx:if="{{option.show_qty_stepper}}">
+                  <view class="option-step-btn" data-group-key="{{group.group_key}}" data-option-key="{{option.option_key}}" catchtap="onDecreaseOptionQty">-</view>
+                  <text class="option-step-value">{{option.selected_quantity}}</text>
+                  <view class="option-step-btn {{option.increase_disabled ? 'option-step-btn-disabled' : ''}}" data-group-key="{{group.group_key}}" data-option-key="{{option.option_key}}" catchtap="onIncreaseOptionQty">+</view>
+                </view>
+                <text class="select-pill {{option.selected ? 'select-pill-active' : ''}}" wx:else>{{option.select_text}}</text>
               </view>
             </view>
           </view>

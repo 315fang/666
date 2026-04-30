@@ -1,5 +1,5 @@
 /**
- * 全局样式 — Enterprise Gateway 设计系统
+ * 全局样式 — Operations Desk 设计系统
  * S2B2C 管理台
  */
 
@@ -8,25 +8,27 @@
 ============================================================ */
 :root {
   /* 主色 */
-  --color-primary: #6366F1;
-  --color-primary-light: rgba(99, 102, 241, 0.12);
-  --color-primary-glow: rgba(99, 102, 241, 0.4);
+  --color-primary: #C59A45;
+  --color-primary-light: rgba(197, 154, 69, 0.14);
+  --color-primary-glow: rgba(197, 154, 69, 0.28);
+  --color-marketing: #D8343A;
+  --color-structure: #1F2937;
 
   /* 字体 */
   --font-sans: 'Plus Jakarta Sans', 'PingFang SC', 'Noto Sans SC', sans-serif;
 
   /* 文字色阶 */
-  --text-primary: #0F172A;
+  --text-primary: #111827;
   --text-secondary: #374151;
-  --text-muted: #64748B;
-  --text-subtle: #94A3B8;
+  --text-muted: #6B7280;
+  --text-subtle: #9CA3AF;
 
   /* 背景与边框 */
-  --bg-page: #F8FAFC;
+  --bg-page: #F6F7F9;
   --bg-card: #ffffff;
-  --bg-raised: #F1F5F9;
-  --border-default: #E2E8F0;
-  --border-subtle: #F1F5F9;
+  --bg-raised: #F3F4F6;
+  --border-default: #E5E7EB;
+  --border-subtle: #F3F4F6;
 
   /* 状态色 */
   --color-success: #059669;
@@ -123,8 +125,8 @@ body {
 }
 
 .el-button--primary:hover {
-  background: #4F46E5 !important;
-  border-color: #4F46E5 !important;
+  background: #A97825 !important;
+  border-color: #A97825 !important;
   box-shadow: 0 4px 12px var(--color-primary-glow) !important;
 }
 
@@ -304,7 +306,7 @@ body {
 
 /* 价格 */
 .text-price {
-  color: #F56C6C;
+  color: var(--color-marketing);
   font-weight: 600;
 }
 

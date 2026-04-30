@@ -4,7 +4,7 @@ const { normalizeActivityList, resolveSlashResumePayload } = require('./utils/ac
 const { normalizeProductId } = require('../../utils/dataFormatter');
 const { USER_ROLES } = require('../../config/constants');
 const { safeBack } = require('../../utils/navigator');
-const { requireLogin } = require('../../utils/auth');
+const { requireLogin, ensureLogin, getLoginState } = require('../../utils/auth');
 const { fetchLimitedSpotContext, normalizeLimitedSpotMode } = require('../../utils/limitedSpot');
 const { getMiniProgramConfig } = require('../../utils/miniProgramConfig');
 const { loadProduct, resolveDetailImageList, resolvePayableUnitPrice, buildSkuText, PRODUCT_PLACEHOLDER } = require('./productDetailData');
@@ -109,6 +109,18 @@ function formatCouponThreshold(coupon = {}) {
     return minPurchase > 0 ? `满${minPurchase % 1 === 0 ? minPurchase.toFixed(0) : minPurchase.toFixed(2)}可用` : '无门槛';
 }
 
+function getCouponDisplayKey(coupon = {}) {
+    const rawType = String(coupon.coupon_type || coupon.type || 'fixed').toLowerCase();
+    const type = rawType === 'no_threshold' ? 'fixed' : rawType;
+    const value = toFiniteNumber(coupon.coupon_value != null ? coupon.coupon_value : coupon.value, 0);
+    const minPurchase = toFiniteNumber(coupon.min_purchase, 0);
+    return [
+        type || 'fixed',
+        value.toFixed(4),
+        minPurchase.toFixed(2)
+    ].join(':');
+}
+
 function getCouponDiscountAmount(coupon = {}, amount = 0) {
     const orderAmount = Math.max(0, toFiniteNumber(amount, 0));
     const type = String(coupon.coupon_type || coupon.type || '').toLowerCase();
@@ -130,6 +142,118 @@ function extractCouponList(payload) {
     if (payload.data && Array.isArray(payload.data.list)) return payload.data.list;
     if (Array.isArray(payload.list)) return payload.list;
     return [];
+}
+
+function normalizeIdText(value) {
+    return value === null || value === undefined || value === '' ? '' : String(value);
+}
+
+function couponAppliesToProduct(coupon = {}, product = {}) {
+    const scope = String(coupon.scope || 'all').toLowerCase();
+    const scopeIds = Array.isArray(coupon.scope_ids)
+        ? coupon.scope_ids.map(normalizeIdText).filter(Boolean)
+        : [];
+    if (!scope || scope === 'all' || scopeIds.length === 0) return true;
+    const category = product.category && typeof product.category === 'object' ? product.category : {};
+    const productIds = [product.id, product._id, product.product_id]
+        .map(normalizeIdText)
+        .filter(Boolean);
+    const categoryIds = [product.category_id, product.categoryId, product.category_key, category.id, category._id]
+        .map(normalizeIdText)
+        .filter(Boolean);
+    if (scope === 'product') return productIds.some((id) => scopeIds.includes(id));
+    if (scope === 'category') return categoryIds.some((id) => scopeIds.includes(id));
+    return true;
+}
+
+function buildPosterCouponOption(coupon = {}) {
+    const id = coupon.id || coupon.coupon_id || coupon._id || '';
+    return {
+        ...coupon,
+        id,
+        coupon_id: coupon.coupon_id || id,
+        name: coupon.name || coupon.coupon_name || '优惠券',
+        coupon_name: coupon.coupon_name || coupon.name || '优惠券',
+        valueText: formatCouponValue(coupon),
+        thresholdText: formatCouponThreshold(coupon),
+        poster_badge_text: coupon.poster_badge_text || '',
+        displayName: coupon.poster_badge_text || coupon.coupon_name || coupon.name || '优惠券'
+    };
+}
+
+function resolveShareCouponButtonText({ claimed, unavailable, isLoggedIn, status, message }) {
+    if (claimed) return '已领取';
+    if (!isLoggedIn && !unavailable) return '登录领取';
+    if (!unavailable) return '立即领取';
+    const text = String(message || '').trim();
+    if (status === 'not_started' || text.includes('未开始')) return '未开始';
+    if (status === 'daily_exhausted' || status === 'out_of_stock' || text.includes('领完')) return '已领完';
+    return '已结束';
+}
+
+function buildShareCouponBarView(coupon = {}, { status = 'idle', message = '', canClaim = true, isLoggedIn = false } = {}) {
+    const normalized = buildPosterCouponOption(coupon);
+    const claimed = status === 'already_owned' || status === 'claimed' || status === 'success';
+    const unavailable = canClaim === false && !claimed;
+    const displayMessage = claimed
+        ? (message || '已领取，可下单使用')
+        : (message || (isLoggedIn ? '扫码福利，已为你锁定' : '登录后放入卡包'));
+    return {
+        coupon: normalized,
+        title: normalized.poster_badge_text || normalized.coupon_name || normalized.name,
+        status,
+        message,
+        can_claim: canClaim !== false,
+        claimed,
+        button_disabled: claimed || unavailable,
+        button_text: resolveShareCouponButtonText({ claimed, unavailable, isLoggedIn, status, message }),
+        valueText: formatCouponValue(coupon),
+        thresholdText: formatCouponThreshold(coupon),
+        display_desc: displayMessage || formatCouponThreshold(coupon)
+    };
+}
+
+function buildShareCouponFallbackBar({ couponId = '', ticketId = '', status = 'checking', message = '正在确认优惠券状态' } = {}) {
+    const isChecking = status === 'checking';
+    return {
+        coupon: {
+            id: couponId || ticketId,
+            coupon_id: couponId,
+            ticket_id: ticketId,
+            name: '扫码优惠券',
+            coupon_name: '扫码优惠券'
+        },
+        title: '扫码优惠券',
+        status,
+        message,
+        can_claim: false,
+        claimed: false,
+        button_disabled: true,
+        button_text: isChecking ? '校验中' : '不可领取',
+        valueText: '券',
+        thresholdText: '扫码福利',
+        display_desc: message
+    };
+}
+
+function appendDetailQueryParam(params, key, value) {
+    if (value === null || value === undefined || value === '') return;
+    params.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
+}
+
+function buildProductDetailRelaunchUrl(productId, options = {}) {
+    const params = [];
+    appendDetailQueryParam(params, 'id', productId);
+    appendDetailQueryParam(params, 'exchange_coupon_id', options.exchange_coupon_id);
+    appendDetailQueryParam(params, 'cid', options.coupon_id || options.cid);
+    appendDetailQueryParam(params, 'ticket', options.ticket || options.ticket_id || options.t);
+    appendDetailQueryParam(params, 'invite', options.invite);
+    appendDetailQueryParam(params, 'limited_spot_card_id', options.limited_spot_card_id);
+    appendDetailQueryParam(params, 'limited_spot_offer_id', options.limited_spot_offer_id);
+    appendDetailQueryParam(params, 'limited_sale_slot_id', options.limited_sale_slot_id);
+    appendDetailQueryParam(params, 'limited_sale_item_id', options.limited_sale_item_id);
+    appendDetailQueryParam(params, 'limited_spot_mode', options.limited_spot_mode);
+    return `/pages/product/detail?${params.join('&')}`;
 }
 
 function isSameProductId(productId, candidate) {
@@ -248,6 +372,16 @@ Page({
         limitedSpotOriginalPrice: '',
         limitedSpotLockedSkuId: '',
         productCouponChips: [],
+        posterCouponOptions: [],
+        selectedPosterCouponId: '',
+        selectedPosterCoupon: null,
+        posterCouponLoading: false,
+        posterCouponTip: '',
+        showPosterCouponPicker: false,
+        shareCouponId: '',
+        shareTicketId: '',
+        shareCouponBar: null,
+        shareCouponClaiming: false,
         estimatedPoints: 0,
         showSharePanel: false,
         showTimelineTip: false
@@ -290,7 +424,7 @@ Page({
             if (prev !== rid) {
                 app.globalData.productDetailNfRelaunchKey = rid;
                 wx.reLaunch({
-                    url: `/pages/product/detail?id=${encodeURIComponent(rid)}`,
+                    url: buildProductDetailRelaunchUrl(rid, options),
                     fail: () => {
                         app.globalData.productDetailNfRelaunchKey = '';
                         this.setData({ id: normalizedId });
@@ -303,6 +437,15 @@ Page({
         }
 
         const exchangeCouponId = options.exchange_coupon_id ? String(options.exchange_coupon_id) : '';
+        const shareCouponId = options.coupon_id || options.cid ? String(options.coupon_id || options.cid) : '';
+        const shareTicketId = options.ticket || options.ticket_id || options.t ? String(options.ticket || options.ticket_id || options.t) : '';
+        const initialShareCouponBar = shareCouponId || shareTicketId
+            ? buildShareCouponFallbackBar({
+                couponId: shareCouponId,
+                ticketId: shareTicketId,
+                message: '正在确认扫码优惠券'
+            })
+            : null;
         const limitedSpotCardId = options.limited_sale_slot_id
             ? String(options.limited_sale_slot_id)
             : (options.limited_spot_card_id ? String(options.limited_spot_card_id) : '');
@@ -324,6 +467,9 @@ Page({
             exchangeMode: !!exchangeCouponId,
             exchangeCouponId,
             exchangeTitle,
+            shareCouponId,
+            shareTicketId,
+            shareCouponBar: initialShareCouponBar,
             limitedSpotCardId,
             limitedSpotOfferId,
             limitedSpotSource,
@@ -368,6 +514,8 @@ Page({
     async loadProduct(id) {
         const result = await loadProduct(this, id);
         this.schedulePurchaseBenefitsRefresh({ reloadCoupons: true });
+        this.loadPosterCouponOptions();
+        this.loadShareCouponPrompt();
         this._scheduleDetailSectionObserver();
         return result;
     },
@@ -417,6 +565,7 @@ Page({
     },
 
     buildCouponChips(coupons = [], amount = 0) {
+        const seenDisplayKeys = new Set();
         return coupons
             .filter((coupon) => String(coupon.coupon_type || coupon.type || '').toLowerCase() !== 'exchange')
             .map((coupon) => ({
@@ -428,11 +577,232 @@ Page({
                 if (b.discountAmount !== a.discountAmount) return b.discountAmount - a.discountAmount;
                 return toFiniteNumber(a.coupon.min_purchase, 0) - toFiniteNumber(b.coupon.min_purchase, 0);
             })
+            .filter(({ coupon }) => {
+                const key = getCouponDisplayKey(coupon);
+                if (seenDisplayKeys.has(key)) return false;
+                seenDisplayKeys.add(key);
+                return true;
+            })
             .map(({ coupon }) => ({
                 id: coupon._id || coupon.id || coupon.coupon_id || `${coupon.coupon_name || coupon.name}:${coupon.coupon_value}`,
                 valueText: formatCouponValue(coupon),
                 thresholdText: formatCouponThreshold(coupon)
             }));
+    },
+
+    buildPosterCouponOptions(coupons = []) {
+        const product = this.data.product || {};
+        const seenDisplayKeys = new Set();
+        return (Array.isArray(coupons) ? coupons : [])
+            .filter((coupon) => String(coupon.coupon_type || coupon.type || '').toLowerCase() !== 'exchange')
+            .filter((coupon) => coupon.share_poster_enabled === 1 || coupon.share_poster_enabled === true || coupon.share_poster_enabled === '1')
+            .filter((coupon) => couponAppliesToProduct(coupon, product))
+            .filter((coupon) => {
+                const key = getCouponDisplayKey(coupon);
+                if (seenDisplayKeys.has(key)) return false;
+                seenDisplayKeys.add(key);
+                return true;
+            })
+            .map(buildPosterCouponOption)
+            .filter((coupon) => coupon.id)
+            .slice(0, 6);
+    },
+
+    async loadPosterCouponOptions() {
+        if (!this.data.product || !(this.data.product.id || this.data.product._id)) return;
+        if (!this.isProductCouponEnabled()) {
+            this.setData({
+                posterCouponOptions: [],
+                selectedPosterCouponId: '',
+                selectedPosterCoupon: null,
+                posterCouponTip: '',
+                showPosterCouponPicker: false
+            });
+            return;
+        }
+        this.setData({ posterCouponLoading: true, posterCouponTip: '', showPosterCouponPicker: true });
+        try {
+            const res = await get('/coupons/center', { share_poster: 1 }, { showError: false, maxRetries: 0 });
+            const coupons = extractCouponList(res);
+            const posterCouponOptions = this.buildPosterCouponOptions(coupons);
+            const selectedId = String(this.data.selectedPosterCouponId || '');
+            const selectedPosterCoupon = posterCouponOptions.find((coupon) => String(coupon.id) === selectedId) || null;
+            const selectedKey = selectedPosterCoupon ? String(selectedPosterCoupon.id) : '';
+            this.setData({
+                posterCouponOptions: posterCouponOptions.map((coupon) => ({
+                    ...coupon,
+                    selected: String(coupon.id) === selectedKey
+                })),
+                selectedPosterCouponId: selectedKey,
+                selectedPosterCoupon,
+                posterCouponTip: posterCouponOptions.length ? '' : '暂无可用于海报分享的优惠券',
+                showPosterCouponPicker: posterCouponOptions.length > 0
+            });
+        } catch (_err) {
+            this.setData({
+                posterCouponOptions: [],
+                selectedPosterCouponId: '',
+                selectedPosterCoupon: null,
+                posterCouponTip: '',
+                showPosterCouponPicker: false
+            });
+        } finally {
+            this.setData({ posterCouponLoading: false });
+        }
+    },
+
+    async loadShareCouponPrompt() {
+        const couponId = String(this.data.shareCouponId || '').trim();
+        const ticketId = String(this.data.shareTicketId || '').trim();
+        if (!couponId && !ticketId) return;
+        const fallbackBar = (status, message) => buildShareCouponFallbackBar({
+            couponId,
+            ticketId,
+            status,
+            message
+        });
+        try {
+            const query = ticketId ? { ticket: ticketId } : { coupon_id: couponId };
+            const res = await get('/coupons/info', query, { showError: false, maxRetries: 0 });
+            const coupon = res && res.coupon;
+            if (!coupon) {
+                this.setData({
+                    shareCouponBar: fallbackBar('invalid', '这张扫码券暂不可领取')
+                });
+                return;
+            }
+            const status = String(res.claim_status || '').trim() || 'idle';
+            const message = String(res.claim_message || '').trim();
+            const loginState = getLoginState();
+            const shareCouponBar = buildShareCouponBarView(coupon, {
+                status,
+                message,
+                canClaim: res.can_claim !== false,
+                isLoggedIn: !!loginState.isLoggedIn
+            });
+            this.setData({
+                shareCouponBar
+            });
+            this.autoClaimShareCouponIfNeeded();
+        } catch (_err) {
+            this.setData({
+                shareCouponBar: fallbackBar('error', '优惠券状态加载失败')
+            });
+        }
+    },
+
+    onSelectPosterCoupon(e) {
+        const couponId = String(e.currentTarget.dataset.couponId || '');
+        const selectedPosterCoupon = (this.data.posterCouponOptions || []).find((coupon) => String(coupon.id) === couponId) || null;
+        const alreadySelected = selectedPosterCoupon && String(this.data.selectedPosterCouponId || '') === String(selectedPosterCoupon.id);
+        const nextSelectedId = alreadySelected || !selectedPosterCoupon ? '' : String(selectedPosterCoupon.id);
+        this.setData({
+            selectedPosterCouponId: nextSelectedId,
+            selectedPosterCoupon: nextSelectedId ? selectedPosterCoupon : null,
+            posterCouponOptions: (this.data.posterCouponOptions || []).map((coupon) => ({
+                ...coupon,
+                selected: String(coupon.id) === nextSelectedId
+            }))
+        });
+    },
+
+    clearPosterCoupon() {
+        this.setData({
+            selectedPosterCouponId: '',
+            selectedPosterCoupon: null,
+            posterCouponOptions: (this.data.posterCouponOptions || []).map((coupon) => ({
+                ...coupon,
+                selected: false
+            }))
+        });
+    },
+
+    getShareCouponClaimKey() {
+        const couponId = String(this.data.shareCouponId || '').trim();
+        const ticketId = String(this.data.shareTicketId || '').trim();
+        if (ticketId) return `ticket:${ticketId}`;
+        if (couponId) return `coupon:${couponId}`;
+        return '';
+    },
+
+    async autoClaimShareCouponIfNeeded() {
+        const bar = this.data.shareCouponBar;
+        if (!bar || bar.claimed || bar.can_claim === false) return;
+        const loginState = getLoginState();
+        if (!loginState.isLoggedIn) return;
+        const key = this.getShareCouponClaimKey();
+        if (!key || this._autoClaimShareCouponKey === key) return;
+        this._autoClaimShareCouponKey = key;
+        await this.claimShareCoupon({ auto: true });
+    },
+
+    async claimShareCoupon(options = {}) {
+        const auto = !!(options && options.auto);
+        const couponId = String(this.data.shareCouponId || '').trim();
+        const ticketId = String(this.data.shareTicketId || '').trim();
+        const bar = this.data.shareCouponBar;
+        if (this.data.shareCouponClaiming || !bar || (!couponId && !ticketId)) return;
+        if (bar.claimed || bar.status === 'success') return;
+        if (bar.can_claim === false) {
+            wx.showToast({ title: bar.message || '当前不可领取', icon: 'none' });
+            return;
+        }
+        try {
+            await ensureLogin({ message: '请先登录领取优惠券' });
+        } catch (_err) {
+            if (auto) return;
+            wx.showToast({ title: '请先登录领取优惠券', icon: 'none' });
+            return;
+        }
+        this.setData({
+            shareCouponClaiming: true,
+            'shareCouponBar.button_text': '领取中'
+        });
+        try {
+            const payload = ticketId ? { ticket: ticketId } : { coupon_id: couponId };
+            const res = await post('/coupons/claim', payload, { showError: false, maxRetries: 0 });
+            if (res && res.success === false) {
+                const msg = String(res.message || '领取失败，请稍后重试');
+                this.setData({
+                    'shareCouponBar.status': msg.includes('已领取') ? 'already_owned' : 'error',
+                    'shareCouponBar.claimed': msg.includes('已领取'),
+                    'shareCouponBar.message': msg,
+                    'shareCouponBar.display_desc': msg,
+                    'shareCouponBar.button_disabled': msg.includes('已领取'),
+                    'shareCouponBar.button_text': msg.includes('已领取') ? '已领取' : '领取'
+                });
+                wx.showToast({ title: msg.length > 10 ? '优惠券暂不可领' : msg, icon: 'none' });
+                return;
+            }
+            this.setData({
+                'shareCouponBar.status': 'success',
+                'shareCouponBar.claimed': true,
+                'shareCouponBar.can_claim': false,
+                'shareCouponBar.message': '已领取，可下单使用',
+                'shareCouponBar.display_desc': '已领取，可下单使用',
+                'shareCouponBar.button_disabled': true,
+                'shareCouponBar.button_text': '已领取'
+            });
+            wx.showToast({ title: auto ? '优惠券已领取' : '领取成功', icon: 'success' });
+            this.schedulePurchaseBenefitsRefresh({ reloadCoupons: true });
+        } catch (err) {
+            const msg = normalizeUserMessage(err && err.message, '领取失败，请稍后重试');
+            this.setData({
+                'shareCouponBar.status': msg.includes('已领取') ? 'already_owned' : 'error',
+                'shareCouponBar.claimed': msg.includes('已领取'),
+                'shareCouponBar.message': msg,
+                'shareCouponBar.display_desc': msg,
+                'shareCouponBar.button_disabled': msg.includes('已领取'),
+                'shareCouponBar.button_text': msg.includes('已领取') ? '已领取' : '领取'
+            });
+            wx.showToast({ title: msg.length > 10 ? '优惠券暂不可领' : msg, icon: 'none' });
+        } finally {
+            this.setData({ shareCouponClaiming: false });
+        }
+    },
+
+    async onClaimShareCoupon() {
+        return this.claimShareCoupon();
     },
 
     calculateEstimatedPoints(amount) {

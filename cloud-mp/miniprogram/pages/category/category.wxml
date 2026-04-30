@@ -48,7 +48,7 @@
           interval="4500"
           circular="{{categoryBanners.length > 1}}"
           indicator-color="rgba(0,0,0,0.2)"
-          indicator-active-color="#667eea"
+          indicator-active-color="#2563eb"
         >
           <swiper-item wx:for="{{categoryBanners}}" wx:key="id">
             <view

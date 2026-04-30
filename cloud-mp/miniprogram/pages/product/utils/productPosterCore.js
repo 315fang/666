@@ -106,16 +106,21 @@ class ProductPosterCore {
         });
     }
 
-    async fetchProductWxaCodeToTempPath(productId, inviteCode = '') {
+    async fetchProductWxaCodeToTempPath(productId, inviteCode = '', coupon = null) {
         const res = await callFn('products', {
             action: 'wxacodeProduct',
             product_id: productId,
-            invite_code: inviteCode || ''
+            invite_code: inviteCode || '',
+            coupon_id: coupon && (coupon.coupon_id || coupon.id) || '',
+            ticket: coupon && (coupon.ticket || coupon.ticket_id) || ''
         }, { showError: false });
         const fs = wx.getFileSystemManager();
         const root = wx.env && wx.env.USER_DATA_PATH;
         if (!root) throw new Error('请升级微信版本后重试');
-        const filePath = `${root}/product_wxacode_${String(productId).replace(/[^a-z0-9_-]/ig, '_')}.png`;
+        const couponKey = coupon && (coupon.coupon_id || coupon.id || coupon.ticket || coupon.ticket_id)
+            ? `_${String(coupon.coupon_id || coupon.id || coupon.ticket || coupon.ticket_id).replace(/[^a-z0-9_-]/ig, '_')}`
+            : '';
+        const filePath = `${root}/product_wxacode_${String(productId).replace(/[^a-z0-9_-]/ig, '_')}${couponKey}.png`;
         const base64 = res && (res.wxacode_base64 || (res.data && res.data.wxacode_base64));
         const buf = res && res.buffer;
 
@@ -133,6 +138,36 @@ class ProductPosterCore {
         }
         const apiErr = res && res.error;
         throw new Error(apiErr ? String(apiErr) : '小程序码暂不可用，请稍后重试');
+    }
+
+    drawCouponBadge(ctx, coupon, x, y, w) {
+        if (!coupon) return 0;
+        const valueText = safeText(coupon.valueText || coupon.value_text, '');
+        const title = safeText(coupon.poster_badge_text || coupon.coupon_name || coupon.name, '扫码领券');
+        const threshold = safeText(coupon.thresholdText || coupon.threshold_text, '');
+        if (!valueText && !title) return 0;
+
+        const h = 54;
+        this.fillRoundRect(ctx, x, y, w, h, 14, '#FFF2F1');
+        ctx.save();
+        ctx.fillStyle = '#D93448';
+        ctx.font = '700 27px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(valueText || '领券', x + 16, y + h / 2);
+        const leftWidth = Math.max(66, ctx.measureText(valueText || '领券').width + 28);
+        ctx.strokeStyle = 'rgba(217, 52, 72, 0.22)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x + leftWidth, y + 11);
+        ctx.lineTo(x + leftWidth, y + h - 11);
+        ctx.stroke();
+        ctx.fillStyle = '#8A3B40';
+        ctx.font = '600 19px sans-serif';
+        const copy = threshold ? `${title} · ${threshold}` : title;
+        this.wrapText(ctx, copy, x + leftWidth + 14, y + 34, Math.max(80, w - leftWidth - 28), 22, 1);
+        ctx.restore();
+        return h;
     }
 
     roundRectPath(ctx, x, y, w, h, r) {
@@ -292,7 +327,11 @@ class ProductPosterCore {
         ctx.font = '500 34px sans-serif';
         this.wrapText(ctx, product.name, textX, top + 150, titleMaxWidth, 48, 2);
 
-        if (product.specText) {
+        const coupon = options.coupon || null;
+        const couponY = top + 244;
+        if (coupon) {
+            this.drawCouponBadge(ctx, coupon, textX, couponY, titleMaxWidth);
+        } else if (product.specText) {
             ctx.fillStyle = '#8A8F98';
             ctx.font = '500 22px sans-serif';
             this.wrapText(ctx, product.specText, textX, top + 256, titleMaxWidth, 30, 1);
@@ -300,7 +339,7 @@ class ProductPosterCore {
 
         this.fillRoundRect(ctx, qrX, qrY, qrSize, qrSize, 18, '#F6F7F8');
         try {
-            const qrPath = await this.fetchProductWxaCodeToTempPath(product.id, options.inviteCode || '');
+            const qrPath = await this.fetchProductWxaCodeToTempPath(product.id, options.inviteCode || '', coupon);
             const qrImage = await this.loadCanvasImage(canvas, qrPath);
             ctx.drawImage(qrImage, qrX + 8, qrY + 8, qrSize - 16, qrSize - 16);
         } catch (err) {
@@ -325,7 +364,7 @@ class ProductPosterCore {
         await this.drawInfoSection(ctx, canvas, product, options);
     }
 
-    async generateToTempPath({ product, inviteCode = '' }) {
+    async generateToTempPath({ product, inviteCode = '', coupon = null }) {
         this.qrDrawError = null;
         await new Promise((resolve) => {
             if (typeof wx.nextTick === 'function') wx.nextTick(resolve);
@@ -333,7 +372,7 @@ class ProductPosterCore {
         });
         await sleep(32);
         const { canvas, ctx, W, H, dpr } = await this.getPosterCanvas2d();
-        await this.drawPoster(ctx, canvas, W, H, product, { inviteCode });
+        await this.drawPoster(ctx, canvas, W, H, product, { inviteCode, coupon });
         await sleep(80);
         return this.exportPoster(canvas, W, H, dpr);
     }

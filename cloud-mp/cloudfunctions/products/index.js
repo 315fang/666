@@ -380,13 +380,28 @@ function chooseWxacodeSceneProductId(product = {}, requestedId = '') {
 
 async function resolveShareInviteCode(openid, params = {}) {
     const provided = pickString(params.invite_code || params.invite || '').toUpperCase();
-    if (provided && /^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$/i.test(provided)) {
+    if (provided && /^[A-Z0-9_-]{4,32}$/i.test(provided)) {
         return provided;
     }
     if (!openid) return '';
     const userRes = await db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] }));
     const user = userRes.data && userRes.data[0];
-    return pickString(user && (user.my_invite_code || user.invite_code || '')).toUpperCase();
+    return pickString(user && (user.my_invite_code || user.invite_code || user.member_no || '')).toUpperCase();
+}
+
+function appendPathPart(parts, key, value) {
+    const text = pickString(value);
+    if (!text) return;
+    parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(text)}`);
+}
+
+function buildProductWxacodePath(productId, inviteCode = '', couponId = '', ticketId = '') {
+    const parts = [];
+    appendPathPart(parts, 'id', productId);
+    appendPathPart(parts, 'cid', couponId);
+    appendPathPart(parts, 'ticket', ticketId);
+    appendPathPart(parts, 'invite', inviteCode);
+    return `pages/product/detail${parts.length ? '?' + parts.join('&') : ''}`;
 }
 
 async function generateProductWxacode(openid, params = {}) {
@@ -396,43 +411,40 @@ async function generateProductWxacode(openid, params = {}) {
     if (!product) throw notFound('商品不存在');
     if (!isOnSale(product.status)) throw notFound('商品未上架');
 
-    const sceneProductId = chooseWxacodeSceneProductId(product, requestedId);
-    if (!sceneProductId) {
-        return success({ product_id: requestedId, wxacode_base64: null, error: 'scene_product_id_too_long' });
-    }
-
+    const pathProductId = chooseWxacodeSceneProductId(product, requestedId) || requestedId;
     const inviteCode = await resolveShareInviteCode(openid, params);
-    const baseScene = `pid=${sceneProductId}`;
-    const inviteScene = inviteCode ? `${baseScene}&i=${inviteCode}` : baseScene;
-    const scene = inviteScene.length <= 32 ? inviteScene : baseScene;
+    const couponId = pickString(params.coupon_id || params.cid);
+    const ticketId = pickString(params.ticket || params.ticket_id || params.t);
+    const path = buildProductWxacodePath(pathProductId, inviteCode, couponId, ticketId);
     const width = Math.min(430, Math.max(180, toNumber(params.width || 280, 280)));
 
     try {
-        const res = await cloud.openapi.wxacode.getUnlimited({
-            scene,
-            page: 'pages/product/detail',
+        const res = await cloud.openapi.wxacode.get({
+            path,
             width,
             is_hyaline: false
         });
         const buf = res.buffer;
         if (!buf || (buf.byteLength === 0 && !Buffer.isBuffer(buf))) {
             console.warn('[products/wxacodeProduct] buffer 为空');
-            return success({ product_id: sceneProductId, scene, wxacode_base64: null, error: 'empty_buffer' });
+            return success({ product_id: pathProductId, path, wxacode_base64: null, error: 'empty_buffer' });
         }
         const base64 = Buffer.isBuffer(buf)
             ? buf.toString('base64')
             : Buffer.from(buf).toString('base64');
         return success({
-            product_id: sceneProductId,
-            invite_code: scene === inviteScene ? inviteCode : '',
-            scene,
+            product_id: pathProductId,
+            invite_code: inviteCode,
+            coupon_id: couponId,
+            ticket: ticketId,
+            path,
             wxacode_base64: base64
         });
     } catch (wxacodeErr) {
         console.warn('[products/wxacodeProduct] 生成小程序码失败:', wxacodeErr.errCode || wxacodeErr.message);
         return success({
-            product_id: sceneProductId,
-            scene,
+            product_id: pathProductId,
+            path,
             wxacode_base64: null,
             error: wxacodeErr.message || 'wxacode_failed'
         });

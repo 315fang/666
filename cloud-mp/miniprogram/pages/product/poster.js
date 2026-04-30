@@ -7,9 +7,15 @@ const { formatPriceText, resolveInviteCode } = require('./productDetailShare');
 
 const app = getApp();
 
-function buildShareQuery(productId, inviteCode = '') {
+function buildShareQuery(productId, inviteCode = '', coupon = null) {
     const params = [`id=${encodeURIComponent(String(productId || ''))}`];
     if (inviteCode) params.push(`invite=${encodeURIComponent(String(inviteCode))}`);
+    if (coupon && (coupon.coupon_id || coupon.id)) {
+        params.push(`cid=${encodeURIComponent(String(coupon.coupon_id || coupon.id))}`);
+    }
+    if (coupon && (coupon.ticket || coupon.ticket_id)) {
+        params.push(`ticket=${encodeURIComponent(String(coupon.ticket || coupon.ticket_id))}`);
+    }
     return params.join('&');
 }
 
@@ -34,6 +40,35 @@ function normalizePosterProduct(draft = {}) {
     };
 }
 
+function normalizePosterCoupon(raw = {}) {
+    if (!raw || typeof raw !== 'object') return null;
+    const id = raw.coupon_id || raw.id || '';
+    if (!id && !(raw.ticket || raw.ticket_id)) return null;
+    const type = String(raw.coupon_type || raw.type || '').toLowerCase();
+    const value = Number(raw.coupon_value != null ? raw.coupon_value : raw.value);
+    let valueText = raw.valueText || '';
+    if (!valueText && Number.isFinite(value)) {
+        if (type === 'percent') {
+            const discount = value <= 1 ? value * 10 : value;
+            valueText = `${discount % 1 === 0 ? discount.toFixed(0) : discount.toFixed(1)}折`;
+        } else {
+            valueText = `¥${value % 1 === 0 ? value.toFixed(0) : value.toFixed(2)}`;
+        }
+    }
+    const minPurchase = Number(raw.min_purchase || 0);
+    return {
+        id,
+        coupon_id: id,
+        ticket: raw.ticket || '',
+        ticket_id: raw.ticket_id || '',
+        name: raw.name || raw.coupon_name || '优惠券',
+        coupon_name: raw.coupon_name || raw.name || '优惠券',
+        valueText,
+        thresholdText: raw.thresholdText || (minPurchase > 0 ? `满${minPurchase % 1 === 0 ? minPurchase.toFixed(0) : minPurchase.toFixed(2)}可用` : '无门槛'),
+        poster_badge_text: raw.poster_badge_text || ''
+    };
+}
+
 Page({
     data: {
         id: '',
@@ -41,6 +76,7 @@ Page({
         statusBarHeight: 20,
         navBarHeight: 44,
         product: {},
+        coupon: null,
         posterGenerating: false,
         posterImagePath: '',
         posterPreviewReady: false,
@@ -50,9 +86,12 @@ Page({
     onLoad(options = {}) {
         const id = normalizeProductId(options.id || options.product_id || '');
         const inviteCode = String(options.invite || '').trim() || resolveInviteCode(app);
+        const couponId = String(options.cid || options.coupon_id || '').trim();
+        const ticketId = String(options.ticket || options.ticket_id || options.t || '').trim();
         this.setData({
             id,
             inviteCode,
+            coupon: couponId || ticketId ? { coupon_id: couponId, id: couponId, ticket: ticketId, ticket_id: ticketId } : null,
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navBarHeight: app.globalData.navBarHeight || 44
         });
@@ -68,7 +107,11 @@ Page({
     async loadPosterProduct(id) {
         const draft = readPosterDraft(id);
         if (draft) {
-            this.setData({ product: normalizePosterProduct(draft), loadError: '' });
+            this.setData({
+                product: normalizePosterProduct(draft),
+                coupon: normalizePosterCoupon(draft.coupon) || this.data.coupon,
+                loadError: ''
+            });
             await this.generatePoster();
             return;
         }
@@ -122,7 +165,8 @@ Page({
             const core = new ProductPosterCore(this, { canvasSelector: '#productPosterCanvas' });
             const tempPath = await core.generateToTempPath({
                 product,
-                inviteCode: this.data.inviteCode || ''
+                inviteCode: this.data.inviteCode || '',
+                coupon: this.data.coupon || null
             });
             this.setData({
                 posterImagePath: tempPath,
@@ -184,7 +228,7 @@ Page({
 
     onShareAppMessage() {
         const product = this.data.product || {};
-        const query = buildShareQuery(product.id || this.data.id, this.data.inviteCode);
+        const query = buildShareQuery(product.id || this.data.id, this.data.inviteCode, this.data.coupon);
         return {
             title: product.price ? `¥${product.price} ${product.name}` : product.name,
             path: `/pages/product/detail?${query}`,
@@ -196,7 +240,7 @@ Page({
         const product = this.data.product || {};
         return {
             title: product.price ? `¥${product.price} ${product.name}` : product.name,
-            query: buildShareQuery(product.id || this.data.id, this.data.inviteCode),
+            query: buildShareQuery(product.id || this.data.id, this.data.inviteCode, this.data.coupon),
             imageUrl: this.data.posterImagePath || product.image || ''
         };
     }

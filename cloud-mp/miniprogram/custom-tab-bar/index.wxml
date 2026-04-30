@@ -3,18 +3,18 @@
     wx:for="{{list}}"
     wx:for-index="idx"
     wx:key="pagePath"
-    class="tab-bar-item {{selected === idx ? 'tab-bar-item-active' : ''}}"
+    class="{{item.itemClass}}"
     data-index="{{idx}}"
     bindtap="onSwitchTab"
   >
     <view class="tab-bar-icon-wrap">
       <image
         class="tab-bar-icon"
-        src="{{selected === idx ? item.selectedIconPath : item.iconPath}}"
+        src="{{item.displayIconPath}}"
         mode="aspectFit"
       />
     </view>
-    <text class="tab-bar-text" style="color: {{selected === idx ? selectedColor : color}};">{{item.text}}</text>
-    <view wx:if="{{selected === idx}}" class="tab-bar-indicator"></view>
+    <text class="tab-bar-text" style="color: {{item.textColor}};">{{item.text}}</text>
+    <view wx:if="{{item.active}}" class="tab-bar-indicator"></view>
   </view>
 </view>

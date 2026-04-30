@@ -35,6 +35,7 @@ const userFavorites = require('./user-favorites');
 const userNotifications = require('./user-notifications');
 const userPiggyBank = require('./user-piggy-bank');
 const userWallet = require('./user-wallet');
+const { buildAgentUpgradeProgress } = require('./user-upgrade-progress');
 const portalPassword = require('./user-portal-password');
 const {
     resolveRoleLevel,
@@ -1582,6 +1583,14 @@ const handleAction = {
         const tier = calculateTier(growthValue, growthTiers.length ? growthTiers : null);
         const roleLevel = toNum(user.role_level, 0);
         const roleLevelConfig = memberLevels.find((item) => Number(item.level) === roleLevel);
+        const evaluation = syncResult && syncResult.directMembers ? syncResult : await evaluateAgentUpgrade(openid);
+        const agentUpgradeProgress = buildAgentUpgradeProgress({
+            ...evaluation,
+            user,
+            memberLevels,
+            currentRoleLevel: roleLevel,
+            growthValue
+        });
         return success({
             current_level: roleLevel,
             current_name: user.role_name || roleLevelConfig?.name || 'VIP用户',
@@ -1599,6 +1608,7 @@ const handleAction = {
             member_levels: memberLevels,
             growth_rules: config.growth_rules || {},
             upgrade_rules: config.upgrade_rules || DEFAULT_AGENT_UPGRADE_RULES,
+            agent_upgrade_progress: agentUpgradeProgress,
             point_levels: Array.isArray(config.point_levels) ? config.point_levels : [],
             point_rules: config.point_rules || {}
         });
@@ -1683,10 +1693,14 @@ const handleAction = {
         return success({ list: coupons });
     }),
 
-    'couponCenter': asyncHandler(async (openid) => {
+    'couponCenter': asyncHandler(async (openid, params = {}) => {
+        const sharePosterOnly = ['1', 'true', 'yes', 'on'].includes(String(params.share_poster || params.poster || '').trim().toLowerCase());
         const [templates, mine] = await Promise.all([
             withTransientDbReadRetry(
-                () => userCoupons.listCouponCenter(openid),
+                () => userCoupons.listCouponCenter(openid, {
+                    sharePosterOnly,
+                    ignoreOwned: sharePosterOnly
+                }),
                 { action: 'couponCenter', openid }
             ),
             withTransientDbReadRetry(
@@ -1855,6 +1869,7 @@ const handleAction = {
         const evaluation = await evaluateAgentUpgrade(openid);
         const points = toNum(evaluation.user.points || evaluation.user.growth_value, 0);
         const canUpgrade = evaluation.nextRoleLevel > evaluation.currentRoleLevel;
+        const agentUpgradeProgress = buildAgentUpgradeProgress(evaluation);
         return success({
             current_level: evaluation.currentRoleLevel,
             current_name: evaluation.user.role_name || DEFAULT_ROLE_NAMES[evaluation.currentRoleLevel] || 'VIP用户',
@@ -1870,7 +1885,8 @@ const handleAction = {
                 : (evaluation.nextRoleLevel === 2 ? toNum(evaluation.upgradeRules.c2_growth_value, DEFAULT_AGENT_UPGRADE_RULES.c2_growth_value) : null)),
             direct_member_count: evaluation.directMembers.length,
             recharge_total: Number(evaluation.rechargeTotal.toFixed(2)),
-            rules: evaluation.upgradeRules
+            rules: evaluation.upgradeRules,
+            agent_upgrade_progress: agentUpgradeProgress
         });
     }),
 

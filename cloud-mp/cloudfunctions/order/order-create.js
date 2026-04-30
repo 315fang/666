@@ -1237,6 +1237,7 @@ async function createOrder(openid, orderData) {
     if (bundleContext) {
         if (coupon_id || user_coupon_id) throw new Error('组合订单不能叠加普通优惠券');
         if (toNumber(points_to_use, 0) > 0) throw new Error('组合订单不能使用积分抵扣');
+        if (use_goods_fund) throw new Error('组合订单不支持货款余额支付');
     }
     if (use_goods_fund) {
         await assertPortalPassword(db, openid, portal_password);

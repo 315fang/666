@@ -1035,7 +1035,9 @@ async function applyRefundProgress(orderId, order = {}, refund = {}) {
         };
     });
     const totalPointsEarned = Math.max(0, toNumber(order.points_earned, 0));
-    const totalGrowthEarned = Math.max(0, Math.floor(resolveOrderPayAmount(order, 0)));
+    const totalGrowthEarned = Math.max(0, Math.floor(
+        order.growth_earned != null ? toNumber(order.growth_earned, 0) : resolveOrderPayAmount(order, 0)
+    ));
     const rewardPointsClawedBefore = Math.max(0, toNumber(order.reward_points_clawback_total, 0));
     const growthClawedBefore = Math.max(0, toNumber(order.growth_clawback_total, 0));
     const rewardPointsClawback = isFullRefund

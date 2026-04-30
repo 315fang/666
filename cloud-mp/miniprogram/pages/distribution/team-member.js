@@ -48,10 +48,24 @@ Page({
     },
 
     onLoad(options) {
+        const memberId = (options && options.id) || '';
+        let preview = null;
+        try {
+            const cached = wx.getStorageSync('teamMemberPreview');
+            const cachedId = cached && String(cached._id || cached.id || '');
+            if (cachedId && cachedId === String(memberId)) {
+                preview = cached;
+            }
+        } catch (_) {}
         this.setData({
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navBarHeight: app.globalData.navBarHeight || 44,
-            memberId: (options && options.id) || ''
+            memberId,
+            ...(preview ? {
+                loading: false,
+                member: preview,
+                detailItems: buildDetailItems(preview)
+            } : {})
         });
         this.loadMemberDetail();
     },
@@ -63,7 +77,7 @@ Page({
             wx.showToast({ title: '成员参数错误', icon: 'none' });
             return;
         }
-        this.setData({ loading: true, loadError: '' });
+        this.setData({ loading: !this.data.member, loadError: '' });
         try {
             const res = await get(`/distribution/team/${memberId}`);
             if (res && res.code === 0 && res.data) {

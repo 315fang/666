@@ -954,15 +954,22 @@ function registerMarketingRoutes(app, deps) {
             stock: row.stock == null ? -1 : toNumber(row.stock, -1),
             issued_count: toNumber(row.issued_count, 0),
             used_count: toNumber(row.used_count, 0),
+            total_claim_limit: row.total_claim_limit == null ? -1 : Math.max(-1, toNumber(row.total_claim_limit, -1)),
+            per_user_limit: row.per_user_limit == null ? 1 : Math.max(1, toNumber(row.per_user_limit, 1)),
             daily_claim_limit: row.daily_claim_limit == null ? -1 : Math.max(-1, toNumber(row.daily_claim_limit, -1)),
             claimed_today_count: claimedTodayCount,
             claim_day_key: claimDayKey,
             claim_time_enabled: claimTimeEnabled ? 1 : 0,
             claim_start_time: claimStartTime,
             claim_end_time: claimEndTime,
+            activity_enabled: toBoolean(row.activity_enabled ?? true) ? 1 : 0,
+            activity_start_at: pickString(row.activity_start_at || ''),
+            activity_end_at: pickString(row.activity_end_at || ''),
             scope: pickString(row.scope || 'all'),
             scope_ids: toArray(row.scope_ids),
             show_in_coupon_center: toBoolean(row.show_in_coupon_center ?? false) ? 1 : 0,
+            share_poster_enabled: toBoolean(row.share_poster_enabled ?? false) ? 1 : 0,
+            poster_badge_text: pickString(row.poster_badge_text || ''),
             is_active: toBoolean(isActive == null ? 1 : isActive) ? 1 : 0,
             status: toBoolean(isActive == null ? 1 : isActive) ? 1 : 0
         };
@@ -989,15 +996,26 @@ function registerMarketingRoutes(app, deps) {
             min_purchase: minPurchase,
             valid_days: Math.max(1, toNumber(body.valid_days ?? existing.valid_days, 30)),
             stock: body.stock == null ? (existing.stock == null ? -1 : toNumber(existing.stock, -1)) : toNumber(body.stock, -1),
+            total_claim_limit: body.total_claim_limit == null
+                ? (existing.total_claim_limit == null ? -1 : Math.max(-1, toNumber(existing.total_claim_limit, -1)))
+                : Math.max(-1, toNumber(body.total_claim_limit, -1)),
+            per_user_limit: body.per_user_limit == null
+                ? (existing.per_user_limit == null ? 1 : Math.max(1, toNumber(existing.per_user_limit, 1)))
+                : Math.max(1, toNumber(body.per_user_limit, 1)),
             daily_claim_limit: body.daily_claim_limit == null
                 ? (existing.daily_claim_limit == null ? -1 : Math.max(-1, toNumber(existing.daily_claim_limit, -1)))
                 : Math.max(-1, toNumber(body.daily_claim_limit, -1)),
             claim_time_enabled: toBoolean(body.claim_time_enabled ?? existing.claim_time_enabled ?? false) ? 1 : 0,
             claim_start_time: pickString(body.claim_start_time ?? existing.claim_start_time ?? '09:00', '09:00'),
             claim_end_time: pickString(body.claim_end_time ?? existing.claim_end_time ?? '23:59', '23:59'),
+            activity_enabled: toBoolean(body.activity_enabled ?? existing.activity_enabled ?? true) ? 1 : 0,
+            activity_start_at: pickString(body.activity_start_at ?? existing.activity_start_at ?? ''),
+            activity_end_at: pickString(body.activity_end_at ?? existing.activity_end_at ?? ''),
             scope: pickString(body.scope ?? existing.scope ?? 'all'),
             scope_ids: toArray(body.scope_ids ?? existing.scope_ids),
             show_in_coupon_center: toBoolean(body.show_in_coupon_center ?? existing.show_in_coupon_center ?? false) ? 1 : 0,
+            share_poster_enabled: toBoolean(body.share_poster_enabled ?? existing.share_poster_enabled ?? false) ? 1 : 0,
+            poster_badge_text: pickString(body.poster_badge_text ?? existing.poster_badge_text ?? ''),
             is_active: toBoolean(body.is_active ?? existing.is_active ?? existing.status ?? 1) ? 1 : 0,
             status: toBoolean(body.is_active ?? existing.is_active ?? existing.status ?? 1) ? 1 : 0,
             updated_at: nowIso()

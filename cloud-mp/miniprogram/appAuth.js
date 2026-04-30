@@ -32,6 +32,43 @@ function extractCachedOpenid(userInfo, openid) {
     return '';
 }
 
+function decodeLaunchValue(value) {
+    let text = value == null ? '' : String(value);
+    for (let i = 0; i < 2; i += 1) {
+        try {
+            const decoded = decodeURIComponent(text);
+            if (decoded === text) break;
+            text = decoded;
+        } catch (_) {
+            break;
+        }
+    }
+    return text.trim();
+}
+
+function isInviteCodeCandidate(value) {
+    return /^[A-Z0-9_-]{4,32}$/i.test(String(value || '').trim());
+}
+
+function parseInviteCodeFromLaunchValue(raw) {
+    const value = decodeLaunchValue(raw);
+    if (!value) return '';
+    const directMatch = value.match(/^i=([A-Z0-9_-]{4,32})$/i);
+    if (directMatch) return directMatch[1].toUpperCase();
+    if (isInviteCodeCandidate(value)) return value.toUpperCase();
+
+    const queryText = value.includes('?') ? value.slice(value.indexOf('?') + 1).split('#')[0] : value.split('#')[0];
+    const parts = queryText.split('&');
+    for (const part of parts) {
+        const [rawKey, ...rawValueParts] = part.split('=');
+        const key = decodeLaunchValue(rawKey);
+        if (key !== 'i' && key !== 'invite') continue;
+        const code = decodeLaunchValue(rawValueParts.join('='));
+        if (isInviteCodeCandidate(code)) return code.toUpperCase();
+    }
+    return '';
+}
+
 module.exports = {
     _captureInviteFromLaunch(options) {
         try {
@@ -42,6 +79,9 @@ module.exports = {
             if (q && q.scene != null && q.scene !== '') {
                 this._parseSceneToPendingInvite(q.scene);
             }
+            if (q && q.q != null && q.q !== '') {
+                this._parseSceneToPendingInvite(q.q);
+            }
         } catch (e) {
             /* ignore */
         }
@@ -49,16 +89,7 @@ module.exports = {
 
     _parseSceneToPendingInvite(raw) {
         try {
-            let value = raw;
-            if (typeof value === 'number') value = String(value);
-            value = String(value);
-            try {
-                value = decodeURIComponent(value);
-            } catch (e) { /* 保持原样 */ }
-            let code = '';
-            const match = value.match(/^i=([23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8})$/i);
-            if (match) code = match[1];
-            else if (/^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{8}$/i.test(value)) code = value;
+            const code = parseInviteCodeFromLaunchValue(raw);
             if (code) wx.setStorageSync('pending_invite_code', code.toUpperCase());
         } catch (e) { /* ignore */ }
     },

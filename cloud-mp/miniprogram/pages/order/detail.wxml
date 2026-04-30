@@ -223,6 +223,10 @@
       <text class="info-label">实付金额</text>
       <text class="info-value price-value-strong">¥{{order.display_pay_amount}}</text>
     </view>
+    <view class="info-row" wx:if="{{order.display_growth_reward_text}}">
+      <text class="info-label">本单成长值</text>
+      <text class="info-value growth-value-text">{{order.display_growth_reward_text}}</text>
+    </view>
     <view class="info-row" wx:if="{{order.refunded_cash_total > 0}}">
       <text class="info-label">累计已退</text>
       <text class="info-value">¥{{order.display_refunded_cash_total}}</text>

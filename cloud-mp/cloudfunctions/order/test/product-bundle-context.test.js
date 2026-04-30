@@ -158,3 +158,80 @@ test('resolveBundleContext carries commission pool and solo/split maps', async (
         restore();
     }
 });
+
+test('resolveBundleContext allows repeatable bundle option up to configured max quantity', async () => {
+    const base = createCollections();
+    const collections = createCollections({
+        product_bundles: [{
+            ...base.product_bundles[0],
+            groups: [{
+                ...base.product_bundles[0].groups[0],
+                min_select: 3,
+                max_select: 3,
+                options: [{
+                    ...base.product_bundles[0].groups[0].options[0],
+                    repeatable: 1,
+                    max_qty_per_order: 3
+                }]
+            }]
+        }]
+    });
+    const { module, restore } = loadProductBundleModule(collections);
+    try {
+        const context = await module.resolveBundleContext({
+            bundle_id: 'bundle-1',
+            selected_items: [{ group_key: 'main', product_id: '1', quantity: 3 }]
+        });
+
+        assert.equal(context.normalized_items.length, 1);
+        assert.equal(context.normalized_items[0].quantity, 3);
+    } finally {
+        restore();
+    }
+});
+
+test('resolveBundleContext rejects repeatable quantity above option max', async () => {
+    const base = createCollections();
+    const collections = createCollections({
+        product_bundles: [{
+            ...base.product_bundles[0],
+            groups: [{
+                ...base.product_bundles[0].groups[0],
+                min_select: 1,
+                max_select: 4,
+                options: [{
+                    ...base.product_bundles[0].groups[0].options[0],
+                    repeatable: 1,
+                    max_qty_per_order: 3
+                }]
+            }]
+        }]
+    });
+    const { module, restore } = loadProductBundleModule(collections);
+    try {
+        await assert.rejects(
+            () => module.resolveBundleContext({
+                bundle_id: 'bundle-1',
+                selected_items: [{ group_key: 'main', product_id: '1', quantity: 4 }]
+            }),
+            /数量超过可选上限/
+        );
+    } finally {
+        restore();
+    }
+});
+
+test('resolveBundleContext rejects multi-quantity non-repeatable bundle option', async () => {
+    const { module, restore } = loadProductBundleModule(createCollections());
+    try {
+        await assert.rejects(
+            () => module.resolveBundleContext({
+                bundle_id: 'bundle-1',
+                selected_items: [{ group_key: 'main', product_id: '1', quantity: 2 }]
+            }),
+            /数量超过可选上限|每单只能选择 1 件/
+        );
+    } finally {
+        restore();
+    }
+});

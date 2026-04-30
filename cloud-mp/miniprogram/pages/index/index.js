@@ -85,6 +85,10 @@ function findNextCandidateIndex(candidates = [], currentImage = '', currentIndex
     return -1;
 }
 
+function withRevealClass(baseClass, revealed) {
+    return revealed ? `${baseClass} revealed` : baseClass;
+}
+
 Page({
     data: {
         homeConfigs: {},
@@ -117,6 +121,17 @@ Page({
         revealFeatured: false,
         revealBrand: false,
         revealBottomPosters: false,
+        showHomeLoading: true,
+        showSoloSearch: true,
+        navRootClass: 'custom-nav nav-transparent',
+        navBubbleClass: 'nav-bubble-bar nav-visible',
+        navSearchBoxClass: 'nav-search-box nav-hidden',
+        revealMidPostersClass: 'poster-section scroll-reveal',
+        revealCouponsClass: 'coupon-section scroll-reveal',
+        revealProductsClass: 'products-section products-section-grouped scroll-reveal',
+        revealFeaturedClass: 'products-section scroll-reveal',
+        revealBrandClass: 'brand-zone-section scroll-reveal',
+        revealBottomPostersClass: 'poster-section scroll-reveal',
         navBrandTitle: '问兰镜像',
         navBrandSub: '品牌甄选',
         statusBarHeight: 20,
@@ -134,6 +149,12 @@ Page({
         claimableCouponCount: 0,
         homeBundles: [],
         unusedCouponCount: 0,
+        couponZoneTitle: '优惠券中心',
+        couponZoneSubtitle: '领券后下单可用',
+        brandZoneCoverKicker: '品牌甄选',
+        brandZoneCoverTitle: '问兰镜像',
+        showFeaturedSkeleton: false,
+        showProductsEmpty: false,
         brandZone: createEmptyBrandZone()
     },
 
@@ -230,6 +251,32 @@ onReady() {
 
     _revealObservers: [],
 
+    _buildHomeViewPatch(patch = {}) {
+        const next = Object.assign({}, this.data, patch);
+        const featuredProducts = Array.isArray(next.featuredProducts) ? next.featuredProducts : [];
+        const featuredSections = Array.isArray(next.featuredSections) ? next.featuredSections : [];
+        const bubbles = Array.isArray(next.bubbles) ? next.bubbles : [];
+        return {
+            showHomeLoading: !!(next.loading && featuredProducts.length === 0 && featuredSections.length === 0),
+            showFeaturedSkeleton: !!(next.loading && featuredProducts.length === 0),
+            showProductsEmpty: !!(!next.loading && featuredProducts.length === 0),
+            showSoloSearch: bubbles.length === 0 && !next.navScrolled,
+            navRootClass: next.navScrolled ? 'custom-nav nav-scrolled' : 'custom-nav nav-transparent',
+            navBubbleClass: next.navScrolled ? 'nav-bubble-bar nav-hidden' : 'nav-bubble-bar nav-visible',
+            navSearchBoxClass: next.navScrolled ? 'nav-search-box nav-visible' : 'nav-search-box nav-hidden',
+            revealMidPostersClass: withRevealClass('poster-section scroll-reveal', next.revealMidPosters),
+            revealCouponsClass: withRevealClass('coupon-section scroll-reveal', next.revealCoupons),
+            revealProductsClass: withRevealClass('products-section products-section-grouped scroll-reveal', next.revealProducts),
+            revealFeaturedClass: withRevealClass('products-section scroll-reveal', next.revealFeatured),
+            revealBrandClass: withRevealClass('brand-zone-section scroll-reveal', next.revealBrand),
+            revealBottomPostersClass: withRevealClass('poster-section scroll-reveal', next.revealBottomPosters)
+        };
+    },
+
+    _setHomeData(patch, callback) {
+        this.setData(Object.assign({}, patch, this._buildHomeViewPatch(patch)), callback);
+    },
+
     _getRevealTargetMap() {
         const hasFeaturedSections = Array.isArray(this.data.featuredSections) && this.data.featuredSections.length > 0;
         return {
@@ -275,7 +322,7 @@ onReady() {
                 const observer = this.createIntersectionObserver({ thresholds: [0.1] });
                 observer.relativeToViewport({ bottom: -40 }).observe('#' + id, (res) => {
                     if (res.intersectionRatio < 0.1) return;
-                    this.setData({ [dataKey]: true });
+                    this._setHomeData({ [dataKey]: true });
                     observer.disconnect();
                     const idx = this._revealObservers.indexOf(observer);
                     if (idx > -1) this._revealObservers.splice(idx, 1);
@@ -284,7 +331,7 @@ onReady() {
             });
 
             if (Object.keys(revealImmediately).length > 0) {
-                this.setData(revealImmediately);
+                this._setHomeData(revealImmediately);
             }
         });
     },
@@ -306,7 +353,7 @@ onReady() {
         const scrolled = scrollTop > 40;
         const updates = { heroOpacity, heroTransform };
         if (scrolled !== this.data.navScrolled) updates.navScrolled = scrolled;
-        this.setData(updates);
+        this._setHomeData(updates);
     },
 
     onPullDownRefresh() {
@@ -599,11 +646,13 @@ onReady() {
                 cover_image: nextImage,
                 image: nextImage,
                 firstImage: nextImage,
+                cardImage: nextImage,
+                hasCardImage: true,
                 image_candidates: candidates,
                 image_candidate_index: nextCandidateIndex,
                 image_missing: false
             };
-            this.setData({ featuredProducts });
+            this._setHomeData({ featuredProducts });
             return;
         }
 
@@ -616,12 +665,14 @@ onReady() {
             cover_image: '',
             image: '',
             firstImage: '',
+            cardImage: '',
+            hasCardImage: false,
             image_candidates: candidates,
             image_candidate_index: candidates.length - 1,
             image_missing: true,
             _detailImageHydrated: true
         };
-        this.setData({ featuredProducts });
+        this._setHomeData({ featuredProducts });
 
         if (currentImage || candidates.length) {
             this.onAssetImageError({
@@ -671,7 +722,9 @@ onReady() {
                     display_image: nextImage,
                     cover_image: nextImage,
                     image: nextImage,
-                    firstImage: nextImage
+                    firstImage: nextImage,
+                    cardImage: nextImage,
+                    hasCardImage: true
                 };
             } else {
                 featuredProducts[index] = {
@@ -679,11 +732,13 @@ onReady() {
                     display_image: '',
                     cover_image: '',
                     image: '',
-                    firstImage: ''
+                    firstImage: '',
+                    cardImage: '',
+                    hasCardImage: false
                 };
             }
 
-            this.setData({ featuredProducts });
+            this._setHomeData({ featuredProducts });
             return nextCandidateIndex !== -1;
         } catch (err) {
             console.warn('[Index] 商品详情补图失败:', productId, err && (err.message || err));

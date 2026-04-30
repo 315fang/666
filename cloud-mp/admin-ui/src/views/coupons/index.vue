@@ -1,45 +1,46 @@
 <template>
   <div class="coupons-page">
     <el-card>
-      <template #header>优惠券管理</template>
-
-      <el-alert
-        title="自动发券：支持新用户注册自动发券。可在下方配置触发规则。"
-        type="info"
-        :closable="false"
-        show-icon
-        style="margin-bottom: 14px;"
-      />
-
-      <el-card shadow="never" style="margin-bottom: 16px;">
-        <template #header>
-          <div style="display:flex;align-items:center;justify-content:space-between;">
-            <span>自动发券规则</span>
-            <el-button type="primary" :loading="autoRuleSaving" @click="saveAutoRule">保存规则</el-button>
+      <template #header>
+        <div class="page-head">
+          <div>
+            <div class="page-title">优惠券管理</div>
+            <div class="page-subtitle">日常只处理券列表和投放开关，自动发券等低频规则收进高级配置。</div>
           </div>
-        </template>
-        <el-form label-width="130px">
-          <el-form-item label="注册自动发券">
-            <el-switch v-model="autoRule.enabled" />
-          </el-form-item>
-          <el-form-item label="目标优惠券">
-            <el-select v-model="autoRule.coupon_id" placeholder="请选择优惠券" style="width:320px">
-              <el-option v-for="c in couponOptions" :key="c.id" :label="`${c.name} (#${c.id})`" :value="c.id" />
-            </el-select>
-          </el-form-item>
-          <el-form-item label="目标用户等级">
-            <el-checkbox-group v-model="autoRule.target_levels">
-              <el-checkbox :label="0">VIP用户(0)</el-checkbox>
-              <el-checkbox :label="1">初级会员(1)</el-checkbox>
-              <el-checkbox :label="2">高级会员(2)</el-checkbox>
-              <el-checkbox :label="3">推广合伙人(3)</el-checkbox>
-              <el-checkbox :label="4">运营合伙人(4)</el-checkbox>
-              <el-checkbox :label="5">区域合伙人(5)</el-checkbox>
-              <el-checkbox :label="6">线下实体门店(6)</el-checkbox>
-            </el-checkbox-group>
-          </el-form-item>
-        </el-form>
-      </el-card>
+          <el-button type="primary" @click="openForm()">创建优惠券</el-button>
+        </div>
+      </template>
+
+      <el-collapse class="advanced-collapse">
+        <el-collapse-item title="高级规则：注册自动发券" name="auto-rule">
+          <div class="auto-rule-panel">
+            <el-form label-width="130px">
+              <el-form-item label="注册自动发券">
+                <el-switch v-model="autoRule.enabled" />
+              </el-form-item>
+              <el-form-item label="目标优惠券">
+                <el-select v-model="autoRule.coupon_id" placeholder="请选择优惠券" style="width:320px">
+                  <el-option v-for="c in couponOptions" :key="c.id" :label="`${c.name} (#${c.id})`" :value="c.id" />
+                </el-select>
+              </el-form-item>
+              <el-form-item label="目标用户等级">
+                <el-checkbox-group v-model="autoRule.target_levels">
+                  <el-checkbox :label="0">VIP用户(0)</el-checkbox>
+                  <el-checkbox :label="1">初级会员(1)</el-checkbox>
+                  <el-checkbox :label="2">高级会员(2)</el-checkbox>
+                  <el-checkbox :label="3">推广合伙人(3)</el-checkbox>
+                  <el-checkbox :label="4">运营合伙人(4)</el-checkbox>
+                  <el-checkbox :label="5">区域合伙人(5)</el-checkbox>
+                  <el-checkbox :label="6">线下实体门店(6)</el-checkbox>
+                </el-checkbox-group>
+              </el-form-item>
+            </el-form>
+            <div class="auto-rule-actions">
+              <el-button type="primary" :loading="autoRuleSaving" @click="saveAutoRule">保存规则</el-button>
+            </div>
+          </div>
+        </el-collapse-item>
+      </el-collapse>
 
       <!-- 搜索查询 -->
       <el-form :inline="true" :model="searchForm" class="filter-container">
@@ -56,7 +57,6 @@
         <el-form-item>
           <el-button type="primary" @click="handleSearch">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
-          <el-button type="success" @click="openForm()">创建优惠券</el-button>
         </el-form-item>
       </el-form>
 
@@ -112,11 +112,16 @@
             <div>已用: <span style="color:#f56c6c">{{ row.used_count }}</span> 张</div>
           </template>
         </el-table-column>
-        <el-table-column label="惊喜礼遇" width="110">
+        <el-table-column label="投放" width="130">
           <template #default="{ row }">
-            <el-tag :type="row.show_in_coupon_center === 1 ? 'success' : 'info'">
-              {{ row.show_in_coupon_center === 1 ? '展示' : '隐藏' }}
-            </el-tag>
+            <div class="coupon-delivery-tags">
+              <el-tag :type="row.show_in_coupon_center === 1 ? 'success' : 'info'" size="small">
+                {{ row.show_in_coupon_center === 1 ? '礼遇页' : '隐藏' }}
+              </el-tag>
+              <el-tag :type="row.share_poster_enabled === 1 ? 'danger' : 'info'" size="small">
+                {{ row.share_poster_enabled === 1 ? '海报带券' : '无海报' }}
+              </el-tag>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="100">
@@ -157,78 +162,92 @@
     </el-card>
 
     <!-- ======== 优惠券表单 ======== -->
-    <el-dialog v-model="formVisible" :title="form.id ? '编辑优惠券' : '创建优惠券'" width="600px">
-      <el-form :model="form" :rules="rules" ref="formRef" label-width="110px">
-        <el-form-item label="优惠券名称" prop="name">
-          <el-input v-model="form.name" placeholder="例如：春季满100减20" />
-        </el-form-item>
+    <el-drawer
+      v-model="formVisible"
+      :title="form.id ? '编辑优惠券' : '创建优惠券'"
+      size="720px"
+      class="coupon-drawer"
+      :close-on-click-modal="false"
+    >
+      <el-form :model="form" :rules="rules" ref="formRef" label-width="110px" class="coupon-form">
+        <section class="coupon-form-section">
+          <div class="section-title">基础信息</div>
+          <el-form-item label="优惠券名称" prop="name">
+            <el-input v-model="form.name" placeholder="例如：春季满100减20" />
+          </el-form-item>
         
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="券类型" prop="type">
-              <el-select v-model="form.type" style="width:100%">
-                <el-option label="满减券 (固定减免)" value="fixed" />
-                <el-option label="无门槛券" value="no_threshold" />
-                <el-option label="折扣券 (百分比)" value="percent" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item :label="form.type === 'percent' ? '折扣率' : '减免额(元)'" prop="value">
-              <!-- 折扣率 0.8 表示 8折 -->
-              <el-input-number v-model="form.value" :min="0.01" :max="form.type === 'percent' ? 1 : 9999" :precision="2" :step="form.type === 'percent' ? 0.05 : 1" style="width:100%" />
-            </el-form-item>
-          </el-col>
-        </el-row>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="券类型" prop="type">
+                <el-select v-model="form.type" style="width:100%">
+                  <el-option label="满减券 (固定减免)" value="fixed" />
+                  <el-option label="无门槛券" value="no_threshold" />
+                  <el-option label="折扣券 (百分比)" value="percent" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item :label="form.type === 'percent' ? '折扣率' : '减免额(元)'" prop="value">
+                <!-- 折扣率 0.8 表示 8折 -->
+                <el-input-number v-model="form.value" :min="0.01" :max="form.type === 'percent' ? 1 : 9999" :precision="2" :step="form.type === 'percent' ? 0.05 : 1" style="width:100%" />
+              </el-form-item>
+            </el-col>
+          </el-row>
 
-        <el-form-item label="消费门槛(元)" prop="min_purchase">
-          <el-input-number v-model="form.min_purchase" :min="0" :precision="2" style="width:100%" :disabled="form.type === 'no_threshold'" />
-          <div class="form-tip">{{ form.type === 'no_threshold' ? '无门槛券固定为 0 元门槛' : '填0表示无门槛即可使用' }}</div>
-        </el-form-item>
+          <el-form-item label="消费门槛(元)" prop="min_purchase">
+            <el-input-number v-model="form.min_purchase" :min="0" :precision="2" style="width:100%" :disabled="form.type === 'no_threshold'" />
+            <div class="form-tip">{{ form.type === 'no_threshold' ? '无门槛券固定为 0 元门槛' : '填0表示无门槛即可使用' }}</div>
+          </el-form-item>
+        </section>
 
-        <el-form-item label="使用范围" prop="scope">
-          <el-radio-group v-model="form.scope">
-            <el-radio label="all">全场通用</el-radio>
-            <el-radio label="product">指定商品</el-radio>
-            <el-radio label="category">指定分类</el-radio>
-          </el-radio-group>
-          <div class="form-tip">指定范围时须至少选择一项；下单时由接口校验是否与购物袋商品一致。</div>
-        </el-form-item>
+        <section class="coupon-form-section">
+          <div class="section-title">使用限制</div>
+          <el-form-item label="使用范围" prop="scope">
+            <el-radio-group v-model="form.scope">
+              <el-radio label="all">全场通用</el-radio>
+              <el-radio label="product">指定商品</el-radio>
+              <el-radio label="category">指定分类</el-radio>
+            </el-radio-group>
+            <div class="form-tip">指定范围时须至少选择一项；下单时由接口校验是否与购物袋商品一致。</div>
+          </el-form-item>
 
-        <el-form-item v-if="form.scope === 'product'" label="适用商品" prop="scope_ids">
-          <el-select
-            v-model="form.scope_ids"
-            multiple
-            filterable
-            remote
-            reserve-keyword
-            placeholder="输入关键字搜索商品"
-            :remote-method="searchProducts"
-            :loading="productSearchLoading"
-            style="width: 100%"
-            value-key="id"
-          >
-            <el-option
-              v-for="p in productOptions"
-              :key="p.id"
-              :label="`${p.id} · ${p.name}`"
-              :value="p.id"
-            />
-          </el-select>
-        </el-form-item>
+          <el-form-item v-if="form.scope === 'product'" label="适用商品" prop="scope_ids">
+            <el-select
+              v-model="form.scope_ids"
+              multiple
+              filterable
+              remote
+              reserve-keyword
+              placeholder="输入关键字搜索商品"
+              :remote-method="searchProducts"
+              :loading="productSearchLoading"
+              style="width: 100%"
+              value-key="id"
+            >
+              <el-option
+                v-for="p in productOptions"
+                :key="p.id"
+                :label="`${p.id} · ${p.name}`"
+                :value="p.id"
+              />
+            </el-select>
+          </el-form-item>
 
-        <el-form-item v-if="form.scope === 'category'" label="适用分类" prop="scope_ids">
-          <el-select v-model="form.scope_ids" multiple filterable placeholder="选择分类" style="width: 100%">
-            <el-option
-              v-for="c in categoryOptions"
-              :key="c.id"
-              :label="`${c.id} · ${c.name}`"
-              :value="c.id"
-            />
-          </el-select>
-        </el-form-item>
+          <el-form-item v-if="form.scope === 'category'" label="适用分类" prop="scope_ids">
+            <el-select v-model="form.scope_ids" multiple filterable placeholder="选择分类" style="width: 100%">
+              <el-option
+                v-for="c in categoryOptions"
+                :key="c.id"
+                :label="`${c.id} · ${c.name}`"
+                :value="c.id"
+              />
+            </el-select>
+          </el-form-item>
+        </section>
 
-        <el-row :gutter="20">
+        <section class="coupon-form-section">
+          <div class="section-title">领取投放</div>
+          <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="有效天数" prop="valid_days">
               <el-input-number v-model="form.valid_days" :min="1" :precision="0" style="width:100%" />
@@ -276,15 +295,27 @@
           <div class="form-tip">开启后，该券才会在小程序惊喜礼遇页和首页福利区公开露出。</div>
         </el-form-item>
 
+        <el-form-item label="海报可带券">
+          <el-switch v-model="form.share_poster_enabled" :active-value="1" :inactive-value="0" />
+          <div class="form-tip">开启后，商品分享海报可选择携带该券；扫码领取仍受库存和每日限制控制。</div>
+        </el-form-item>
+
+        <el-form-item label="海报文案" v-if="form.share_poster_enabled === 1">
+          <el-input v-model="form.poster_badge_text" maxlength="18" show-word-limit placeholder="如：扫码领取神券" />
+        </el-form-item>
+
         <el-form-item label="状态">
           <el-switch v-model="form.is_active" :active-value="1" :inactive-value="0" />
         </el-form-item>
+        </section>
       </el-form>
       <template #footer>
-        <el-button @click="formVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitForm" :loading="submitting">确 定</el-button>
+        <div class="drawer-footer">
+          <el-button @click="formVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitForm" :loading="submitting">保存优惠券</el-button>
+        </div>
       </template>
-    </el-dialog>
+    </el-drawer>
 
     <!-- ======== 人工发券 ======== -->
     <el-dialog v-model="issueVisible" title="定向发券" width="520px">
@@ -601,6 +632,8 @@ const defaultForm = () => ({
   claim_end_time: '23:59',
   description: '',
   show_in_coupon_center: 0,
+  share_poster_enabled: 0,
+  poster_badge_text: '',
   is_active: 1
 })
 const form = reactive(defaultForm())
@@ -620,6 +653,8 @@ const couponPayloadKeys = [
   'claim_end_time',
   'description',
   'show_in_coupon_center',
+  'share_poster_enabled',
+  'poster_badge_text',
   'is_active'
 ]
 
@@ -994,7 +1029,96 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.page-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.page-subtitle {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.advanced-collapse {
+  margin-bottom: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.advanced-collapse :deep(.el-collapse-item__header) {
+  padding: 0 16px;
+  font-weight: 600;
+  color: #374151;
+  background: #fafafa;
+}
+
+.advanced-collapse :deep(.el-collapse-item__content) {
+  padding: 16px;
+}
+
+.auto-rule-panel {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 16px;
+  align-items: end;
+}
+
+.auto-rule-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-bottom: 18px;
+}
+
 .filter-container { margin-bottom: 20px; }
 .form-tip { font-size: 12px; color: #909399; margin-top: 4px; line-height: 1.2; }
 .id-cell { font-family: ui-monospace, monospace; font-size: 12px; color: #606266; cursor: default; }
+.coupon-delivery-tags { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+
+.coupon-form {
+  padding-right: 2px;
+}
+
+.coupon-form-section {
+  padding: 16px 16px 6px;
+  margin-bottom: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.section-title {
+  margin-bottom: 14px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.drawer-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+@media (max-width: 760px) {
+  .page-head,
+  .auto-rule-panel {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .page-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
 </style>

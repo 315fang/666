@@ -1,9 +1,9 @@
 <view class="container">
-  <page-loading show="{{loading && featuredProducts.length === 0 && featuredSections.length === 0}}" text="首页加载中..."></page-loading>
-  <view class="custom-nav {{navScrolled ? 'nav-scrolled' : 'nav-transparent'}}" style="padding-top: {{navTopPadding}}px">
+  <page-loading show="{{showHomeLoading}}" text="首页加载中..."></page-loading>
+  <view class="{{navRootClass}}" style="padding-top: {{navTopPadding}}px">
     <view class="nav-inner" style="height: {{navBarHeight}}px;">
       <!-- 气泡足迹：替换品牌 Logo 区，暂不展示 Logo/品牌甄选 -->
-      <view class="nav-bubble-bar {{navScrolled ? 'nav-hidden' : 'nav-visible'}}" wx:if="{{bubbles.length > 0}}">
+      <view class="{{navBubbleClass}}" wx:if="{{bubbles.length > 0}}">
         <image class="nav-bubble-icon" src="/assets/icons/hot.svg" mode="aspectFit"></image>
         <view class="nav-bubble-scroll">
           <view class="nav-bubble-item" animation="{{bubbleAnim}}">
@@ -15,11 +15,11 @@
         </view>
       </view>
       <!-- 若无气泡数据时保留搜索入口，避免右上角操作栏孤立 -->
-      <view class="nav-search-icon-solo nav-visible" wx:if="{{!bubbles.length && !navScrolled}}" bindtap="onSearchTap">
+      <view class="nav-search-icon-solo nav-visible" wx:if="{{showSoloSearch}}" bindtap="onSearchTap">
         <image class="search-icon" src="/assets/icons/search.svg" mode="aspectFit"></image>
       </view>
 
-      <view class="nav-search-box {{navScrolled ? 'nav-visible' : 'nav-hidden'}}">
+      <view class="{{navSearchBoxClass}}">
         <view class="nav-search-bar" bindtap="onSearchTap">
           <image class="search-icon" src="/assets/icons/search.svg" mode="aspectFit"></image>
           <text class="search-placeholder">搜索商品</text>
@@ -47,17 +47,17 @@
   </view>
 
   <!-- 中部海报区（后端 banners position=home_mid，对标麦吉丽的多海报铺排） -->
-  <view id="reveal_mid_posters" class="poster-section scroll-reveal {{revealMidPosters ? 'revealed' : ''}}" wx:if="{{midPosters.length > 0}}">
+  <view id="reveal_mid_posters" class="{{revealMidPostersClass}}" wx:if="{{midPosters.length > 0}}">
     <view class="poster-card" wx:for="{{midPosters}}" wx:key="id" bindtap="onBannerTap" data-item="{{item}}" hover-class="press">
       <image class="poster-image" src="{{item.image}}" mode="widthFix" binderror="onAssetImageError" data-scene="mid-poster" data-index="{{index}}"></image>
     </view>
   </view>
 
-  <view id="reveal_coupons" class="coupon-section scroll-reveal {{revealCoupons ? 'revealed' : ''}}">
+  <view id="reveal_coupons" class="{{revealCouponsClass}}">
     <view class="section-head coupon-section-head">
       <view class="section-copy">
-        <text class="section-intro-title">{{homeConfigs.coupon_zone_title || '优惠券中心'}}</text>
-        <text class="section-intro-sub">{{homeConfigs.coupon_zone_subtitle || '领券后下单可用'}}</text>
+        <text class="section-intro-title">{{couponZoneTitle}}</text>
+        <text class="section-intro-sub">{{couponZoneSubtitle}}</text>
       </view>
       <view class="section-link" bindtap="onCouponTap">
         更多 ›
@@ -95,7 +95,7 @@
   </view>
 
   <!-- 分类商品编排 -->
-  <view id="reveal_products" class="products-section products-section-grouped scroll-reveal {{revealProducts ? 'revealed' : ''}}" wx:if="{{featuredSections.length > 0}}">
+  <view id="reveal_products" class="{{revealProductsClass}}" wx:if="{{featuredSections.length > 0}}">
     <view class="products-section-block" wx:for="{{featuredSections}}" wx:key="key">
       <view class="section-head">
         <view class="section-copy">
@@ -109,16 +109,16 @@
         <view class="product-card" wx:for="{{item.products}}" wx:key="id" bindtap="onProductTap" data-id="{{item.id}}" hover-class="press">
           <view class="product-card-img-wrap">
             <image
-              wx:if="{{item.display_image || item.cover_image || item.image}}"
+              wx:if="{{item.hasCardImage}}"
               class="product-card-img"
-              src="{{item.display_image || item.cover_image || item.image}}"
+              src="{{item.cardImage}}"
               mode="aspectFill"
               lazy-load="{{true}}"
             ></image>
             <view wx:else class="product-card-img-fallback">
               <text class="product-card-img-fallback-label">暂无商品图片</text>
             </view>
-            <view class="product-card-soldout" wx:if="{{item.stock === 0}}">已售罄</view>
+            <view class="product-card-soldout" wx:if="{{item.soldOut}}">已售罄</view>
           </view>
         </view>
       </view>
@@ -126,13 +126,13 @@
   </view>
 
   <!-- 精选单品回退 -->
-  <view id="reveal_featured" class="products-section scroll-reveal {{revealFeatured ? 'revealed' : ''}}" wx:else>
+  <view id="reveal_featured" class="{{revealFeaturedClass}}" wx:else>
     <view class="section-head">
       <text class="section-intro-title">精选单品</text>
       <view class="section-link" bindtap="onGoCategory">更多 ›</view>
     </view>
 
-    <view class="products-grid" wx:if="{{loading && featuredProducts.length === 0}}">
+    <view class="products-grid" wx:if="{{showFeaturedSkeleton}}">
       <view class="product-card-skeleton" wx:for="{{[1,2,3,4]}}" wx:key="index">
         <view class="psk-img"></view>
         <view class="psk-info">
@@ -146,9 +146,9 @@
 <view class="product-card" wx:for="{{featuredProducts}}" wx:key="id" bindtap="onProductTap" data-id="{{item.id}}" hover-class="press">
           <view class="product-card-img-wrap">
             <image
-              wx:if="{{item.display_image || item.cover_image || item.image}}"
+              wx:if="{{item.hasCardImage}}"
               class="product-card-img"
-              src="{{item.display_image || item.cover_image || item.image}}"
+              src="{{item.cardImage}}"
               mode="aspectFill"
               lazy-load="{{true}}"
               binderror="onFeaturedImageError"
@@ -157,20 +157,20 @@
             <view wx:else class="product-card-img-fallback">
               <text class="product-card-img-fallback-label">暂无商品图片</text>
             </view>
-            <view class="product-card-soldout" wx:if="{{item.stock === 0}}">已售罄</view>
+            <view class="product-card-soldout" wx:if="{{item.soldOut}}">已售罄</view>
           </view>
         </view>
       </view>
 
-    <view class="products-empty" wx:if="{{!loading && featuredProducts.length === 0}}">
+    <view class="products-empty" wx:if="{{showProductsEmpty}}">
       <text>暂无商品，请稍后查看</text>
     </view>
   </view>
 
-  <view id="reveal_brand" class="brand-zone-section scroll-reveal {{revealBrand ? 'revealed' : ''}}" wx:if="{{brandZone.enabled}}">
+  <view id="reveal_brand" class="{{revealBrandClass}}" wx:if="{{brandZone.enabled}}">
     <view class="brand-zone-header">
       <view class="brand-zone-header-line"></view>
-      <text class="brand-zone-header-title">{{brandZone.title || '品牌专区'}}</text>
+      <text class="brand-zone-header-title">{{brandZone.title}}</text>
       <view class="brand-zone-header-line"></view>
     </view>
 
@@ -184,12 +184,12 @@
         data-scene="cover"
       ></image>
       <view wx:else class="brand-zone-cover brand-zone-cover-fallback">
-        <text class="brand-zone-cover-kicker">{{navBrandSub || '品牌甄选'}}</text>
-        <text class="brand-zone-cover-title">{{navBrandTitle || brandZone.title || '品牌专区'}}</text>
+        <text class="brand-zone-cover-kicker">{{brandZoneCoverKicker}}</text>
+        <text class="brand-zone-cover-title">{{brandZoneCoverTitle}}</text>
       </view>
 
-      <view class="brand-zone-welcome-card" wx:if="{{brandZone.welcomeTitle || brandZone.welcomeSubtitle}}">
-        <text class="brand-zone-welcome-title">{{brandZone.welcomeTitle || 'Welcome'}}</text>
+      <view class="brand-zone-welcome-card" wx:if="{{brandZone.showWelcome}}">
+        <text class="brand-zone-welcome-title">{{brandZone.welcomeTitle}}</text>
         <text class="brand-zone-welcome-subtitle" wx:if="{{brandZone.welcomeSubtitle}}">{{brandZone.welcomeSubtitle}}</text>
       </view>
     </view>
@@ -235,14 +235,14 @@
     </view>
 
     <view class="brand-zone-story" wx:if="{{brandZone.story.body}}">
-      <text class="brand-zone-story-title">{{brandZone.story.title || '企业介绍'}}</text>
+      <text class="brand-zone-story-title">{{brandZone.story.title}}</text>
       <text class="brand-zone-story-body">{{brandZone.story.body}}</text>
     </view>
 
   </view>
 
   <!-- 底部海报区（后端 banners position=home_bottom） -->
-  <view id="reveal_bottom_posters" class="poster-section scroll-reveal {{revealBottomPosters ? 'revealed' : ''}}" wx:if="{{bottomPosters.length > 0}}">
+  <view id="reveal_bottom_posters" class="{{revealBottomPostersClass}}" wx:if="{{bottomPosters.length > 0}}">
     <view class="poster-card" wx:for="{{bottomPosters}}" wx:key="id" bindtap="onBannerTap" data-item="{{item}}" hover-class="press">
       <image class="poster-image" src="{{item.image}}" mode="widthFix" binderror="onAssetImageError" data-scene="bottom-poster" data-index="{{index}}"></image>
     </view>
@@ -253,7 +253,7 @@
   <!-- 弹窗广告 -->
   <view class="popup-ad-overlay" wx:if="{{showPopupAd}}" bindtap="onClosePopupAd">
     <view class="popup-ad-card" catchtap="onPopupAdTap">
-      <image class="popup-ad-image" src="{{popupAd.image_url || popupAd.url}}" mode="widthFix" wx:if="{{popupAd.image_url || popupAd.url}}" binderror="onAssetImageError" data-scene="popup-ad"/>
+      <image class="popup-ad-image" src="{{popupAd.displayImage}}" mode="widthFix" wx:if="{{popupAd.hasImage}}" binderror="onAssetImageError" data-scene="popup-ad"/>
       <view class="popup-ad-btn" wx:if="{{popupAd.button_text}}">
         {{popupAd.button_text}}
       </view>

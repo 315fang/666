@@ -64,7 +64,7 @@
         <div class="card orders-card">
           <div class="card-header">
             <div class="card-title">
-              <span class="title-dot title-dot--purple"></span>
+              <span class="title-dot title-dot--gold"></span>
               <span>近期成交订单</span>
             </div>
             <button class="link-btn" @click="$router.push('/orders')">
@@ -104,7 +104,7 @@
           <div class="card-header">
             <div class="card-title">
               <span class="title-dot title-dot--red"></span>
-              <span>⚠️ 库存预警</span>
+              <span>库存预警</span>
               <el-badge :value="lowStockList.length" type="danger" style="margin-left:8px" />
             </div>
             <button class="link-btn" @click="$router.push('/products')">去补货</button>
@@ -131,7 +131,7 @@
           <div class="card-header">
             <div class="card-title">
               <span class="title-dot title-dot--orange"></span>
-              <span>🔥 商品热度榜</span>
+              <span>商品热度榜</span>
             </div>
             <button class="link-btn" @click="$router.push('/products')">管理商品</button>
           </div>
@@ -194,7 +194,7 @@
         <div class="card quick-card">
           <div class="card-header">
             <div class="card-title">
-              <span class="title-dot title-dot--purple"></span>
+              <span class="title-dot title-dot--gold"></span>
               <span>快捷操作</span>
             </div>
           </div>
@@ -262,10 +262,10 @@ const dashboardError = ref('')
 
 // ───────────────── KPI 卡片 ─────────────────
 const statsCards = ref([
-  { title: '今日订单', value: '0', sub: '需要重点盯转化', icon: 'ShoppingCart', iconBg: 'rgba(99,102,241,0.12)', trend: 0 },
-  { title: '今日销售额', value: '¥0.00', sub: '优先看活动拉动', icon: 'Money', iconBg: 'rgba(236,72,153,0.12)', trend: 0 },
-  { title: '累计用户', value: '0', sub: '关注新增与留存', icon: 'User', iconBg: 'rgba(20,184,166,0.12)', trend: 0 },
-  { title: '待发货', value: '0', sub: '先清履约积压', icon: 'Box', iconBg: 'rgba(245,158,11,0.12)', trend: 0 }
+  { title: '今日订单', value: '0', sub: '需要重点盯转化', icon: 'ShoppingCart', iconBg: 'rgba(197,154,69,0.14)', trend: 0 },
+  { title: '今日销售额', value: '¥0.00', sub: '优先看活动拉动', icon: 'Money', iconBg: 'rgba(216,52,58,0.10)', trend: 0 },
+  { title: '累计用户', value: '0', sub: '关注新增与留存', icon: 'User', iconBg: 'rgba(5,150,105,0.10)', trend: 0 },
+  { title: '待发货', value: '0', sub: '先清履约积压', icon: 'Box', iconBg: 'rgba(217,119,6,0.12)', trend: 0 }
 ])
 
 // ───────────────── 运营聚合数据 ─────────────────
@@ -275,10 +275,10 @@ const ordersLoading = ref(false)
 const lowStockList = ref([])
 const hotProducts = ref([])
 const todoItems = ref([
-  { title: '待发货订单', count: 0, path: '/orders', query: { status_group: 'pending_ship' }, icon: 'Box', iconBg: 'rgba(245,158,11,0.12)' },
-  { title: '待提现审核', count: 0, path: '/withdrawals', query: { status: 'pending' }, icon: 'Money', iconBg: 'rgba(239,68,68,0.12)' },
-  { title: '待退款审核', count: 0, path: '/refunds', query: { status: 'pending' }, icon: 'RefreshLeft', iconBg: 'rgba(99,102,241,0.12)' },
-  { title: '待审批佣金', count: 0, path: '/commissions', icon: 'Wallet', iconBg: 'rgba(20,184,166,0.12)' }
+  { title: '待发货订单', count: 0, path: '/orders', query: { status_group: 'pending_ship' }, icon: 'Box', iconBg: 'rgba(197,154,69,0.14)' },
+  { title: '待提现审核', count: 0, path: '/withdrawals', query: { status: 'pending' }, icon: 'Money', iconBg: 'rgba(216,52,58,0.10)' },
+  { title: '待退款审核', count: 0, path: '/refunds', query: { status: 'pending' }, icon: 'RefreshLeft', iconBg: 'rgba(216,52,58,0.10)' },
+  { title: '待审批佣金', count: 0, path: '/commissions', icon: 'Wallet', iconBg: 'rgba(5,150,105,0.10)' }
 ])
 const memberTierList = ref([])
 const quickActions = computed(() => (
@@ -542,7 +542,7 @@ onUnmounted(() => {
 }
 
 .focus-bar {
-  background: linear-gradient(135deg, #111827 0%, #312E81 100%);
+  background: #1F2937;
   border-radius: 16px;
   padding: 18px 20px;
   display: flex;
@@ -602,10 +602,10 @@ button.focus-tag {
   padding: 20px;
   transition: all 0.2s;
 }
-.kpi-card:hover { border-color: #C7D2FE; box-shadow: 0 4px 20px rgba(99,102,241,0.08); transform: translateY(-2px); }
+.kpi-card:hover { border-color: rgba(197,154,69,0.38); box-shadow: 0 4px 20px rgba(31,41,55,0.06); transform: translateY(-2px); }
 .kpi-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
-.kpi-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #6366F1; }
-.kpi-card--1 .kpi-icon { color: #EC4899; }
+.kpi-icon { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: #C59A45; }
+.kpi-card--1 .kpi-icon { color: #D8343A; }
 .kpi-card--2 .kpi-icon { color: #14B8A6; }
 .kpi-card--3 .kpi-icon { color: #F59E0B; }
 .kpi-trend { display: flex; align-items: center; gap: 2px; font-size: 11px; font-weight: 600; padding: 3px 7px; border-radius: 20px; }
@@ -629,8 +629,8 @@ button.focus-tag {
 }
 .card-title { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: #1E293B; }
 .header-actions { display: flex; gap: 8px; }
-.title-dot { width: 6px; height: 6px; border-radius: 50%; background: #6366F1; flex-shrink: 0; }
-.title-dot--purple { background: #6366F1; }
+.title-dot { width: 6px; height: 6px; border-radius: 50%; background: #C59A45; flex-shrink: 0; }
+.title-dot--gold { background: #C59A45; }
 .title-dot--warn { background: #F59E0B; }
 .title-dot--green { background: #10B981; }
 .title-dot--orange { background: #F97316; }
@@ -638,7 +638,7 @@ button.focus-tag {
 
 .link-btn {
   display: flex; align-items: center; gap: 4px;
-  font-size: 12.5px; color: #6366F1; background: none; border: none;
+  font-size: 12.5px; color: #8A5F14; background: none; border: none;
   cursor: pointer; padding: 4px 0; font-weight: 500; transition: opacity 0.15s;
 }
 .link-btn:hover { opacity: 0.7; }
@@ -657,7 +657,7 @@ button.focus-tag {
 .table-row:hover td { background: #F8FAFC; }
 .table-row:last-child td { border-bottom: none; }
 .order-no { font-family: monospace; font-size: 12px; color: #64748B; }
-.amount { font-weight: 700; color: #6366F1; }
+.amount { font-weight: 700; color: #8A5F14; }
 .time { font-size: 12px; color: #94A3B8; white-space: nowrap; }
 .empty-row { text-align: center; color: #94A3B8; padding: 24px 0; font-size: 13px; }
 
@@ -699,14 +699,14 @@ button.focus-tag {
 .rank-info { flex: 1; min-width: 0; }
 .rank-name { font-size: 13px; font-weight: 500; color: #1E293B; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rank-meta { font-size: 11px; color: #94A3B8; margin-top: 2px; }
-.rank-price { font-size: 13px; font-weight: 700; color: #6366F1; flex-shrink: 0; }
+.rank-price { font-size: 13px; font-weight: 700; color: #8A5F14; flex-shrink: 0; }
 
 /* 待办 */
 .todo-list { padding: 4px 0; }
 .todo-item { display: flex; align-items: center; justify-content: space-between; padding: 11px 20px; cursor: pointer; transition: background 0.15s; }
 .todo-item:hover { background: #F8FAFC; }
 .todo-left { display: flex; align-items: center; gap: 10px; }
-.todo-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #6366F1; flex-shrink: 0; }
+.todo-icon { width: 30px; height: 30px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #8A5F14; flex-shrink: 0; }
 .todo-label { font-size: 13px; font-weight: 500; color: #374151; }
 .todo-badge { font-size: 11.5px; font-weight: 700; min-width: 24px; height: 24px; border-radius: 12px; display: flex; align-items: center; justify-content: center; padding: 0 6px; }
 .badge-active { background: #FEE2E2; color: #DC2626; }

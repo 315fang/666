@@ -242,6 +242,11 @@
   font-size: 34rpx;
 }
 
+.growth-value-text {
+  color: #0F766E;
+  font-weight: 700;
+}
+
 .product-card,
 .info-card {
   overflow: hidden;

@@ -1,15 +1,28 @@
 <template>
   <div class="activities-page">
-    <el-alert
-      title="这里用于维护活动资源本身：砍价、抽奖、节日配置；具体页面怎么展示，统一交给活动页与页面装修入口处理。"
-      type="info"
-      :closable="false"
-      show-icon
-      style="margin-bottom: 16px"
-    />
-    <el-tabs v-model="activeTab">
+    <div class="operations-header">
+      <div>
+        <div class="operations-title">活动管理</div>
+        <div class="operations-subtitle">先选择运营场景，再处理玩法、抽奖履约或页面投放配置。</div>
+      </div>
+    </div>
+
+    <div class="workspace-switcher">
+      <button
+        v-for="item in activityWorkAreas"
+        :key="item.key"
+        type="button"
+        :class="['workspace-card', { 'is-active': activeWorkArea === item.key }]"
+        @click="setActiveWorkArea(item)"
+      >
+        <span class="workspace-title">{{ item.title }}</span>
+        <span class="workspace-desc">{{ item.desc }}</span>
+      </button>
+    </div>
+
+    <el-tabs v-model="activeTab" class="activity-tabs">
       <!-- ====== 砍价活动 ====== -->
-      <el-tab-pane label="砍价活动" name="slash">
+      <el-tab-pane v-if="activeWorkArea === 'play'" label="砍价配置" name="slash">
         <SlashActivityPanel
           :items="slashList"
           :loading="slashLoading"
@@ -25,7 +38,7 @@
       </el-tab-pane>
 
       <!-- ====== 抽奖奖品 ====== -->
-      <el-tab-pane label="抽奖奖品" name="lottery">
+      <el-tab-pane v-if="activeWorkArea === 'lottery'" label="奖品池" name="lottery">
         <LotteryPrizePanel
           :items="prizes"
           :loading="prizeLoading"
@@ -39,7 +52,7 @@
         />
       </el-tab-pane>
 
-      <el-tab-pane label="抽奖履约" name="lottery_fulfillment">
+      <el-tab-pane v-if="activeWorkArea === 'lottery'" label="抽奖履约" name="lottery_fulfillment">
         <LotteryFulfillmentPanel
           :records="lotteryRecords"
           :records-loading="lotteryRecordsLoading"
@@ -56,7 +69,7 @@
       </el-tab-pane>
 
       <!-- ====== 节日活动配置 ====== -->
-      <el-tab-pane label="节日活动" name="festival">
+      <el-tab-pane v-if="activeWorkArea === 'delivery'" label="节日配置" name="festival">
         <FestivalConfigPanel
           :festival="festival"
           :festival-loading="festivalLoading"
@@ -79,7 +92,7 @@
       </el-tab-pane>
 
       <!-- ====== 活动链接配置 ====== -->
-      <el-tab-pane label="活动链接" name="links">
+      <el-tab-pane v-if="activeWorkArea === 'delivery'" label="页面投放" name="links">
         <ActivityLinksPanel
           :links-loading="linksLoading"
           :links-saving="linksSaving"
@@ -156,7 +169,34 @@ import { MINI_PROGRAM_TARGETS, normalizeTargetLinkValue } from '@/config/miniPro
 import { formatDateShort as formatDate } from '@/utils/format'
 
 const activeTab = ref('slash')
+const activeWorkArea = ref('play')
 const submitting = ref(false)
+
+const activityWorkAreas = [
+  {
+    key: 'play',
+    title: '活动玩法',
+    desc: '维护砍价活动；拼团、限时和组合价保留独立入口',
+    tab: 'slash'
+  },
+  {
+    key: 'lottery',
+    title: '抽奖履约',
+    desc: '管理奖品池、中奖记录和发货核销',
+    tab: 'lottery'
+  },
+  {
+    key: 'delivery',
+    title: '页面投放',
+    desc: '配置节日活动、活动链接和首页活动资源',
+    tab: 'festival'
+  }
+]
+
+const setActiveWorkArea = (item) => {
+  activeWorkArea.value = item.key
+  activeTab.value = item.tab
+}
 
 const parseTextArray = (value) => String(value || '')
   .split(/[\n,]/)
@@ -1090,9 +1130,83 @@ watch(activeTab, (tab) => {
 
 <style scoped>
 .activities-page { padding: 0; }
+
+.operations-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.operations-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.operations-subtitle {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.workspace-switcher {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.workspace-card {
+  min-height: 86px;
+  padding: 16px;
+  text-align: left;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.16s, background 0.16s, box-shadow 0.16s;
+}
+
+.workspace-card:hover {
+  border-color: rgba(197, 154, 69, 0.42);
+  box-shadow: 0 8px 22px rgba(31, 41, 55, 0.05);
+}
+
+.workspace-card.is-active {
+  border-color: rgba(197, 154, 69, 0.62);
+  background: #fffaf0;
+}
+
+.workspace-title {
+  display: block;
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 8px;
+}
+
+.workspace-desc {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #6b7280;
+}
+
+.activity-tabs {
+  padding: 16px 18px 18px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+}
+
 .pagination-wrap { display: flex; justify-content: flex-end; margin-top: 16px; }
 
 @media (max-width: 767px) {
+  .workspace-switcher {
+    grid-template-columns: 1fr;
+  }
+
   .pagination-wrap {
     justify-content: center;
   }

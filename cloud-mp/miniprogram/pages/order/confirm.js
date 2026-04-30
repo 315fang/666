@@ -27,6 +27,10 @@ const {
     loadWalletBalance,
     toggleWallet
 } = require('./orderConfirmAccount');
+const {
+    calculateExpectedOrderGrowth,
+    buildGrowthPreview
+} = require('./orderGrowthPreview');
 
 const DISCOUNT_RESTRICTED_ORDER_TYPES = new Set(['group', 'slash', 'limited_sale', 'limited_spot', 'bundle', 'exchange']);
 const GOODS_IMAGE_PLACEHOLDER = '/assets/images/placeholder.svg';
@@ -195,6 +199,7 @@ Page({
         expectedCommissionAmount: 0,
         expectedCommission: '0.00',
         expectedPoints: 0,
+        growthPreview: null,
         shippingFee: 0,
         // 积分抵扣
         pointBalance: 0,
@@ -318,7 +323,7 @@ Page({
         if (!this.data.address && this.data.addressLoadStatus !== 'loading') {
             this.loadDefaultAddress();
         }
-        if (!this.data.exchangeMode && !this.data.limitedSpotOrder) {
+        if (!this.data.exchangeMode && !this.data.limitedSpotOrder && !this.data.bundleOrder) {
             if (this.data.pointsLoadStatus !== 'loading') {
                 this.loadPointBalance();
             }
@@ -328,6 +333,7 @@ Page({
         }
         if (!this.data.exchangeMode
             && !this.data.limitedSpotOrder
+            && !this.data.bundleOrder
             && this.data.allowCoupon !== false
             && (this.data.orderItems || []).length > 0
             && this.data.couponLoadStatus !== 'loading'
@@ -510,11 +516,18 @@ Page({
             return;
         }
         if (this.data.bundleOrder) {
-            tasks.push(this.loadPointBalance());
-            if (this.data.isAgent) {
-                tasks.push(this.loadWalletBalance());
-            }
             this.setData({
+                pointsLoadStatus: 'success',
+                pointsLoadError: '',
+                pointBalance: 0,
+                usePoints: false,
+                pointsToUse: 0,
+                pointsDeduction: '0.00',
+                walletLoadStatus: this.data.isAgent ? 'success' : 'idle',
+                walletLoadError: '',
+                walletBalance: 0,
+                walletBalanceDisplay: '0.00',
+                useWallet: false,
                 couponLoadStatus: 'success',
                 couponLoadError: '',
                 availableCoupons: [],
@@ -763,6 +776,55 @@ Page({
         return Math.max(0, Math.floor((payAmount * perHundred) / 100));
     },
 
+    getOrderGrowthOriginalAmount() {
+        const fallbackAmount = this.getOrderBenefitPreviewAmount();
+        return Math.max(0, toFiniteNumber(this.data.totalAmount, fallbackAmount));
+    },
+
+    calculateExpectedOrderGrowth(amount) {
+        return calculateExpectedOrderGrowth({
+            payAmount: amount,
+            originalAmount: this.getOrderGrowthOriginalAmount(),
+            exchangeMode: this.data.exchangeMode,
+            limitedSpotOrder: this.data.limitedSpotOrder,
+            limitedSpotMode: this.data.limitedSpotMode,
+            config: getMiniProgramConfig()
+        });
+    },
+
+    setGrowthPreview(expectedGrowth, meta) {
+        if (expectedGrowth <= 0) {
+            this.setData({ growthPreview: null });
+            return;
+        }
+        this.setData({
+            growthPreview: buildGrowthPreview({
+                expectedGrowth,
+                meta: meta || this._growthPreviewMeta || null
+            })
+        });
+    },
+
+    async loadGrowthPreviewMeta() {
+        if (this._growthPreviewMeta) return this._growthPreviewMeta;
+        if (this._growthPreviewMetaPromise) return this._growthPreviewMetaPromise;
+        this._growthPreviewMetaPromise = get('/user/member-tier-meta', {}, {
+            showError: false,
+            maxRetries: 0,
+            timeout: 5000
+        })
+            .then((res) => {
+                const meta = res && res.code === 0 && res.data ? res.data : null;
+                this._growthPreviewMeta = meta;
+                return meta;
+            })
+            .catch(() => null)
+            .finally(() => {
+                this._growthPreviewMetaPromise = null;
+            });
+        return this._growthPreviewMetaPromise;
+    },
+
     scheduleOrderBenefitPreviewRefresh() {
         if (this._benefitPreviewTimer) {
             clearTimeout(this._benefitPreviewTimer);
@@ -778,6 +840,7 @@ Page({
         this._benefitPreviewSeq = seq;
         const amount = this.getOrderBenefitPreviewAmount();
         const expectedPoints = this.calculateExpectedOrderPoints(amount);
+        const expectedGrowth = this.calculateExpectedOrderGrowth(amount);
         const emptyCommission = {
             expectedCommissionAmount: 0,
             expectedCommission: '0.00'
@@ -787,8 +850,14 @@ Page({
             expectedPoints,
             ...emptyCommission
         });
+        this.setGrowthPreview(expectedGrowth);
 
         if (amount <= 0) return;
+
+        this.loadGrowthPreviewMeta().then((meta) => {
+            if (seq !== this._benefitPreviewSeq || !meta) return;
+            this.setGrowthPreview(expectedGrowth, meta);
+        });
 
         try {
             const res = await get('/commissions/preview', {
@@ -879,6 +948,7 @@ Page({
             expectedCommissionAmount: 0,
             expectedCommission: '0.00',
             expectedPoints: 0,
+            growthPreview: null,
             bundleOrder: false,
             bundleMeta: null,
             bundlePrice: '0.00',

@@ -194,11 +194,21 @@ async function buildBundleOption(option = {}) {
     const resolvedSku = pickDefaultSku(product, skus, option.sku_id);
     if (pickString(option.sku_id) && !resolvedSku) return null;
     const productSnapshot = buildProductSnapshot(product, resolvedSku);
+    const repeatable = isEnabled(option.repeatable ?? option.allow_repeat, false);
+    const maxQtyPerOrder = repeatable
+        ? Math.max(1, Math.floor(toNumber(option.max_qty_per_order ?? option.max_qty ?? option.default_qty, 1)))
+        : 1;
+    const defaultQty = Math.min(
+        maxQtyPerOrder,
+        Math.max(1, Math.floor(toNumber(option.default_qty, 1)))
+    );
     return {
         option_key: pickString(option.option_key),
         product_id: lookupId(product),
         sku_id: resolvedSku ? lookupId(resolvedSku) : '',
-        default_qty: Math.max(1, Math.floor(toNumber(option.default_qty, 1))),
+        default_qty: defaultQty,
+        repeatable: repeatable ? 1 : 0,
+        max_qty_per_order: maxQtyPerOrder,
         sort_order: toNumber(option.sort_order, 0),
         enabled: isEnabled(option.enabled ?? option.status, true),
         product: productSnapshot,

@@ -63,6 +63,38 @@ function buildTabStats(team = {}) {
     };
 }
 
+function normalizeTeamMember(item = {}, getRoleName) {
+    const levelLabel = Number(item.level) === 1 ? '一级成员' : '二级成员';
+    const relationText = item.current_relation_text || item.relation_text || (Number(item.level) === 1 ? '当前关系：你的一级团队成员' : '当前关系：你的二级团队成员');
+    const inviterText = item.inviter_text || (Number(item.level) === 1 ? '邀请人：你' : '邀请人：一级团队成员');
+    return {
+        id: item.id || item._id,
+        _id: item._id,
+        nick_name: item.nick_name,
+        nickname: item.nickname,
+        avatar: item.avatar,
+        avatar_url: item.avatar_url,
+        invite_code: item.invite_code,
+        phone: item.phone,
+        level: item.level,
+        role_level: item.role_level,
+        role_name: getRoleName(item.role_level),
+        level_label: levelLabel,
+        relation_source: item.relation_source,
+        relation_source_text: item.relation_source_text || (item.relation_source === 'directed_b1' ? '定向邀约' : '普通邀请'),
+        current_relation_text: relationText,
+        relation_text: item.relation_text,
+        inviter_text: inviterText,
+        line_locked: !!item.line_locked,
+        joined_at: item.joined_at,
+        joined_at_format: formatDate(item.joined_at),
+        total_sales: item.total_sales,
+        total_sales_format: formatMoney(item.total_sales),
+        order_count: item.order_count,
+        order_count_format: Number(item.order_count || 0)
+    };
+}
+
 Page({
     data: {
         statusBarHeight: 20,
@@ -156,38 +188,26 @@ Page({
                 pageSize: limit,
                 limit
             });
-            const list = (res.data?.list || []).map((item) => {
-                const levelLabel = Number(item.level) === 1 ? '一级成员' : '二级成员';
-                return {
-                    ...item,
-                    joined_at_format: formatDate(item.joined_at),
-                    role_name: this.getRoleName(item.role_level),
-                    relation_source_text: item.relation_source_text || (item.relation_source === 'directed_b1' ? '定向邀约' : '普通邀请'),
-                    current_relation_text: item.current_relation_text || item.relation_text || (Number(item.level) === 1 ? '当前关系：你的一级团队成员' : '当前关系：你的二级团队成员'),
-                    inviter_text: item.inviter_text || (Number(item.level) === 1 ? '邀请人：你' : '邀请人：一级团队成员'),
-                    total_sales_format: formatMoney(item.total_sales),
-                    order_count_format: Number(item.order_count || 0),
-                    level_label: levelLabel,
-                    detail_items: [
-                        { label: '团队层级', value: levelLabel },
-                        { label: '成员身份', value: this.getRoleName(item.role_level) },
-                        { label: '当前关系', value: item.current_relation_text || item.relation_text || (Number(item.level) === 1 ? '当前关系：你的一级团队成员' : '当前关系：你的二级团队成员') },
-                        { label: '邀请人', value: item.inviter_text || (Number(item.level) === 1 ? '邀请人：你' : '邀请人：一级团队成员') },
-                        { label: '加入来源', value: item.relation_source_text || (item.relation_source === 'directed_b1' ? '定向邀约' : '普通邀请') },
-                        { label: '成员ID', value: item.invite_code || '暂无ID' },
-                        { label: '手机号', value: item.phone || '未绑定' },
-                        { label: '订单数', value: `${Number(item.order_count || 0)} 单` },
-                        { label: '累计业绩', value: `¥${formatMoney(item.total_sales)}` },
-                        { label: '加入时间', value: formatDate(item.joined_at) || '未知' }
-                    ]
+            const list = (res.data?.list || []).map((item) => normalizeTeamMember(item, this.getRoleName.bind(this)));
+            if (isLoadMore) {
+                const nextData = {
+                    hasMore: list.length === limit,
+                    page: page + 1,
+                    loading: false
                 };
-            });
-            this.setData({
-                members: isLoadMore ? members.concat(list) : list,
-                hasMore: list.length === limit,
-                page: page + 1,
-                loading: false
-            });
+                const startIndex = members.length;
+                list.forEach((item, index) => {
+                    nextData[`members[${startIndex + index}]`] = item;
+                });
+                this.setData(nextData);
+            } else {
+                this.setData({
+                    members: list,
+                    hasMore: list.length === limit,
+                    page: page + 1,
+                    loading: false
+                });
+            }
         } catch (err) {
             this.setData({ loading: false });
             console.error('加载成员失败:', err);
@@ -220,6 +240,12 @@ Page({
         const index = Number(e.currentTarget.dataset.index);
         const member = this.data.members[index];
         if (!member) return;
+        try {
+            wx.setStorageSync('teamMemberPreview', {
+                ...member,
+                cached_at: Date.now()
+            });
+        } catch (_) {}
         wx.navigateTo({ url: `/pages/distribution/team-member?id=${member._id || member.id}` });
     },
 
