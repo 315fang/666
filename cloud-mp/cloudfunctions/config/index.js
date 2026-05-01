@@ -1000,6 +1000,25 @@ async function findOneByAnyId(collectionName, rawId) {
     return res.data && res.data[0] ? res.data[0] : null;
 }
 
+function buildMiniProgramRuntimeConfig(config = {}, baseConfig = null) {
+    const source = config && typeof config === 'object' ? config : {};
+    const base = baseConfig && typeof baseConfig === 'object'
+        ? { ...baseConfig }
+        : (source.mini_program_config && typeof source.mini_program_config === 'object'
+            ? { ...source.mini_program_config }
+            : { ...source });
+    [
+        'point_rule_config',
+        'growth_rule_config',
+        'growth_tier_config',
+        'point_level_config',
+        'member_level_config'
+    ].forEach((key) => {
+        if (source[key] !== undefined) base[key] = source[key];
+    });
+    return configContract.normalizeMiniProgramConfig(base);
+}
+
 const handleAction = {
     // ===== 基础配置 =====
     'init': asyncHandler(async (params) => {
@@ -1032,7 +1051,7 @@ const handleAction = {
             () => configLoader.loadConfig(),
             { action: 'miniProgramConfig' }
         );
-        return success(configContract.normalizeMiniProgramConfig(config.mini_program_config || config));
+        return success(buildMiniProgramRuntimeConfig(config));
     }),
 
     // ===== 首页内容 =====
@@ -1094,7 +1113,8 @@ const handleAction = {
                 loadBoardMapWithProducts()
             ]);
 
-            const miniProgramConfig = configContract.normalizeMiniProgramConfig(miniProgramRaw || {});
+            const allConfig = await configLoader.loadConfig();
+            const miniProgramConfig = buildMiniProgramRuntimeConfig(allConfig, miniProgramRaw || {});
             const layout = layoutsRes.data && layoutsRes.data[0] ? layoutsRes.data[0] : null;
             const hotProducts = (productsRes.data || [])
                 .filter((item) => isMallVisibleProduct(item))

@@ -177,11 +177,11 @@ module.exports = {
         },
         {
             key: 'page:distribution-center',
-            title: '分销中心',
+            title: '团队中心',
             group: '分销服务',
             link_type: 'page',
-            link_value: '/pages/distribution/center',
-            note: '分销中心首页'
+            link_value: '/pages/distribution/business-center',
+            note: '当前团队与分销主入口'
         }
     ]
 }

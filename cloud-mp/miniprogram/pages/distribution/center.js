@@ -80,6 +80,14 @@ Page({
     },
 
     onLoad(options) {
+        void options;
+        this._redirectingToCurrentCenter = true;
+        wx.redirectTo({
+            url: '/pages/distribution/business-center',
+            fail: () => {
+                this._redirectingToCurrentCenter = false;
+            }
+        });
     },
 
     onReady() {
@@ -87,6 +95,7 @@ Page({
     },
 
     onShow() {
+        if (this._redirectingToCurrentCenter) return;
         this.setData({ userInfo: app.globalData.userInfo });
         this.loadWithdrawalRules();
         this.refreshDashboard();

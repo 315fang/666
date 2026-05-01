@@ -90,7 +90,7 @@ const PAGES = {
   ORDER_CONFIRM: '/pages/order/confirm',
   ADDRESS_LIST: '/pages/address/list',
   ADDRESS_EDIT: '/pages/address/edit',
-  DISTRIBUTION_CENTER: '/pages/distribution/center',
+  DISTRIBUTION_CENTER: '/pages/distribution/business-center',
   WALLET: '/pages/wallet/index'
 };
 

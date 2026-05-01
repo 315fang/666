@@ -2207,8 +2207,8 @@ function getMiniProgramDefault() {
 function getMiniProgramConfigSnapshot() {
     const configRows = getCollection('configs');
     const appConfigs = getCollection('app_configs');
-    const fromConfigs = configRows.find((item) => item.config_key === 'mini_program_config' || item.key === 'mini_program_config');
-    const fromConfigRow = appConfigs.find((item) => item.config_key === 'mini_program_config');
+    const fromConfigs = pickPreferredConfigRow(configRows.filter((item) => item.config_key === 'mini_program_config' || item.key === 'mini_program_config'));
+    const fromConfigRow = pickPreferredConfigRow(appConfigs.filter((item) => item.config_key === 'mini_program_config' || item.key === 'mini_program_config'));
     const fallback = fromConfigs && typeof (fromConfigs.config_value ?? fromConfigs.value) === 'object'
         ? (fromConfigs.config_value ?? fromConfigs.value)
         : (fromConfigRow && typeof fromConfigRow.config_value === 'object'
@@ -9669,9 +9669,30 @@ function parseConfigRowValue(row, fallback) {
     return value;
 }
 
+function isConfigRowEnabled(row = {}) {
+    if (row.active !== undefined && row.active !== null && row.active !== '') {
+        return toBoolean(row.active);
+    }
+    if (row.status !== undefined && row.status !== null && row.status !== '') {
+        return toBoolean(row.status);
+    }
+    return true;
+}
+
+function pickPreferredConfigRow(rows = []) {
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const enabledRows = rows.filter(isConfigRowEnabled);
+    const source = enabledRows.length ? enabledRows : rows.slice();
+    return source.sort((left, right) => {
+        const timeDiff = parseTimestamp(right.updated_at || right.created_at) - parseTimestamp(left.updated_at || left.created_at);
+        if (timeDiff !== 0) return timeDiff;
+        return pickString(right._id || right.id).localeCompare(pickString(left._id || left.id));
+    })[0] || null;
+}
+
 function getConfigRowValue(key, fallback) {
-    const row = getCollection('configs').find((item) => item.config_key === key || item.key === key)
-        || getCollection('app_configs').find((item) => item.config_key === key || item.key === key);
+    const row = pickPreferredConfigRow(getCollection('configs').filter((item) => item.config_key === key || item.key === key))
+        || pickPreferredConfigRow(getCollection('app_configs').filter((item) => item.config_key === key || item.key === key));
     return parseConfigRowValue(row, fallback);
 }
 
@@ -9797,7 +9818,11 @@ function buildConfigSourceReport(key) {
 
 function upsertConfigRow(key, value, options = {}) {
     const rows = getCollection('configs');
-    const index = rows.findIndex((item) => item.config_key === key || item.key === key);
+    const matchingIndexes = rows
+        .map((item, index) => ((item.config_key === key || item.key === key) ? index : -1))
+        .filter((index) => index >= 0);
+    const preferred = pickPreferredConfigRow(matchingIndexes.map((index) => rows[index]));
+    const index = preferred ? rows.findIndex((item) => item === preferred) : -1;
     const row = {
         ...(index === -1 ? { id: nextId(rows), created_at: nowIso() } : rows[index]),
         config_key: key,
@@ -9814,7 +9839,16 @@ function upsertConfigRow(key, value, options = {}) {
         updated_at: nowIso()
     };
     if (index === -1) rows.push(row);
-    else rows[index] = row;
+    else {
+        for (const matchIndex of matchingIndexes) {
+            rows[matchIndex] = {
+                ...rows[matchIndex],
+                ...row,
+                id: rows[matchIndex].id ?? row.id,
+                _id: rows[matchIndex]._id ?? row._id
+            };
+        }
+    }
     saveCollection('configs', rows);
     return row;
 }

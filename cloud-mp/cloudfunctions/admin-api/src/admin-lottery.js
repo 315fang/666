@@ -379,7 +379,9 @@ function createLotteryAdminSupport(deps = {}) {
         if (amount <= 0) throw new Error('货款奖励配置异常');
 
         if (!eligibleLevels.includes(roleLevel)) {
-            const pointRuleRow = getCollection('configs').find((item) => pickString(item.config_key || item.key) === 'point_rule_config');
+            const pointRuleRow = sortByUpdatedDesc(getCollection('configs')
+                .filter((item) => pickString(item.config_key || item.key) === 'point_rule_config')
+                .filter((item) => item.active !== false && item.status !== false && item.status !== 0 && item.status !== '0'))[0];
             const pointRule = pointRuleRow && typeof pointRuleRow.config_value === 'object' ? pointRuleRow.config_value : (pointRuleRow && typeof pointRuleRow.value === 'object' ? pointRuleRow.value : {});
             const deduction = pointRule.deduction || pointRule.redeem || {};
             const yuanPerPoint = Math.max(0.01, toNumber(deduction.yuan_per_point ?? deduction.value_per_point ?? pointRule.yuan_per_point ?? pointRule.point_value, 0.1));

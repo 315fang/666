@@ -274,6 +274,7 @@ Page({
             }
 
             const p = prepayRes.data;
+            const rechargeOrderId = p.recharge_id || p.order_no || '';
             wx.requestPayment({
                 timeStamp: p.timeStamp,
                 nonceStr:  p.nonceStr,
@@ -288,7 +289,17 @@ Page({
                 fail: (err) => {
                     this.setData({ recharging: false });
                     if (err.errMsg && err.errMsg.includes('cancel')) {
-                        wx.showToast({ title: '已取消充值', icon: 'none' });
+                        wx.showModal({
+                            title: '已取消充值',
+                            content: '充值单会保留一段时间，可继续支付或等待超时关闭。',
+                            confirmText: '查看充值单',
+                            cancelText: '知道了',
+                            success: (res) => {
+                                if (res.confirm && rechargeOrderId) {
+                                    wx.navigateTo({ url: `/pages/wallet/recharge-order?id=${encodeURIComponent(rechargeOrderId)}` });
+                                }
+                            }
+                        });
                     } else {
                         wx.showToast({ title: '支付失败，请重试', icon: 'none' });
                     }

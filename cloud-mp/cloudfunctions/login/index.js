@@ -39,6 +39,30 @@ function createInviteCode() {
     return code;
 }
 
+function sanitizeDocIdPart(value) {
+    return String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+}
+
+function userDocIdForOpenid(openid) {
+    return `user-${sanitizeDocIdPart(openid)}`;
+}
+
+function invitePointLogDocId(referrerOpenid, inviteeOpenid) {
+    return `invite-success-${sanitizeDocIdPart(referrerOpenid)}-${sanitizeDocIdPart(inviteeOpenid)}`;
+}
+
+function removeFieldPatch() {
+    return typeof _.remove === 'function' ? _.remove() : undefined;
+}
+
+function assignRemoveField(patch, field) {
+    const removeValue = removeFieldPatch();
+    if (removeValue !== undefined) {
+        patch[field] = removeValue;
+    }
+    return patch;
+}
+
 function couponExpireOffsetMs(validDays) {
     const days = Math.max(1, Math.floor(toNumber(validDays, 30)));
     return days * 24 * 60 * 60 * 1000;
@@ -87,19 +111,72 @@ function parseConfigValue(row, fallback) {
     return value;
 }
 
+function parseTimestamp(value) {
+    if (!value) return 0;
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value === 'string') {
+        const ts = new Date(value).getTime();
+        return Number.isFinite(ts) ? ts : 0;
+    }
+    if (typeof value === 'object') {
+        if (typeof value._seconds === 'number') return value._seconds * 1000;
+        if (typeof value.seconds === 'number') return value.seconds * 1000;
+        if (value.$date !== undefined) return parseTimestamp(value.$date);
+        if (typeof value.toDate === 'function') {
+            const date = value.toDate();
+            return date instanceof Date ? date.getTime() : 0;
+        }
+    }
+    return 0;
+}
+
+function isEnabledFlag(value, fallback = true) {
+    if (value === undefined || value === null || value === '') return fallback;
+    if (value === true || value === 1 || value === '1') return true;
+    if (value === false || value === 0 || value === '0') return false;
+    const normalized = String(value).trim().toLowerCase();
+    if (!normalized) return fallback;
+    if (['true', 'yes', 'y', 'on', 'enabled', 'enable', 'active', 'show', 'visible'].includes(normalized)) return true;
+    if (['false', 'no', 'n', 'off', 'disabled', 'disable', 'inactive', 'hidden'].includes(normalized)) return false;
+    return fallback;
+}
+
+function isConfigRowEnabled(row = {}) {
+    if (row.active !== undefined && row.active !== null && row.active !== '') {
+        return isEnabledFlag(row.active, true);
+    }
+    if (row.status !== undefined && row.status !== null && row.status !== '') {
+        return isEnabledFlag(row.status, true);
+    }
+    return true;
+}
+
+function pickPreferredConfigRow(rows = []) {
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const enabledRows = rows.filter(isConfigRowEnabled);
+    const source = enabledRows.length ? enabledRows : rows.slice();
+    return source.sort((a, b) => {
+        const timeDiff = parseTimestamp(b.updated_at || b.created_at) - parseTimestamp(a.updated_at || a.created_at);
+        if (timeDiff !== 0) return timeDiff;
+        return String(b._id || b.id || '').localeCompare(String(a._id || a.id || ''));
+    })[0] || null;
+}
+
 async function getConfigByKey(key) {
     const res = await db.collection('configs')
         .where(_.or([{ config_key: key }, { key }]))
-        .limit(1)
+        .limit(20)
         .get()
         .catch(() => ({ data: [] }));
-    if (res.data && res.data[0]) return res.data[0];
+    const row = pickPreferredConfigRow(res.data || []);
+    if (row) return row;
     const legacyRes = await db.collection('app_configs')
         .where(_.or([{ config_key: key }, { key }]))
-        .limit(1)
+        .limit(20)
         .get()
         .catch(() => ({ data: [] }));
-    return legacyRes.data && legacyRes.data[0] ? legacyRes.data[0] : null;
+    return pickPreferredConfigRow(legacyRes.data || []);
 }
 
 async function findInviterByInviteCode(inviteCode = '') {
@@ -186,24 +263,64 @@ async function awardInviteSuccessPoints(referrerOpenid, inviteeOpenid) {
         .catch(() => ({ data: [] }));
     if (existing.data && existing.data[0]) return 0;
 
-    await db.collection('users').where({ openid: referrerOpenid }).update({
-        data: {
-            points: _.inc(rule.points),
-            updated_at: db.serverDate()
-        }
-    }).catch(() => null);
+    const lockWhere = {
+        openid: inviteeOpenid,
+        invite_points_awarded_at: _.exists(false),
+        invite_points_awarding_at: _.exists(false)
+    };
+    const lockData = {
+        invite_points_awarding_at: db.serverDate(),
+        invite_points_awarded_to_openid: referrerOpenid,
+        updated_at: db.serverDate()
+    };
+    assignRemoveField(lockData, 'invite_points_award_error');
+    const lockRes = await db.collection('users').where(lockWhere).update({ data: lockData }).catch(() => ({ stats: { updated: 0 } }));
+    if (!lockRes.stats || lockRes.stats.updated === 0) return 0;
 
-    await db.collection('point_logs').add({
-        data: {
-            openid: referrerOpenid,
-            type: 'earn',
-            amount: rule.points,
-            source: 'invite_success',
-            invitee_openid: inviteeOpenid,
-            description: rule.remark,
-            created_at: db.serverDate()
+    try {
+        const referrerUpdate = await db.collection('users').where({ openid: referrerOpenid }).update({
+            data: {
+                points: _.inc(rule.points),
+                updated_at: db.serverDate()
+            }
+        });
+        if (!referrerUpdate.stats || referrerUpdate.stats.updated === 0) {
+            throw new Error('邀请人不存在，积分未发放');
         }
-    }).catch(() => null);
+
+        await db.collection('point_logs').doc(invitePointLogDocId(referrerOpenid, inviteeOpenid)).set({
+            data: {
+                openid: referrerOpenid,
+                type: 'earn',
+                amount: rule.points,
+                source: 'invite_success',
+                invitee_openid: inviteeOpenid,
+                description: rule.remark,
+                created_at: db.serverDate(),
+                updated_at: db.serverDate()
+            }
+        }).catch((err) => {
+            console.error('[Login] 邀请积分流水写入失败:', err.message);
+        });
+
+        const donePatch = {
+            invite_points_awarded_at: db.serverDate(),
+            invite_points_awarded_to_openid: referrerOpenid,
+            updated_at: db.serverDate()
+        };
+        assignRemoveField(donePatch, 'invite_points_awarding_at');
+        assignRemoveField(donePatch, 'invite_points_award_error');
+        await db.collection('users').where({ openid: inviteeOpenid }).update({ data: donePatch }).catch(() => null);
+    } catch (err) {
+        const failPatch = {
+            invite_points_award_error: err.message || String(err),
+            invite_points_award_failed_at: db.serverDate(),
+            updated_at: db.serverDate()
+        };
+        assignRemoveField(failPatch, 'invite_points_awarding_at');
+        await db.collection('users').where({ openid: inviteeOpenid }).update({ data: failPatch }).catch(() => null);
+        return 0;
+    }
 
     return rule.points;
 }
@@ -473,11 +590,15 @@ exports.main = cloudFunctionWrapper(async (event) => {
                 updated_at: db.serverDate()
             };
 
-            await db.collection('users').add({ data: newUser });
+            await db.collection('users').doc(userDocIdForOpenid(openid)).set({ data: newUser });
             if (referrerOpenid) {
                 await awardInviteSuccessPoints(referrerOpenid, openid);
             }
             userRes = await db.collection('users').where({ openid }).limit(1).get();
+            if (!userRes.data.length) {
+                const userDoc = await db.collection('users').doc(userDocIdForOpenid(openid)).get().catch(() => ({ data: null }));
+                userRes = { data: userDoc.data ? [userDoc.data] : [] };
+            }
         } else if (invite_code) {
             const reboundUser = await bindExistingUserReferrerIfNeeded(openid, userRes.data[0], invite_code);
             userRes = { data: [reboundUser] };
@@ -519,3 +640,8 @@ exports.main = cloudFunctionWrapper(async (event) => {
 
     throw badRequest(`未知 action: ${action}`);
 });
+
+exports._test = {
+    userDocIdForOpenid,
+    invitePointLogDocId
+};

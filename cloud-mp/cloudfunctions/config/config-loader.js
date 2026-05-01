@@ -55,6 +55,23 @@ function pickPreferredConfigRow(rows = []) {
     })[0] || null;
 }
 
+function mergeRowsByPreferredKey(target, rows = []) {
+    const groups = new Map();
+    rows.filter(isConfigRowEnabled).forEach((item) => {
+        const key = item.config_key || item.key || item.type || item._id;
+        if (!key) return;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(item);
+    });
+    groups.forEach((groupRows, key) => {
+        const preferred = pickPreferredConfigRow(groupRows);
+        if (!preferred || target[key] !== undefined) return;
+        target[key] = preferred.config_value !== undefined
+            ? preferred.config_value
+            : (preferred.value !== undefined ? preferred.value : preferred);
+    });
+}
+
 async function loadRows(collectionName, whereClause) {
     const collection = db.collection(collectionName);
     const allRows = [];
@@ -90,20 +107,10 @@ async function loadConfig(configType) {
     // 无参数时加载所有配置并合并为键值对象
     const rows = await loadRows('configs');
     const config = {};
-    rows.filter(isConfigRowEnabled).forEach(item => {
-        const key = item.config_key || item.key || item.type || item._id;
-        if (key) {
-            config[key] = item.config_value !== undefined ? item.config_value : (item.value !== undefined ? item.value : item);
-        }
-    });
+    mergeRowsByPreferredKey(config, rows);
 
     const legacyRows = await loadRows('app_configs');
-    legacyRows.filter(isConfigRowEnabled).forEach(item => {
-        const key = item.config_key || item.key || item._id;
-        if (key && config[key] === undefined) {
-            config[key] = item.config_value !== undefined ? item.config_value : (item.value !== undefined ? item.value : item);
-        }
-    });
+    mergeRowsByPreferredKey(config, legacyRows);
 
     return config;
 }

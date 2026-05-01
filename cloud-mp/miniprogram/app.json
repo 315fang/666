@@ -205,7 +205,7 @@
             },
             {
                 "pagePath": "pages/user/user",
-                "text": "我的会员",
+                "text": "我的",
                 "iconPath": "assets/tabbar-icons/user.png",
                 "selectedIconPath": "assets/tabbar-icons/user-active.png"
             }

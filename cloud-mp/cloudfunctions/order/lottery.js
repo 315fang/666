@@ -105,6 +105,18 @@ function isEnabledFlag(value, fallback = true) {
     return fallback;
 }
 
+function pickPreferredConfigRow(rows = []) {
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const enabledRows = rows.filter((row) => isEnabledFlag(row?.active ?? row?.status, true));
+    const source = enabledRows.length ? enabledRows : rows.slice();
+    return source.sort((a, b) => {
+        const timeDiff = (parseDateValue(b.updated_at || b.created_at)?.getTime() || 0)
+            - (parseDateValue(a.updated_at || a.created_at)?.getTime() || 0);
+        if (timeDiff !== 0) return timeDiff;
+        return pickString(b._id || b.id).localeCompare(pickString(a._id || a.id));
+    })[0] || null;
+}
+
 function resolveLotteryId(params = {}) {
     return pickString(params.lottery_id || params.pool_id || params.lotteryId || params.poolId || 'default', 'default');
 }
@@ -868,10 +880,10 @@ async function loadMiniProgramConfig() {
         { key: 'mini_program_config' }
     ]);
     const [configRes, appConfigRes] = await Promise.all([
-        db.collection('configs').where(query).limit(1).get().catch(() => ({ data: [] })),
-        db.collection('app_configs').where(query).limit(1).get().catch(() => ({ data: [] }))
+        db.collection('configs').where(query).limit(20).get().catch(() => ({ data: [] })),
+        db.collection('app_configs').where(query).limit(20).get().catch(() => ({ data: [] }))
     ]);
-    const row = (configRes.data && configRes.data[0]) || (appConfigRes.data && appConfigRes.data[0]) || null;
+    const row = pickPreferredConfigRow(configRes.data || []) || pickPreferredConfigRow(appConfigRes.data || []);
     return pickConfigPayload(row);
 }
 

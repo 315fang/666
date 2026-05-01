@@ -186,22 +186,56 @@ function parseConfigValue(row, fallback) {
     return value;
 }
 
+function isEnabledFlag(value, fallback = true) {
+    if (value === undefined || value === null || value === '') return fallback;
+    if (value === true || value === 1 || value === '1') return true;
+    if (value === false || value === 0 || value === '0') return false;
+    const normalized = String(value).trim().toLowerCase();
+    if (!normalized) return fallback;
+    if (['true', 'yes', 'y', 'on', 'enabled', 'enable', 'active', 'show', 'visible'].includes(normalized)) return true;
+    if (['false', 'no', 'n', 'off', 'disabled', 'disable', 'inactive', 'hidden'].includes(normalized)) return false;
+    return fallback;
+}
+
+function isConfigRowEnabled(row = {}) {
+    if (row.active !== undefined && row.active !== null && row.active !== '') {
+        return isEnabledFlag(row.active, true);
+    }
+    if (row.status !== undefined && row.status !== null && row.status !== '') {
+        return isEnabledFlag(row.status, true);
+    }
+    return true;
+}
+
+function pickPreferredConfigRow(rows = []) {
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const enabledRows = rows.filter(isConfigRowEnabled);
+    const source = enabledRows.length ? enabledRows : rows.slice();
+    return source.sort((a, b) => {
+        const timeDiff = parseTimestamp(b.updated_at || b.created_at) - parseTimestamp(a.updated_at || a.created_at);
+        if (timeDiff !== 0) return timeDiff;
+        return String(b._id || b.id || '').localeCompare(String(a._id || a.id || ''));
+    })[0] || null;
+}
+
 async function getConfigByKeys(keys = []) {
     for (const key of keys) {
         const current = String(key || '').trim();
         if (!current) continue;
         const res = await db.collection('configs')
             .where(_.or([{ config_key: current }, { key: current }]))
-            .limit(1)
+            .limit(20)
             .get()
             .catch(() => ({ data: [] }));
-        if (res.data && res.data[0]) return res.data[0];
+        const row = pickPreferredConfigRow(res.data || []);
+        if (row) return row;
         const legacyRes = await db.collection('app_configs')
-            .where({ config_key: current, status: _.in([true, 1, '1']) })
-            .limit(1)
+            .where(_.or([{ config_key: current }, { key: current }]))
+            .limit(20)
             .get()
             .catch(() => ({ data: [] }));
-        if (legacyRes.data && legacyRes.data[0]) return legacyRes.data[0];
+        const legacyRow = pickPreferredConfigRow(legacyRes.data || []);
+        if (legacyRow) return legacyRow;
     }
     return null;
 }
@@ -704,6 +738,57 @@ function calculateOrderPayPoints(payAmount, purchasePointsPerHundred) {
     const amount = Math.max(0, toNumber(payAmount, 0));
     const pointsPerHundred = Math.max(0, toNumber(purchasePointsPerHundred, 0));
     return Math.max(0, Math.floor((amount * pointsPerHundred) / 100));
+}
+
+function removeFieldPatch() {
+    return typeof _.remove === 'function' ? _.remove() : undefined;
+}
+
+function assignRemoveField(patch, field) {
+    const removeValue = removeFieldPatch();
+    if (removeValue !== undefined) {
+        patch[field] = removeValue;
+    }
+    return patch;
+}
+
+async function acquireOrderStepLock(orderId, doneField, lockField, errorField) {
+    const where = { _id: orderId };
+    where[doneField] = _.exists(false);
+    where[lockField] = _.exists(false);
+    const data = {
+        [lockField]: db.serverDate(),
+        updated_at: db.serverDate()
+    };
+    assignRemoveField(data, errorField);
+
+    const result = await db.collection('orders').where(where).update({ data });
+    return Boolean(result && result.stats && result.stats.updated > 0);
+}
+
+async function completeOrderStep(orderId, doneField, lockField, patch = {}, extraRemoveFields = []) {
+    const data = {
+        ...patch,
+        [doneField]: db.serverDate(),
+        updated_at: db.serverDate()
+    };
+    assignRemoveField(data, lockField);
+    extraRemoveFields.forEach((field) => assignRemoveField(data, field));
+    await db.collection('orders').doc(orderId).update({ data });
+}
+
+async function failOrderStep(orderId, lockField, errorField, error) {
+    const data = {
+        [errorField]: error?.message || String(error || 'unknown_error'),
+        updated_at: db.serverDate()
+    };
+    assignRemoveField(data, lockField);
+    if (errorField) {
+        data[`${errorField.replace(/_error$/, '')}_failed_at`] = db.serverDate();
+    }
+    await db.collection('orders').doc(orderId).update({ data }).catch((patchErr) => {
+        console.error('[payment-callback] ⚠️ 支付后处理失败状态写入失败', patchErr.message);
+    });
 }
 
 function normalizeAdministrativeRegionText(value) {
@@ -1443,94 +1528,117 @@ async function ensurePeerBonusCreated(orderId, order, roleSyncResult) {
 }
 
 async function ensurePointsAwarded(orderId, order) {
-    if (isExchangeOrder(order)) {
-        await db.collection('orders').doc(orderId).update({
-            data: { points_awarded_at: db.serverDate(), points_earned: 0, updated_at: db.serverDate() },
-        });
-        return { skipped: true, reason: 'exchange_order', awarded: 0, growth: 0, multiplier: 0, buyerRole: 0 };
-    }
-    if (order.is_test_order === true || order.is_test_order === 1 || order.is_test_order === '1') {
-        await db.collection('orders').doc(orderId).update({
-            data: { points_awarded_at: db.serverDate(), points_earned: 0, growth_earned: 0, updated_at: db.serverDate() },
-        });
-        return { skipped: true, reason: 'test_order', awarded: 0, growth: 0, multiplier: 0, buyerRole: 0 };
-    }
     if (order.points_awarded_at) return { skipped: true };
 
     // 原子幂等锁：用 where 条件确保只有一个调用能通过
-    const lockRes = await db.collection('orders')
-        .where({ _id: orderId, points_awarded_at: _.exists(false) })
-        .update({ data: { points_awarded_at: db.serverDate(), updated_at: db.serverDate() } });
-    if (!lockRes || !lockRes.stats || lockRes.stats.updated === 0) {
+    const locked = await acquireOrderStepLock(orderId, 'points_awarded_at', 'points_awarding_at', 'points_award_error');
+    if (!locked) {
         console.log('[payment-callback] 积分发放已被并发处理，跳过 orderId=%s', orderId);
         return { skipped: true, reason: 'concurrent_lock' };
     }
 
-    const payAmount = getOrderTotalAmount(order);
-    if (payAmount <= 0 || !order.openid) {
-        await db.collection('orders').doc(orderId).update({
-            data: { points_awarded_at: db.serverDate(), points_earned: 0, growth_earned: 0, updated_at: db.serverDate() },
-        });
-        return { awarded: 0 };
+    try {
+        if (isExchangeOrder(order)) {
+            await completeOrderStep(orderId, 'points_awarded_at', 'points_awarding_at', {
+                points_earned: 0,
+                growth_earned: 0
+            }, ['points_award_error', 'points_log_error']);
+            return { skipped: true, reason: 'exchange_order', awarded: 0, growth: 0, multiplier: 0, buyerRole: 0 };
+        }
+        if (order.is_test_order === true || order.is_test_order === 1 || order.is_test_order === '1') {
+            await completeOrderStep(orderId, 'points_awarded_at', 'points_awarding_at', {
+                points_earned: 0,
+                growth_earned: 0
+            }, ['points_award_error', 'points_log_error']);
+            return { skipped: true, reason: 'test_order', awarded: 0, growth: 0, multiplier: 0, buyerRole: 0 };
+        }
+
+        const payAmount = getOrderTotalAmount(order);
+        if (payAmount <= 0 || !order.openid) {
+            await completeOrderStep(orderId, 'points_awarded_at', 'points_awarding_at', {
+                points_earned: 0,
+                growth_earned: 0
+            }, ['points_award_error', 'points_log_error']);
+            return { awarded: 0 };
+        }
+
+        // 查买家等级，按等级倍率赠送积分
+        const buyerRes = await db.collection('users').where({ openid: order.openid }).limit(1).get().catch(() => ({ data: [] }));
+        const buyerRole = buyerRes.data && buyerRes.data[0]
+            ? toNumber(buyerRes.data[0].role_level ?? buyerRes.data[0].distributor_level ?? buyerRes.data[0].level, 0)
+            : 0;
+        const benefitBuyerRole = resolvePointBenefitRoleLevel(buyerRole);
+        const { pointRules, growthRules } = await loadAgentRuntimeConfig();
+        const purchasePointsPerHundred = Math.max(
+            0,
+            toNumber(pointRules.purchase_multiplier_by_role?.[benefitBuyerRole], pointRules.purchase_multiplier_by_role?.[0] || DEFAULT_POINT_RULES.purchase_multiplier_by_role[0])
+        );
+        const pointsEarned = calculateOrderPayPoints(payAmount, purchasePointsPerHundred);
+
+        const purchaseGrowthRule = growthRules.purchase || DEFAULT_GROWTH_RULES.purchase;
+        const growthBaseAmount = purchaseGrowthRule.use_original_amount
+            ? toNumber(order.original_amount ?? order.total_amount ?? payAmount, payAmount)
+            : payAmount;
+        const growthEarned = purchaseGrowthRule.enabled === false
+            ? 0
+            : Math.max(0, Math.floor(growthBaseAmount * toNumber(purchaseGrowthRule.multiplier, 1) + toNumber(purchaseGrowthRule.fixed, 0)));
+
+        if (pointsEarned <= 0 && growthEarned <= 0) {
+            await completeOrderStep(orderId, 'points_awarded_at', 'points_awarding_at', {
+                points_earned: 0,
+                growth_earned: 0
+            }, ['points_award_error', 'points_log_error']);
+            return { awarded: 0 };
+        }
+
+        const updates = { total_spent: _.inc(payAmount), order_count: _.inc(1), updated_at: db.serverDate() };
+        if (pointsEarned > 0) updates.points = _.inc(pointsEarned);
+        if (growthEarned > 0) updates.growth_value = _.inc(growthEarned);
+
+        const userUpdate = await db.collection('users').where({ openid: order.openid }).update({ data: updates });
+        if (!userUpdate || !userUpdate.stats || userUpdate.stats.updated === 0) {
+            throw new Error('用户积分/成长值更新失败');
+        }
+
+        let pointLogError = '';
+        const existingLog = await db.collection('point_logs')
+            .where({ openid: order.openid, source: 'order_pay', order_id: orderId })
+            .limit(1).get().catch(() => ({ data: [] }));
+        if (!existingLog.data || existingLog.data.length === 0) {
+            await db.collection('point_logs').add({
+                data: {
+                    openid: order.openid,
+                    type: 'earn',
+                    amount: pointsEarned,
+                    source: 'order_pay',
+                    order_id: orderId,
+                    buyer_role: buyerRole,
+                    multiplier: purchasePointsPerHundred,
+                    description: `订单支付获得${pointsEarned}积分（每100元赠送${purchasePointsPerHundred}积分）`,
+                    created_at: db.serverDate(),
+                },
+            }).catch((err) => {
+                pointLogError = err.message || String(err);
+                console.error('[payment-callback] ⚠️ 支付积分流水写入失败 orderId=%s error=%s', orderId, pointLogError);
+            });
+        }
+
+        const completionPatch = {
+            points_earned: pointsEarned,
+            growth_earned: growthEarned
+        };
+        const removeFields = ['points_award_error'];
+        if (pointLogError) {
+            completionPatch.points_log_error = pointLogError;
+        } else {
+            removeFields.push('points_log_error');
+        }
+        await completeOrderStep(orderId, 'points_awarded_at', 'points_awarding_at', completionPatch, removeFields);
+        return { awarded: pointsEarned, growth: growthEarned, multiplier: purchasePointsPerHundred, buyerRole, point_log_error: pointLogError || undefined };
+    } catch (err) {
+        await failOrderStep(orderId, 'points_awarding_at', 'points_award_error', err);
+        throw err;
     }
-
-    // 查买家等级，按等级倍率赠送积分
-    const buyerRes = await db.collection('users').where({ openid: order.openid }).limit(1).get().catch(() => ({ data: [] }));
-    const buyerRole = buyerRes.data && buyerRes.data[0]
-        ? toNumber(buyerRes.data[0].role_level ?? buyerRes.data[0].distributor_level ?? buyerRes.data[0].level, 0)
-        : 0;
-    const benefitBuyerRole = resolvePointBenefitRoleLevel(buyerRole);
-    const { pointRules, growthRules } = await loadAgentRuntimeConfig();
-    const purchasePointsPerHundred = Math.max(
-        0,
-        toNumber(pointRules.purchase_multiplier_by_role?.[benefitBuyerRole], pointRules.purchase_multiplier_by_role?.[0] || DEFAULT_POINT_RULES.purchase_multiplier_by_role[0])
-    );
-    const pointsEarned = calculateOrderPayPoints(payAmount, purchasePointsPerHundred);
-
-    const purchaseGrowthRule = growthRules.purchase || DEFAULT_GROWTH_RULES.purchase;
-    const growthBaseAmount = purchaseGrowthRule.use_original_amount
-        ? toNumber(order.original_amount ?? order.total_amount ?? payAmount, payAmount)
-        : payAmount;
-    const growthEarned = purchaseGrowthRule.enabled === false
-        ? 0
-        : Math.max(0, Math.floor(growthBaseAmount * toNumber(purchaseGrowthRule.multiplier, 1) + toNumber(purchaseGrowthRule.fixed, 0)));
-
-    if (pointsEarned <= 0 && growthEarned <= 0) {
-        await db.collection('orders').doc(orderId).update({
-            data: { points_awarded_at: db.serverDate(), points_earned: 0, growth_earned: 0, updated_at: db.serverDate() },
-        });
-        return { awarded: 0 };
-    }
-
-    const updates = { total_spent: _.inc(payAmount), order_count: _.inc(1), updated_at: db.serverDate() };
-    if (pointsEarned > 0) updates.points = _.inc(pointsEarned);
-    if (growthEarned > 0) updates.growth_value = _.inc(growthEarned);
-
-    await db.collection('users').where({ openid: order.openid }).update({ data: updates });
-
-    const existingLog = await db.collection('point_logs')
-        .where({ openid: order.openid, source: 'order_pay', order_id: orderId })
-        .limit(1).get().catch(() => ({ data: [] }));
-    if (!existingLog.data || existingLog.data.length === 0) {
-        await db.collection('point_logs').add({
-            data: {
-                openid: order.openid,
-                type: 'earn',
-                amount: pointsEarned,
-                source: 'order_pay',
-                order_id: orderId,
-                buyer_role: buyerRole,
-                multiplier: purchasePointsPerHundred,
-                description: `订单支付获得${pointsEarned}积分（每100元赠送${purchasePointsPerHundred}积分）`,
-                created_at: db.serverDate(),
-            },
-        });
-    }
-
-    await db.collection('orders').doc(orderId).update({
-        data: { points_earned: pointsEarned, growth_earned: growthEarned, updated_at: db.serverDate() },
-    });
-    return { awarded: pointsEarned, growth: growthEarned, multiplier: purchasePointsPerHundred, buyerRole };
 }
 
 async function ensureStockDeducted(orderId, order) {
@@ -1573,213 +1681,208 @@ async function ensureStockDeducted(orderId, order) {
 }
 
 async function ensureCommissionsCreated(orderId, order) {
-    if (isExchangeOrder(order)) {
-        await db.collection('orders').doc(orderId).update({
-            data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
-        });
-        return { skipped: true, reason: 'exchange_order', created: 0 };
-    }
     if (order.commissions_created_at) return { skipped: true };
 
     // 原子幂等锁：用 where 条件确保只有一个调用能通过
-    const lockRes = await db.collection('orders')
-        .where({ _id: orderId, commissions_created_at: _.exists(false) })
-        .update({ data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() } });
-    if (!lockRes || !lockRes.stats || lockRes.stats.updated === 0) {
+    const locked = await acquireOrderStepLock(orderId, 'commissions_created_at', 'commissions_creating_at', 'commissions_create_error');
+    if (!locked) {
         console.log('[payment-callback] 佣金创建已被并发处理，跳过 orderId=%s', orderId);
         return { skipped: true, reason: 'concurrent_lock' };
     }
-    const orderPayAmount = getOrderTotalAmount(order);
-    const commissionBase = orderPayAmount;
-    const branchRegion = commissionBase > 0
-        ? await ensureBranchAgentRegionCommissionWithRetryState(orderId, order, { orderPayAmount })
-        : { skipped: true, reason: 'non_positive_amount' };
-    const buyer = await findUserByAny(order.openid || order.buyer_id || order.user_id);
-    if (!buyer) {
-        await db.collection('orders').doc(orderId).update({
-            data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
-        });
-        return { created: toNumber(branchRegion.created, 0), branch_region: branchRegion };
-    }
+    try {
+        if (isExchangeOrder(order)) {
+            await completeOrderStep(orderId, 'commissions_created_at', 'commissions_creating_at', {}, ['commissions_create_error']);
+            return { skipped: true, reason: 'exchange_order', created: 0 };
+        }
 
-    const parent = await findUserByAny(order.direct_referrer_openid || getUserReferrer(buyer));
-    const grandparent = await findUserByAny(order.indirect_referrer_openid || (parent ? getUserReferrer(parent) : ''));
-    const fulfillmentPartner = await findUserByAny(order.fulfillment_partner_openid || order.nearest_agent_openid || order.agent_info?.openid || '');
-    const fulfillmentPartnerOpenid = fulfillmentPartner?.openid || order.fulfillment_partner_openid || '';
-    const beneficiaries = [
-        { level: 1, type: 'direct', user: parent },
-        { level: 2, type: 'indirect', user: grandparent }
-    ].filter((b) => b.user && b.user.openid && b.user.openid !== order.openid);
+        const orderPayAmount = getOrderTotalAmount(order);
+        const commissionBase = orderPayAmount;
+        const branchRegion = commissionBase > 0
+            ? await ensureBranchAgentRegionCommissionWithRetryState(orderId, order, { orderPayAmount })
+            : { skipped: true, reason: 'non_positive_amount' };
+        const buyer = await findUserByAny(order.openid || order.buyer_id || order.user_id);
+        if (!buyer) {
+            await completeOrderStep(orderId, 'commissions_created_at', 'commissions_creating_at', {}, ['commissions_create_error']);
+            return { created: toNumber(branchRegion.created, 0), branch_region: branchRegion };
+        }
 
-    const { commissionConfig, commissionMatrix, bundleCommissionMatrix, costSplit } = await loadAgentRuntimeConfig();
-    const buyerRole = toNumber(buyer.role_level ?? buyer.distributor_level ?? buyer.level, 0);
-    const benefitBuyerRole = resolveBenefitRoleLevel(buyerRole);
-    const isAgentSelfPurchase = buyerRole >= 3;
-    const totals = new Map();
-    const items = toArray(order.items);
+        const parent = await findUserByAny(order.direct_referrer_openid || getUserReferrer(buyer));
+        const grandparent = await findUserByAny(order.indirect_referrer_openid || (parent ? getUserReferrer(parent) : ''));
+        const fulfillmentPartner = await findUserByAny(order.fulfillment_partner_openid || order.nearest_agent_openid || order.agent_info?.openid || '');
+        const fulfillmentPartnerOpenid = fulfillmentPartner?.openid || order.fulfillment_partner_openid || '';
+        const beneficiaries = [
+            { level: 1, type: 'direct', user: parent },
+            { level: 2, type: 'indirect', user: grandparent }
+        ].filter((b) => b.user && b.user.openid && b.user.openid !== order.openid);
 
-    // 佣金基数 = 实付金额（pay_amount 已扣除积分抵扣和优惠券，无需再减 points_discount）
-    if (commissionBase <= 0) {
-        await db.collection('orders').doc(orderId).update({
-            data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
-        });
-        return { created: 0, reason: 'all_points_payment', branch_region: branchRegion };
-    }
+        const { commissionConfig, commissionMatrix, bundleCommissionMatrix, costSplit } = await loadAgentRuntimeConfig();
+        const buyerRole = toNumber(buyer.role_level ?? buyer.distributor_level ?? buyer.level, 0);
+        const benefitBuyerRole = resolveBenefitRoleLevel(buyerRole);
+        const isAgentSelfPurchase = buyerRole >= 3;
+        const totals = new Map();
+        const items = toArray(order.items);
 
-    if (isAgentSelfPurchase && SELF_PURCHASE_COMMISSION_ENABLED) {
-        const existingSelfRes = await db.collection('commissions')
-            .where({ order_id: orderId, openid: buyer.openid, type: 'self' })
-            .limit(1)
-            .get()
-            .catch(() => ({ data: [] }));
-        const selfCommissionRate = resolveSelfCommissionRate(costSplit);
-        const selfCommissionAmount = roundMoney(orderPayAmount * selfCommissionRate);
+        // 佣金基数 = 实付金额（pay_amount 已扣除积分抵扣和优惠券，无需再减 points_discount）
+        if (commissionBase <= 0) {
+            await completeOrderStep(orderId, 'commissions_created_at', 'commissions_creating_at', {}, ['commissions_create_error']);
+            return { created: 0, reason: 'all_points_payment', branch_region: branchRegion };
+        }
 
-        if ((!existingSelfRes.data || existingSelfRes.data.length === 0) && selfCommissionAmount > 0) {
+        if (isAgentSelfPurchase && SELF_PURCHASE_COMMISSION_ENABLED) {
+            const existingSelfRes = await db.collection('commissions')
+                .where({ order_id: orderId, openid: buyer.openid, type: 'self' })
+                .limit(1)
+                .get()
+                .catch(() => ({ data: [] }));
+            const selfCommissionRate = resolveSelfCommissionRate(costSplit);
+            const selfCommissionAmount = roundMoney(orderPayAmount * selfCommissionRate);
+
+            if ((!existingSelfRes.data || existingSelfRes.data.length === 0) && selfCommissionAmount > 0) {
+                await db.collection('commissions').add({
+                    data: {
+                        openid: buyer.openid,
+                        user_id: buyer.id || buyer._legacy_id || buyer._id || buyer.openid,
+                        from_openid: order.openid,
+                        buyer_role: buyerRole,
+                        order_id: orderId,
+                        order_no: order.order_no,
+                        amount: selfCommissionAmount,
+                        level: buyerRole,
+                        type: 'self',
+                        self_sale_rate: selfCommissionRate,
+                        self_sale_profit_amount: selfCommissionAmount,
+                        self_sale_goods_value_amount: roundMoney(orderPayAmount - selfCommissionAmount),
+                        status: 'pending',
+                        created_at: db.serverDate(),
+                        updated_at: db.serverDate()
+                    }
+                });
+            }
+
+            await completeOrderStep(orderId, 'commissions_created_at', 'commissions_creating_at', {}, ['commissions_create_error']);
+            return {
+                created: (selfCommissionAmount > 0 ? 1 : 0) + toNumber(branchRegion.created, 0),
+                commission_base: orderPayAmount,
+                mode: 'self_purchase',
+                branch_region: branchRegion
+            };
+        }
+
+        if (!beneficiaries.length) {
+            await completeOrderStep(orderId, 'commissions_created_at', 'commissions_creating_at', {}, ['commissions_create_error']);
+            return { created: toNumber(branchRegion.created, 0), branch_region: branchRegion };
+        }
+
+        const itemBaseTotal = items.reduce((sum, item) => {
+            const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
+            return sum + roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price, 0) * qty));
+        }, 0) || commissionBase;
+
+        for (const item of items) {
+            const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
+            const product = await getDocByIdOrLegacy('products', item.product_id) || {};
+            const sku = item.sku_id ? await getDocByIdOrLegacy('skus', item.sku_id) || {} : {};
+            const rawBase = roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price, 0) * qty));
+            const allocatedBase = itemBaseTotal > 0 ? roundMoney(commissionBase * rawBase / itemBaseTotal) : rawBase;
+            const useBundleMatrix = isFlexBundleCommissionItem(order, item);
+            const activeMatrix = useBundleMatrix ? bundleCommissionMatrix : commissionMatrix;
+            const useMatrix = activeMatrix && Object.keys(activeMatrix).length > 0;
+            if (useMatrix) {
+                // 组合商品与普通商品使用同一套级差矩阵算法，但矩阵参数各自独立。
+                // 级差矩阵制：parent 拿 matrix[parentRole][buyerRole]%，grandparent 拿级差
+                // 即便父级被跳过（因为 openid == buyer 等），也要用父级应得比例计算级差
+                const parentBeneficiary = beneficiaries.find(b => b.level === 1);
+                const parentRole = parentBeneficiary
+                    ? resolveBenefitRoleLevel(parentBeneficiary.user.role_level ?? parentBeneficiary.user.distributor_level ?? parentBeneficiary.user.level)
+                    : 0;
+                // 无论是否使用商品级配置，都应基于矩阵比例计算级差基准
+                const parentMatrixRate = parentBeneficiary ? matrixRate(activeMatrix, parentRole, benefitBuyerRole) : 0;
+
+                for (const beneficiary of beneficiaries) {
+                    const bRole = resolveBenefitRoleLevel(beneficiary.user.role_level ?? beneficiary.user.distributor_level ?? beneficiary.user.level);
+
+                    let amount;
+                    const configured = useBundleMatrix ? 0 : commissionConfigForLevel(product, beneficiary.level, allocatedBase);
+                    if (configured > 0) {
+                        amount = Math.min(allocatedBase, configured);
+                    } else {
+                        const myRate = matrixRate(activeMatrix, bRole, benefitBuyerRole);
+                        const effectiveRate = beneficiary.level === 1
+                            ? myRate
+                            : Math.max(0, myRate - parentMatrixRate);
+                        amount = roundMoney(allocatedBase * effectiveRate);
+                    }
+
+                    if (amount <= 0) continue;
+                    if (fulfillmentPartnerOpenid && beneficiary.user.openid === fulfillmentPartnerOpenid) continue;
+                    const key = `${beneficiary.user.openid}:${beneficiary.level}:${beneficiary.type}`;
+                    totals.set(key, {
+                        openid: beneficiary.user.openid,
+                        user_id: beneficiary.user.id || beneficiary.user._legacy_id || beneficiary.user._id || beneficiary.user.openid,
+                        amount: roundMoney((totals.get(key)?.amount || 0) + amount),
+                        level: beneficiary.level,
+                        type: beneficiary.type
+                    });
+                }
+            } else {
+                // 兼容旧模式
+                for (const beneficiary of beneficiaries) {
+                    let amount;
+                    if (useBundleMatrix) {
+                        amount = roundMoney(beneficiary.level === 1 ? item.direct_commission_fixed_amount : item.indirect_commission_fixed_amount);
+                    } else {
+                        const configured = commissionConfigForLevel(product, beneficiary.level, allocatedBase);
+                        const roleBased = roleBasedCommission(beneficiary.user, beneficiary.level, allocatedBase, commissionConfig);
+                        amount = configured > 0
+                            ? Math.min(allocatedBase, configured)
+                            : roleBased;
+                    }
+                    if (amount <= 0) continue;
+                    if (fulfillmentPartnerOpenid && beneficiary.user.openid === fulfillmentPartnerOpenid) continue;
+                    const key = `${beneficiary.user.openid}:${beneficiary.level}:${beneficiary.type}`;
+                    totals.set(key, {
+                        openid: beneficiary.user.openid,
+                        user_id: beneficiary.user.id || beneficiary.user._legacy_id || beneficiary.user._id || beneficiary.user.openid,
+                        amount: roundMoney((totals.get(key)?.amount || 0) + amount),
+                        level: beneficiary.level,
+                        type: beneficiary.type
+                    });
+                }
+            }
+        }
+
+        let created = toNumber(branchRegion.created, 0);
+        for (const commission of totals.values()) {
+            if (commission.amount <= 0) continue;
+            const existing = await db.collection('commissions')
+                .where({ order_id: orderId, openid: commission.openid, level: commission.level, type: commission.type })
+                .limit(1).get().catch(() => ({ data: [] }));
+            if (existing.data && existing.data.length > 0) continue;
             await db.collection('commissions').add({
                 data: {
-                    openid: buyer.openid,
-                    user_id: buyer.id || buyer._legacy_id || buyer._id || buyer.openid,
+                    openid: commission.openid,
+                    user_id: commission.user_id,
                     from_openid: order.openid,
                     buyer_role: buyerRole,
                     order_id: orderId,
                     order_no: order.order_no,
-                    amount: selfCommissionAmount,
-                    level: buyerRole,
-                    type: 'self',
-                    self_sale_rate: selfCommissionRate,
-                    self_sale_profit_amount: selfCommissionAmount,
-                    self_sale_goods_value_amount: roundMoney(orderPayAmount - selfCommissionAmount),
+                    amount: commission.amount,
+                    level: commission.level,
+                    type: commission.type,
                     status: 'pending',
                     created_at: db.serverDate(),
-                    updated_at: db.serverDate()
-                }
+                    updated_at: db.serverDate(),
+                },
             });
+            created += 1;
         }
 
-        await db.collection('orders').doc(orderId).update({
-            data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
-        });
-        return {
-            created: (selfCommissionAmount > 0 ? 1 : 0) + toNumber(branchRegion.created, 0),
-            commission_base: orderPayAmount,
-            mode: 'self_purchase',
-            branch_region: branchRegion
-        };
+        await completeOrderStep(orderId, 'commissions_created_at', 'commissions_creating_at', {}, ['commissions_create_error']);
+        return { created, commission_base: commissionBase, branch_region: branchRegion };
+    } catch (err) {
+        await failOrderStep(orderId, 'commissions_creating_at', 'commissions_create_error', err);
+        throw err;
     }
-
-    if (!beneficiaries.length) {
-        await db.collection('orders').doc(orderId).update({
-            data: { commissions_created_at: db.serverDate(), updated_at: db.serverDate() },
-        });
-        return { created: toNumber(branchRegion.created, 0), branch_region: branchRegion };
-    }
-
-    const itemBaseTotal = items.reduce((sum, item) => {
-        const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
-        return sum + roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price, 0) * qty));
-    }, 0) || commissionBase;
-
-    for (const item of items) {
-        const qty = Math.max(1, toNumber(item.qty || item.quantity, 1));
-        const product = await getDocByIdOrLegacy('products', item.product_id) || {};
-        const sku = item.sku_id ? await getDocByIdOrLegacy('skus', item.sku_id) || {} : {};
-        const rawBase = roundMoney(item.subtotal ?? item.item_amount ?? (toNumber(item.price || item.unit_price, 0) * qty));
-        const allocatedBase = itemBaseTotal > 0 ? roundMoney(commissionBase * rawBase / itemBaseTotal) : rawBase;
-        const useBundleMatrix = isFlexBundleCommissionItem(order, item);
-        const activeMatrix = useBundleMatrix ? bundleCommissionMatrix : commissionMatrix;
-        const useMatrix = activeMatrix && Object.keys(activeMatrix).length > 0;
-        if (useMatrix) {
-            // 组合商品与普通商品使用同一套级差矩阵算法，但矩阵参数各自独立。
-            // 级差矩阵制：parent 拿 matrix[parentRole][buyerRole]%，grandparent 拿级差
-            // 即便父级被跳过（因为 openid == buyer 等），也要用父级应得比例计算级差
-            const parentBeneficiary = beneficiaries.find(b => b.level === 1);
-            const parentRole = parentBeneficiary
-                ? resolveBenefitRoleLevel(parentBeneficiary.user.role_level ?? parentBeneficiary.user.distributor_level ?? parentBeneficiary.user.level)
-                : 0;
-            // 无论是否使用商品级配置，都应基于矩阵比例计算级差基准
-            const parentMatrixRate = parentBeneficiary ? matrixRate(activeMatrix, parentRole, benefitBuyerRole) : 0;
-
-            for (const beneficiary of beneficiaries) {
-                const bRole = resolveBenefitRoleLevel(beneficiary.user.role_level ?? beneficiary.user.distributor_level ?? beneficiary.user.level);
-
-                let amount;
-                const configured = useBundleMatrix ? 0 : commissionConfigForLevel(product, beneficiary.level, allocatedBase);
-                if (configured > 0) {
-                    amount = Math.min(allocatedBase, configured);
-                } else {
-                    const myRate = matrixRate(activeMatrix, bRole, benefitBuyerRole);
-                    const effectiveRate = beneficiary.level === 1
-                        ? myRate
-                        : Math.max(0, myRate - parentMatrixRate);
-                    amount = roundMoney(allocatedBase * effectiveRate);
-                }
-
-                if (amount <= 0) continue;
-                if (fulfillmentPartnerOpenid && beneficiary.user.openid === fulfillmentPartnerOpenid) continue;
-                const key = `${beneficiary.user.openid}:${beneficiary.level}:${beneficiary.type}`;
-                totals.set(key, {
-                    openid: beneficiary.user.openid,
-                    user_id: beneficiary.user.id || beneficiary.user._legacy_id || beneficiary.user._id || beneficiary.user.openid,
-                    amount: roundMoney((totals.get(key)?.amount || 0) + amount),
-                    level: beneficiary.level,
-                    type: beneficiary.type
-                });
-            }
-        } else {
-            // 兼容旧模式
-            for (const beneficiary of beneficiaries) {
-                let amount;
-                if (useBundleMatrix) {
-                    amount = roundMoney(beneficiary.level === 1 ? item.direct_commission_fixed_amount : item.indirect_commission_fixed_amount);
-                } else {
-                    const configured = commissionConfigForLevel(product, beneficiary.level, allocatedBase);
-                    const roleBased = roleBasedCommission(beneficiary.user, beneficiary.level, allocatedBase, commissionConfig);
-                    amount = configured > 0
-                        ? Math.min(allocatedBase, configured)
-                        : roleBased;
-                }
-                if (amount <= 0) continue;
-                if (fulfillmentPartnerOpenid && beneficiary.user.openid === fulfillmentPartnerOpenid) continue;
-                const key = `${beneficiary.user.openid}:${beneficiary.level}:${beneficiary.type}`;
-                totals.set(key, {
-                    openid: beneficiary.user.openid,
-                    user_id: beneficiary.user.id || beneficiary.user._legacy_id || beneficiary.user._id || beneficiary.user.openid,
-                    amount: roundMoney((totals.get(key)?.amount || 0) + amount),
-                    level: beneficiary.level,
-                    type: beneficiary.type
-                });
-            }
-        }
-    }
-
-    let created = toNumber(branchRegion.created, 0);
-    for (const commission of totals.values()) {
-        if (commission.amount <= 0) continue;
-        const existing = await db.collection('commissions')
-            .where({ order_id: orderId, openid: commission.openid, level: commission.level, type: commission.type })
-            .limit(1).get().catch(() => ({ data: [] }));
-        if (existing.data && existing.data.length > 0) continue;
-        await db.collection('commissions').add({
-            data: {
-                openid: commission.openid,
-                user_id: commission.user_id,
-                from_openid: order.openid,
-                buyer_role: buyerRole,
-                order_id: orderId,
-                order_no: order.order_no,
-                amount: commission.amount,
-                level: commission.level,
-                type: commission.type,
-                status: 'pending',
-                created_at: db.serverDate(),
-                updated_at: db.serverDate(),
-            },
-        });
-        created += 1;
-    }
-
-    return { created, commission_base: commissionBase, branch_region: branchRegion };
 }
 
 function isGroupOrder(order = {}) {
@@ -3210,6 +3313,8 @@ module.exports = {
     processPaidOrder,
     _test: {
         calculateOrderPayPoints,
-        resolvePointBenefitRoleLevel
+        resolvePointBenefitRoleLevel,
+        ensurePointsAwarded,
+        ensureCommissionsCreated
     }
 };

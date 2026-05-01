@@ -65,6 +65,58 @@ function getDateKey(date = new Date()) {
     ].join('-');
 }
 
+function parseTimestamp(value) {
+    if (!value) return 0;
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value === 'string') {
+        const ts = new Date(value).getTime();
+        return Number.isFinite(ts) ? ts : 0;
+    }
+    if (typeof value === 'object') {
+        if (typeof value._seconds === 'number') return value._seconds * 1000;
+        if (typeof value.seconds === 'number') return value.seconds * 1000;
+        if (value.$date !== undefined) return parseTimestamp(value.$date);
+        if (typeof value.toDate === 'function') {
+            const date = value.toDate();
+            return date instanceof Date ? date.getTime() : 0;
+        }
+    }
+    return 0;
+}
+
+function isEnabledFlag(value, fallback = true) {
+    if (value === undefined || value === null || value === '') return fallback;
+    if (value === true || value === 1 || value === '1') return true;
+    if (value === false || value === 0 || value === '0') return false;
+    const normalized = String(value).trim().toLowerCase();
+    if (!normalized) return fallback;
+    if (['true', 'yes', 'y', 'on', 'enabled', 'enable', 'active', 'show', 'visible'].includes(normalized)) return true;
+    if (['false', 'no', 'n', 'off', 'disabled', 'disable', 'inactive', 'hidden'].includes(normalized)) return false;
+    return fallback;
+}
+
+function isConfigRowEnabled(row = {}) {
+    if (row.active !== undefined && row.active !== null && row.active !== '') {
+        return isEnabledFlag(row.active, true);
+    }
+    if (row.status !== undefined && row.status !== null && row.status !== '') {
+        return isEnabledFlag(row.status, true);
+    }
+    return true;
+}
+
+function pickPreferredConfigRow(rows = []) {
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const enabledRows = rows.filter(isConfigRowEnabled);
+    const source = enabledRows.length ? enabledRows : rows.slice();
+    return source.sort((a, b) => {
+        const timeDiff = parseTimestamp(b.updated_at || b.created_at) - parseTimestamp(a.updated_at || a.created_at);
+        if (timeDiff !== 0) return timeDiff;
+        return String(b._id || b.id || '').localeCompare(String(a._id || a.id || ''));
+    })[0] || null;
+}
+
 function parseConfigValue(row, fallback) {
     if (!row) return fallback;
     const value = row.config_value !== undefined ? row.config_value : row.value;
@@ -87,16 +139,17 @@ function resolvePointBenefitRoleLevel(roleLevel) {
 async function getConfigByKey(key) {
     const res = await db.collection('configs')
         .where(_.or([{ config_key: key }, { key }]))
-        .limit(1)
+        .limit(20)
         .get()
         .catch(() => ({ data: [] }));
-    if (res.data && res.data[0]) return res.data[0];
+    const row = pickPreferredConfigRow(res.data || []);
+    if (row) return row;
     const legacyRes = await db.collection('app_configs')
-        .where({ config_key: key, status: _.in([true, 1, '1']) })
-        .limit(1)
+        .where(_.or([{ config_key: key }, { key }]))
+        .limit(20)
         .get()
         .catch(() => ({ data: [] }));
-    return legacyRes.data && legacyRes.data[0] ? legacyRes.data[0] : null;
+    return pickPreferredConfigRow(legacyRes.data || []);
 }
 
 function normalizePointRuleConfig(raw = {}) {

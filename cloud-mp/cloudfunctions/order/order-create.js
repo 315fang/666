@@ -3,7 +3,7 @@ const cloud = require('wx-server-sdk');
 const db = cloud.database();
 const _ = db.command;
 const { toNumber, toBoolean } = require('./shared/utils');
-const { findUserCouponDoc } = require('./order-coupon');
+const { findUserCouponDoc, restoreUsedCoupon } = require('./order-coupon');
 const { reservePickupStationInventory, releasePickupStationInventoryForOrder } = require('./pickup-station-stock');
 const { resolveBundleContext } = require('./product-bundle');
 const { assertPortalPassword } = require('./shared/portal-password');
@@ -983,6 +983,36 @@ function buildAddressSnapshot(addressInfo) {
     };
 }
 
+async function markUserCouponUsedForOrder(couponDoc, orderId) {
+    if (!couponDoc || !couponDoc._id || !orderId) {
+        return { ok: false, reason: 'missing_coupon_identity' };
+    }
+    const where = {
+        _id: String(couponDoc._id),
+        status: 'unused'
+    };
+    if (couponDoc.openid) {
+        where.openid = couponDoc.openid;
+    }
+    const result = await db.collection('user_coupons').where(where).update({
+        data: {
+            status: 'used',
+            used_at: db.serverDate(),
+            order_id: orderId,
+            used_order_id: orderId,
+            updated_at: db.serverDate()
+        }
+    }).catch((err) => {
+        console.error('[OrderCreate] 优惠券条件核销失败:', err.message);
+        return { stats: { updated: 0 }, error: err };
+    });
+    const updated = result && result.stats && result.stats.updated > 0;
+    return {
+        ok: updated,
+        reason: updated ? '' : 'coupon_not_unused'
+    };
+}
+
 function buildUserSummary(user) {
     if (!user || typeof user !== 'object') return null;
     return {
@@ -1797,7 +1827,7 @@ async function createOrder(openid, orderData) {
         growth_clawback_total: 0,
         has_partial_refund: false,
         payment_method: '',
-        pay_channel: '',
+        pay_channel: shouldAutoPayFreeOrder ? 'free' : '',
         address_id: address_id || '',
         address: addressSnapshot,
         address_snapshot: addressSnapshot,
@@ -1934,11 +1964,7 @@ const freshBalance = toNumber(u.agent_wallet_balance, 0);
         }
     }
 
-    let result;
-    try {
-        result = await db.collection('orders').add({ data: order });
-    } catch (addErr) {
-        // 创单失败：回滚已扣积分和库存（必须记录回滚结果，防止静默丢失）
+    // 创单失败或订单被业务保护取消时，回滚已扣积分和库存（必须记录回滚结果，防止静默丢失）
     async function rollbackCreateFailure(context, actualPts, stockDeductionsList, pickupRes, orderNumber, createErr) {
         const rollbackErrors = [];
         if (actualPts > 0) {
@@ -1989,22 +2015,44 @@ const freshBalance = toNumber(u.agent_wallet_balance, 0);
             } catch (_) { /* 日志写入失败不影响主流程 */ }
         }
     }
+
+    let result;
+    try {
+        result = await db.collection('orders').add({ data: order });
+    } catch (addErr) {
         await rollbackCreateFailure('order_add_failed', actualPoints, stockDeductions, pickupReservation, orderNo, addErr);
         throw new Error('创建订单失败，已回滚积分与库存: ' + addErr.message);
     }
 
-    // 7.5 订单创建成功后，执行优惠券核销（先创单后核销，失败不影响订单，但不应再用此券）
-    if (isExchangeOrder && exchangeCouponDoc?._id) {
-        await db.collection('user_coupons').doc(String(exchangeCouponDoc._id)).update({
-            data: { status: 'used', used_at: db.serverDate(), order_id: result._id, used_order_id: result._id, updated_at: db.serverDate() }
-        }).catch((err) => {
-            console.error('[OrderCreate] 兑换券核销失败:', err.message, '订单已创建:', result._id);
-        });
-    } else if (pendingCouponDoc) {
-        await db.collection('user_coupons').doc(pendingCouponDoc._id).update({
-            data: { status: 'used', used_at: db.serverDate(), order_id: result._id }
-        }).catch((err) => {
-            console.error('[OrderCreate] 优惠券核销失败:', err.message, '订单已创建:', result._id);
+    // 7.5 订单创建成功后，执行优惠券条件核销。核销失败必须取消订单并回滚折扣相关副作用。
+    const couponDocToUse = isExchangeOrder ? exchangeCouponDoc : pendingCouponDoc;
+    if (couponDocToUse?._id) {
+        const couponMark = await markUserCouponUsedForOrder(couponDocToUse, result._id);
+        if (!couponMark.ok) {
+            const reason = '优惠券已被使用或不可用，请重新下单';
+            await db.collection('orders').doc(result._id).update({
+                data: {
+                    status: 'cancelled',
+                    cancel_reason: reason,
+                    cancelled_at: db.serverDate(),
+                    updated_at: db.serverDate()
+                }
+            }).catch((cancelErr) => {
+                console.error('[OrderCreate] ⚠️ 优惠券核销失败后的订单取消失败 orderId=%s error=%s', result._id, cancelErr.message);
+            });
+            await rollbackCreateFailure('coupon_mark_failed', actualPoints, stockDeductions, pickupReservation, orderNo, new Error(reason));
+            throw new Error(reason);
+        }
+    }
+
+    async function restoreCouponForCancelledOrder(reason) {
+        if (!couponDocToUse?._id) return;
+        await restoreUsedCoupon({
+            openid,
+            user_coupon_id: order.user_coupon_id,
+            coupon_id: order.coupon_id
+        }).catch((couponErr) => {
+            console.error('[OrderCreate] ⚠️ 订单取消后优惠券恢复失败 orderId=%s reason=%s error=%s', result._id, reason, couponErr.message);
         });
     }
     // 积分已在步骤3扣减，写流水便于用户查询和对账
@@ -2056,6 +2104,7 @@ const freshBalance = toNumber(u.agent_wallet_balance, 0);
                 }).catch((cancelErr) => {
                     console.error('[OrderCreate] ⚠️ 订单取消写入失败(货款并发不足) orderId=%s error=%s', orderId, cancelErr.message);
                 });
+                await restoreCouponForCancelledOrder('货款余额不足（并发）');
                 if (actualPoints > 0) {
                     await db.collection('users').where({ openid }).update({
                         data: { points: _.inc(actualPoints), growth_value: _.inc(actualPoints), updated_at: db.serverDate() }
@@ -2141,6 +2190,7 @@ const freshBalance = toNumber(u.agent_wallet_balance, 0);
                 }).catch((orderCancelErr) => {
                     console.error('[OrderCreate] ⚠️ 订单取消写入失败:', orderCancelErr.message);
                 });
+                await restoreCouponForCancelledOrder('货款支付处理失败');
                 if (actualPoints > 0) {
                     await db.collection('users').where({ openid }).update({
                         data: { points: _.inc(actualPoints), growth_value: _.inc(actualPoints), updated_at: db.serverDate() }
@@ -2252,5 +2302,8 @@ module.exports = {
     getPointDeductionRule,
     getUserGoodsFundBalance,
     ensureWalletAccountForUser,
-    buildAddressSnapshot
+    buildAddressSnapshot,
+    _test: {
+        markUserCouponUsedForOrder
+    }
 };
