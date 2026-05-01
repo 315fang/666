@@ -12,6 +12,10 @@ const {
     normalizeClaimTicket
 } = require('./claim-ticket-wxacode');
 const { createLotteryAdminSupport } = require('./admin-lottery');
+const {
+    DEFAULT_DIRECTED_INVITE_RULES,
+    normalizeDirectedInviteRules
+} = require('./shared/directed-invite');
 
 function registerMarketingRoutes(app, deps) {
     const {
@@ -2207,7 +2211,8 @@ function registerMarketingRoutes(app, deps) {
         'fund-pool': { enabled: false },
         'dividend-rules': { enabled: false, source_pct: 0, b_team_award: { enabled: false, pool_pct: 0, ranks: [] }, b1_personal_award: { enabled: false, pool_pct: 0, ranks: [] } },
         'exit-rules': { enabled: false },
-        'recharge-config': { enabled: false, options: [] }
+        'recharge-config': { enabled: false, options: [] },
+        'directed-invite-rules': DEFAULT_DIRECTED_INVITE_RULES
     };
 
     Object.keys(agentConfigDefaults).forEach((key) => {
@@ -2215,6 +2220,10 @@ function registerMarketingRoutes(app, deps) {
             await ensureFreshCollections(['configs']);
             if (key === 'dividend-rules') {
                 ok(res, getDividendRulesSnapshot());
+                return;
+            }
+            if (key === 'directed-invite-rules') {
+                ok(res, normalizeDirectedInviteRules(getConfigValue(`agent_system_${key}`, agentConfigDefaults[key])));
                 return;
             }
             ok(res, getConfigValue(`agent_system_${key}`, agentConfigDefaults[key]));
@@ -2226,6 +2235,10 @@ function registerMarketingRoutes(app, deps) {
                 const validation = validateDividendRulesConfig(normalizedRules);
                 if (!validation.ok) return fail(res, validation.message, 400);
                 ok(res, setConfigValue(`agent_system_${key}`, normalizedRules, 'agent_system'));
+                return;
+            }
+            if (key === 'directed-invite-rules') {
+                ok(res, setConfigValue(`agent_system_${key}`, normalizeDirectedInviteRules(req.body || {}), 'agent_system'));
                 return;
             }
             ok(res, setConfigValue(`agent_system_${key}`, req.body || {}, 'agent_system'));

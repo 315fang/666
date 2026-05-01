@@ -37,7 +37,7 @@ const directedInviteService = require('./directed-invite-service');
 const goodsFundTransferService = require('./goods-fund-transfer');
 const { assertPortalPassword } = require('./shared/portal-password');
 const internalActionToken = String(process.env.DISTRIBUTION_INTERNAL_TOKEN || '').trim();
-const SELF_PURCHASE_COMMISSION_ENABLED = false;
+const DEFAULT_SELF_PURCHASE_COMMISSION_ENABLED = false;
 
 function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
@@ -138,6 +138,12 @@ function resolveSelfCommissionRate(costSplit = {}) {
     const directSalesPct = toNumber(costSplit.direct_sales_pct, DEFAULT_COST_SPLIT.direct_sales_pct);
     const normalized = directSalesPct > 1 ? directSalesPct / 100 : directSalesPct;
     return Math.max(0, normalized);
+}
+
+function isSelfPurchaseCommissionEnabled(config = {}) {
+    return config.self_purchase_commission_enabled === true
+        || config.self_purchase_commission_enabled === 1
+        || config.self_purchase_commission_enabled === '1';
 }
 
 function isGrowthRuleMet(growthValue, target) {
@@ -909,10 +915,14 @@ const handleAction = {
             || params.self_purchase === 1
             || params.self_purchase === '1'
             || params.mode === 'self_purchase';
+        const commissionConfig = await loadCommissionConfig();
+        const selfPurchaseCommissionEnabled = isSelfPurchaseCommissionEnabled({
+            self_purchase_commission_enabled: commissionConfig.self_purchase_commission_enabled ?? DEFAULT_SELF_PURCHASE_COMMISSION_ENABLED
+        });
         let selfCommission = 0;
         let selfCommissionRate = 0;
         let selfCommissionEligible = false;
-        if (SELF_PURCHASE_COMMISSION_ENABLED && selfPurchase && baseAmount > 0) {
+        if (selfPurchaseCommissionEnabled && selfPurchase && baseAmount > 0) {
             const user = await findUserByOpenid(openid);
             const roleLevel = user ? resolveRoleLevel(user) : 0;
             selfCommissionEligible = roleLevel >= 3;
@@ -934,8 +944,8 @@ const handleAction = {
             self_commission_eligible: selfCommissionEligible,
             self_commission_rate: selfCommissionRate,
             self_commission: selfCommission,
-            self_commission_disabled: selfPurchase && !SELF_PURCHASE_COMMISSION_ENABLED,
-            self_commission_message: selfPurchase && !SELF_PURCHASE_COMMISSION_ENABLED ? '代理自购返利已停用' : ''
+            self_commission_disabled: selfPurchase && !selfPurchaseCommissionEnabled,
+            self_commission_message: selfPurchase && !selfPurchaseCommissionEnabled ? '代理自购返利已停用' : ''
         });
     }),
 

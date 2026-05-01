@@ -23,6 +23,8 @@
     "audit:order-fields": "node scripts/audit-order-fields.js",
     "check:index-plan": "node scripts/check-cloudbase-index-manifest.js",
     "check:foundation": "node scripts/check-cloudbase-foundation.js",
+    "check:shared": "node scripts/sync-shared.js --check",
+    "sync:shared": "node scripts/sync-shared.js",
     "check:order-helpers": "node scripts/check-order-helper-integrity.js",
     "perf:baseline": "node scripts/generate-cloudbase-perf-baseline.js",
     "seed:ensure-target": "node scripts/ensure-target-collections.js",
@@ -60,7 +62,7 @@
     "repair:refund-reopen": "node scripts/repair-internal-refund-reopen.js",
     "export:paid-orders": "node scripts/export-paid-orders.js",
     "release:finance": "node scripts/release-finance-check.js",
-    "release:check": "npm run check:foundation && npm run import:validate && npm run audit:legacy && node scripts/check-production-gaps.js",
+    "release:check": "npm run check:foundation && npm run check:shared && npm run import:validate && npm run audit:legacy && node scripts/check-production-gaps.js",
     "verify:v2:local": "node scripts/verify-v2-local-readiness.js"
   },
   "main": "index.js",

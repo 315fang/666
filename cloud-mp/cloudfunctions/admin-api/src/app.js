@@ -61,7 +61,7 @@ const BRANCH_AGENT_COMMISSION_ORDER_STATUSES = [
     'shipped',
     'completed'
 ];
-const SELF_PURCHASE_COMMISSION_ENABLED = false;
+const DEFAULT_SELF_PURCHASE_COMMISSION_ENABLED = false;
 
 // Express 4 async handler patch: auto-catch rejected promises (Express 5 does this natively)
 const Layer = require('express/lib/router/layer');
@@ -4636,6 +4636,14 @@ function resolveSelfSaleRateSnapshot() {
     return Math.max(0, normalized);
 }
 
+function isSelfPurchaseCommissionEnabledSnapshot() {
+    const config = toObject(
+        getConfigRowValue('agent_system_commission-config', getConfigRowValue('agent_system_commission_config', {})),
+        {}
+    );
+    return toBoolean(config.self_purchase_commission_enabled, DEFAULT_SELF_PURCHASE_COMMISSION_ENABLED);
+}
+
 function ensurePlatformSettlementCommissionsForOrder(order = {}) {
     const rows = getCollection('commissions');
     const users = getCollection('users');
@@ -4643,7 +4651,7 @@ function ensurePlatformSettlementCommissionsForOrder(order = {}) {
     const buyer = findUserByAnyId(users, order.openid || order.buyer_id || order.user_id);
     const buyerRole = toNumber(order.buyer_role_level ?? buyer?.role_level ?? buyer?.distributor_level, 0);
     const benefitBuyerRole = resolveBenefitRoleLevelSnapshot(buyerRole);
-    if (buyerRole >= 3 && buyer?.openid && SELF_PURCHASE_COMMISSION_ENABLED) {
+    if (buyerRole >= 3 && buyer?.openid && isSelfPurchaseCommissionEnabledSnapshot()) {
         const existingSelf = rows.find((row) =>
             rowMatchesLookup(row, order._id || order.id || order.order_no, [row.order_id, row.order_no])
             && rowMatchesLookup(row, buyer.openid, [row.openid, row.user_id])

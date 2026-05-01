@@ -23,7 +23,12 @@ export const executeDividend = (data) => request({ url: '/agent-system/dividend/
 
 export const getExitRulesConfig = () => request({ url: '/agent-system/exit-rules', method: 'get' })
 export const updateExitRulesConfig = (data) => request({ url: '/agent-system/exit-rules', method: 'put', data })
+export const getExitApplications = (params) => request({ url: '/agent-system/exit-applications', method: 'get', params })
 export const createExitApplication = (userId, data) => request({ url: `/agent-system/exit-applications/${userId}`, method: 'post', data })
+export const reviewExitApplication = (id, data) => request({ url: `/agent-system/exit-applications/${id}/review`, method: 'put', data })
 
 export const getRechargeConfig = () => request({ url: '/agent-system/recharge-config', method: 'get' })
 export const updateRechargeConfig = (data) => request({ url: '/agent-system/recharge-config', method: 'put', data })
+
+export const getDirectedInviteRulesConfig = () => request({ url: '/agent-system/directed-invite-rules', method: 'get' })
+export const updateDirectedInviteRulesConfig = (data) => request({ url: '/agent-system/directed-invite-rules', method: 'put', data })

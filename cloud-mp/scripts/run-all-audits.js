@@ -9,6 +9,7 @@ const { jsonPath, mdPath } = getAuditArtifactPaths(cloudRoot, 'AUDIT_ALL_SUMMARY
 
 const steps = [
   { name: 'foundation', command: 'npm run check:foundation', jsonPath: null },
+  { name: 'shared', command: 'npm run check:shared', jsonPath: null },
   { name: 'hosting', command: 'npm run audit:hosting', jsonPath: path.join(docsDir, 'ADMIN_HOSTING_AUDIT.json') },
   { name: 'migration', command: 'npm run audit:migration', jsonPath: path.join(docsDir, 'CLOUD_MP_MIGRATION_MATRIX.json') },
   { name: 'runtimeSmoke', command: 'npm run runtime:smoke', jsonPath: path.join(docsDir, 'CLOUDBASE_LIVE_SMOKE.json') },
@@ -93,6 +94,8 @@ function main() {
     let brief = '执行完成';
     if (step.name === 'foundation' && result.ok) {
       brief = '基础结构与主入口检查通过';
+    } else if (step.name === 'shared' && result.ok) {
+      brief = '云函数共享模块镜像一致';
     } else if (step.name === 'hosting' && payload) {
       brief = `静态托管差异${payload.diff.length}项`;
     } else if (step.name === 'migration' && payload?.summary) {

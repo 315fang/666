@@ -63,7 +63,7 @@ const PAID_POST_PROCESS_STATUSES = [
     'shipped',
     'completed'
 ];
-const SELF_PURCHASE_COMMISSION_ENABLED = false;
+const DEFAULT_SELF_PURCHASE_COMMISSION_ENABLED = false;
 
 const DEFAULT_PEER_BONUS_CONFIG = {
     enabled: true,
@@ -127,6 +127,17 @@ function toNumber(value, fallback = 0) {
     if (value === null || value === undefined || value === '') return fallback;
     const num = Number(value);
     return Number.isFinite(num) ? num : fallback;
+}
+
+function toBoolean(value, fallback = false) {
+    if (value === true || value === 1 || value === '1') return true;
+    if (value === false || value === 0 || value === '0') return false;
+    if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (['true', 'yes', 'on', 'enabled'].includes(normalized)) return true;
+        if (['false', 'no', 'off', 'disabled'].includes(normalized)) return false;
+    }
+    return fallback;
 }
 
 function toArray(value) {
@@ -390,7 +401,8 @@ async function loadAgentRuntimeConfig() {
     };
     const piggyBank = {
         ...DEFAULT_UPGRADE_PIGGY_BANK_CONFIG,
-        ...(parseConfigValue(piggyBankRow, {}) || {})
+        ...(parseConfigValue(piggyBankRow, {}) || {}),
+        self_purchase_commission_enabled: toBoolean(commission?.self_purchase_commission_enabled, DEFAULT_SELF_PURCHASE_COMMISSION_ENABLED)
     };
     const commissionMatrix = normalizeCommissionMatrix(
         dbMatrix || commission?.commission_matrix,
@@ -405,6 +417,7 @@ async function loadAgentRuntimeConfig() {
         commissionConfig: {
             direct_pct_by_role: normalizePctMap(commission?.direct_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.direct_pct_by_role),
             indirect_pct_by_role: normalizePctMap(commission?.indirect_pct_by_role, DEFAULT_AGENT_COMMISSION_CONFIG.indirect_pct_by_role),
+            self_purchase_commission_enabled: toBoolean(commission?.self_purchase_commission_enabled, DEFAULT_SELF_PURCHASE_COMMISSION_ENABLED),
             commission_matrix: commissionMatrix,
             bundle_commission_matrix: bundleCommissionMatrix
         },
@@ -1728,7 +1741,7 @@ async function ensureCommissionsCreated(orderId, order) {
             return { created: 0, reason: 'all_points_payment', branch_region: branchRegion };
         }
 
-        if (isAgentSelfPurchase && SELF_PURCHASE_COMMISSION_ENABLED) {
+        if (isAgentSelfPurchase && commissionConfig.self_purchase_commission_enabled) {
             const existingSelfRes = await db.collection('commissions')
                 .where({ order_id: orderId, openid: buyer.openid, type: 'self' })
                 .limit(1)

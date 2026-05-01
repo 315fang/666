@@ -1,9 +1,9 @@
 'use strict';
 
 const {
+    DEFAULT_DIRECTED_INVITE_RULES,
     DIRECTED_INVITE_FREEZE_STATUS,
     DIRECTED_INVITE_LOCK_STATUS,
-    DIRECTED_INVITE_MIN_TRANSFER_AMOUNT,
     DIRECTED_INVITE_REROUTE_REQUIRED_REVIEW_NOTE,
     DIRECTED_INVITE_REVIEW_STATUS,
     DIRECTED_INVITE_STATUS,
@@ -16,6 +16,7 @@ const {
     normalizeDirectedInviteFreezeStatus,
     normalizeDirectedInviteLockStatus,
     normalizeDirectedInviteReviewStatus,
+    normalizeDirectedInviteRules,
     normalizeDirectedInviteStatus,
     normalizeRoleLevel,
     normalizeTransferAmount,
@@ -52,6 +53,30 @@ function registerDirectedInviteRoutes(app, deps) {
     function findUserByOpenid(users = [], openid = '') {
         const normalized = pickString(openid);
         return users.find((item) => pickString(item.openid) === normalized) || null;
+    }
+
+    function parseConfigRowValue(row, fallback = null) {
+        if (!row) return fallback;
+        const raw = row.config_value !== undefined ? row.config_value : row.value;
+        if (raw === undefined || raw === null || raw === '') return fallback;
+        if (typeof raw === 'string') {
+            try {
+                return JSON.parse(raw);
+            } catch (_) {
+                return raw;
+            }
+        }
+        return raw;
+    }
+
+    function getDirectedInviteRules() {
+        const keys = ['agent_system_directed-invite-rules', 'agent_system_directed_invite_rules'];
+        const rows = getCollection('configs');
+        for (const key of keys) {
+            const row = rows.find((item) => item.config_key === key || item.key === key || item._id === key);
+            if (row) return normalizeDirectedInviteRules(parseConfigRowValue(row, DEFAULT_DIRECTED_INVITE_RULES));
+        }
+        return normalizeDirectedInviteRules(DEFAULT_DIRECTED_INVITE_RULES);
     }
 
     function getUserGoodsFundBalance(user = {}) {
@@ -210,13 +235,15 @@ function registerDirectedInviteRoutes(app, deps) {
         const acceptedUser = findUserByOpenid(users, invite.accepted_openid);
         if (!inviter) return fail(res, '发起人不存在', 404);
         if (!acceptedUser) return fail(res, '被邀约用户不存在', 404);
-        if (!isDirectedInviteInitiator(inviter)) return fail(res, '发起人不具备定向邀约权限', 400);
+        const rules = getDirectedInviteRules();
+        if (!rules.enabled) return fail(res, '定向邀约已停用', 400);
+        if (!isDirectedInviteInitiator(inviter, rules)) return fail(res, '发起人不具备定向邀约权限', 400);
         const allowReroute = !!invite.reroute && isVip0(acceptedUser);
-        if (!isDirectedInviteTargetEligible(acceptedUser) && !allowReroute) return fail(res, '被邀约用户当前不满足激活条件', 400);
+        if (!isDirectedInviteTargetEligible(acceptedUser, rules) && !allowReroute) return fail(res, '被邀约用户当前不满足激活条件', 400);
 
         const transferAmount = normalizeTransferAmount(invite.transfer_amount);
-        if (transferAmount < DIRECTED_INVITE_MIN_TRANSFER_AMOUNT) {
-            return fail(res, `定向邀约货款不得低于 ${DIRECTED_INVITE_MIN_TRANSFER_AMOUNT} 元`, 400);
+        if (transferAmount < rules.min_transfer_amount) {
+            return fail(res, `定向邀约货款不得低于 ${rules.min_transfer_amount} 元`, 400);
         }
 
         const inviterBalance = getUserGoodsFundBalance(inviter);

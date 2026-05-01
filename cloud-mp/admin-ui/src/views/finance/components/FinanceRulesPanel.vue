@@ -46,13 +46,14 @@
             </el-table>
             <el-form-item label="B端拿货折扣率"><el-input-number v-model="commission.agent_cost_discount_rate" :min="0.1" :max="1" :step="0.05" :precision="2" /></el-form-item>
             <el-divider content-position="left">成本结构（内部核算）</el-divider>
+            <el-form-item label="代理自购返利"><el-switch v-model="commission.self_purchase_commission_enabled" active-text="启用" inactive-text="停用" /></el-form-item>
             <el-form-item label="启用成本结构"><el-switch v-model="commission.cost_split.enabled" /></el-form-item>
             <el-form-item label="直销收益 %"><el-input-number v-model="commission.cost_split.direct_sales_pct" :min="0" :max="100" /></el-form-item>
             <el-alert
               type="info"
               :closable="false"
               style="margin-bottom:12px"
-              title="代理自购返利已停用；直销收益比例仅保留为内部成本结构/历史记录口径，不再用于新订单给买家本人发放自购佣金。"
+              :title="commission.self_purchase_commission_enabled ? '代理自购返利启用后，直销收益比例会用于给买家本人生成自购佣金。' : '代理自购返利已停用；直销收益比例仅保留为内部成本结构/历史记录口径。'"
             />
             <el-form-item label="运营成本 %"><el-input-number v-model="commission.cost_split.operations_pct" :min="0" :max="100" /></el-form-item>
             <el-form-item label="镜像运营成本 %"><el-input-number v-model="commission.cost_split.mirror_operations_pct" :min="0" :max="100" /></el-form-item>
@@ -248,6 +249,58 @@
             <el-descriptions-item label="退款总计">¥{{ exitResult.refundAmount }}</el-descriptions-item>
           </el-descriptions>
         </el-card>
+        <el-card>
+          <template #header>
+            <div class="card-header">
+              <span>退出申请审核</span>
+              <div class="header-actions">
+                <el-select v-model="exitApplicationStatus" style="width:120px" @change="loadExitApplications">
+                  <el-option label="全部" value="" />
+                  <el-option label="待审核" value="pending" />
+                  <el-option label="已通过" value="approved" />
+                  <el-option label="已拒绝" value="rejected" />
+                </el-select>
+                <el-button :loading="exitApplicationsLoading" @click="loadExitApplications">刷新</el-button>
+              </div>
+            </div>
+          </template>
+          <el-table :data="exitApplications" border v-loading="exitApplicationsLoading">
+            <el-table-column prop="id" label="ID" width="80" />
+            <el-table-column prop="user_id" label="用户ID" width="120" />
+            <el-table-column prop="status" label="状态" width="100">
+              <template #default="{ row }"><el-tag :type="exitStatusTag(row.status)">{{ exitStatusText(row.status) }}</el-tag></template>
+            </el-table-column>
+            <el-table-column prop="reason" label="原因" min-width="180" show-overflow-tooltip />
+            <el-table-column prop="review_remark" label="审核备注" min-width="180" show-overflow-tooltip />
+            <el-table-column prop="refundAmount" label="退款总计" width="120"><template #default="{ row }">¥{{ Number(row.refundAmount || 0).toFixed(2) }}</template></el-table-column>
+            <el-table-column prop="created_at" label="创建时间" width="170" />
+            <el-table-column label="操作" width="150" fixed="right">
+              <template #default="{ row }">
+                <el-button v-if="row.status === 'pending'" text type="success" @click="reviewExit(row, 'approved')">通过</el-button>
+                <el-button v-if="row.status === 'pending'" text type="danger" @click="reviewExit(row, 'rejected')">拒绝</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-card>
+      </el-tab-pane>
+
+      <el-tab-pane label="定向邀约" name="directedInviteRules">
+        <el-card>
+          <template #header>
+            <div class="card-header">
+              <div><el-switch v-model="directedInviteRules.enabled" active-text="启用" inactive-text="停用" style="margin-right:12px" />定向邀约规则</div>
+              <el-button type="primary" :loading="saving" @click="save('directedInviteRules')">保存规则</el-button>
+            </div>
+          </template>
+          <el-form label-width="220px" style="max-width:760px" :disabled="!directedInviteRules.enabled">
+            <el-form-item label="发起人最低等级"><el-input-number v-model="directedInviteRules.initiator_min_role_level" :min="0" :max="6" /></el-form-item>
+            <el-form-item label="目标激活等级"><el-input-number v-model="directedInviteRules.target_role_level" :min="1" :max="6" /></el-form-item>
+            <el-form-item label="最低定向货款（元）"><el-input-number v-model="directedInviteRules.min_transfer_amount" :min="0" :step="100" /></el-form-item>
+            <el-form-item label="每人最多进行中邀约"><el-input-number v-model="directedInviteRules.max_pending_per_inviter" :min="1" :max="200" /></el-form-item>
+            <el-form-item label="票据有效期（天）"><el-input-number v-model="directedInviteRules.expire_days" :min="1" :max="365" /></el-form-item>
+            <el-form-item label="严格改线审核说明"><el-input v-model="directedInviteRules.reroute_required_review_note" type="textarea" :rows="3" /></el-form-item>
+          </el-form>
+        </el-card>
       </el-tab-pane>
 
       <el-tab-pane label="充值配置" name="recharge">
@@ -291,16 +344,20 @@ import {
   getBundleCommissionMatrix,
   getCommissionConfig,
   getCommissionMatrix,
+  getDirectedInviteRulesConfig,
   getDividendPreview,
   getDividendRulesConfig,
+  getExitApplications,
   getExitRulesConfig,
   getFundPoolConfig,
   getMemberTierConfig,
   getRechargeConfig,
+  reviewExitApplication,
   updateAssistBonusConfig,
   updateBundleCommissionMatrix,
   updateCommissionConfig,
   updateCommissionMatrix,
+  updateDirectedInviteRulesConfig,
   updateDividendRulesConfig,
   updateExitRulesConfig,
   updateFundPoolConfig,
@@ -320,6 +377,7 @@ const ROLE_NAMES = { 0: 'VIP用户', 1: '初级会员', 2: '高级会员', 3: '�
 const commission = reactive({
   enabled: true,
   default_platform_fulfillment: true,
+  self_purchase_commission_enabled: false,
   agent_cost_discount_rate: 0.6,
   cost_split: { enabled: true, direct_sales_pct: 40, operations_pct: 25, mirror_operations_pct: 5, profit_pct: 30 }
 })
@@ -362,6 +420,15 @@ const exitRules = reactive({
   auto_revoke_identity: true
 })
 const rechargeConfig = reactive({ enabled: false, preset_amounts: [1000, 3000, 5000], bonus_enabled: false, bonus_tiers: [] })
+const directedInviteRules = reactive({
+  enabled: true,
+  initiator_min_role_level: 4,
+  target_role_level: 3,
+  min_transfer_amount: 3000,
+  max_pending_per_inviter: 20,
+  expire_days: 7,
+  reroute_required_review_note: '当前账号为已绑定团队的 VIP0，满足严格改线条件；审核通过后覆盖 parent/referrer，不回算历史订单、佣金与资金数据。'
+})
 
 function defaultPeerBonusConfig() {
   return {
@@ -387,6 +454,9 @@ const dividendPreviewData = ref([])
 const exitForm = reactive({ userId: null, reason: '' })
 const exitLoading = ref(false)
 const exitResult = ref(null)
+const exitApplications = ref([])
+const exitApplicationStatus = ref('pending')
+const exitApplicationsLoading = ref(false)
 
 const configLabels = {
   commission: '佣金配置',
@@ -395,7 +465,8 @@ const configLabels = {
   fund: '基金池',
   dividendRules: '年终分红',
   exitRules: '合伙人退出',
-  recharge: '充值配置'
+  recharge: '充值配置',
+  directedInviteRules: '定向邀约'
 }
 
 const loadIssueMessage = computed(() => {
@@ -595,7 +666,8 @@ const configLoaders = {
   fund: async () => deepAssign(fundPool, await resolveApiData(getFundPoolConfig)),
   dividendRules: async () => deepAssign(dividendRules, await resolveApiData(getDividendRulesConfig)),
   exitRules: async () => deepAssign(exitRules, await resolveApiData(getExitRulesConfig)),
-  recharge: async () => deepAssign(rechargeConfig, await resolveApiData(getRechargeConfig))
+  recharge: async () => deepAssign(rechargeConfig, await resolveApiData(getRechargeConfig)),
+  directedInviteRules: async () => deepAssign(directedInviteRules, await resolveApiData(getDirectedInviteRulesConfig))
 }
 
 const loadAll = async () => {
@@ -620,6 +692,7 @@ const save = async (key) => {
     if (key === 'dividendRules') await updateDividendRulesConfig(JSON.parse(JSON.stringify(dividendRules)))
     if (key === 'exitRules') await updateExitRulesConfig(JSON.parse(JSON.stringify(exitRules)))
     if (key === 'recharge') await updateRechargeConfig(JSON.parse(JSON.stringify(rechargeConfig)))
+    if (key === 'directedInviteRules') await updateDirectedInviteRulesConfig(JSON.parse(JSON.stringify(directedInviteRules)))
     ElMessage.success('保存成功')
   }).catch(() => ElMessage.error('保存失败'))
 }
@@ -656,10 +729,44 @@ const executePartnerExit = async () => {
     const res = await createExitApplication(exitForm.userId, { reason: exitForm.reason })
     exitResult.value = res
     ElMessage.success('退出申请已创建，请在流程中继续审核')
+    await loadExitApplications()
   }).catch((e) => ElMessage.error(e?.message || '执行失败'))
 }
 
-onMounted(loadAll)
+const normalizeListResponse = (res) => {
+  const payload = res?.data || res || {}
+  return payload.list || payload.items || payload.rows || (Array.isArray(payload) ? payload : [])
+}
+
+const loadExitApplications = async () => {
+  await withLoading(exitApplicationsLoading, async () => {
+    const params = exitApplicationStatus.value ? { status: exitApplicationStatus.value } : {}
+    const res = await getExitApplications(params)
+    exitApplications.value = normalizeListResponse(res)
+  }).catch(() => ElMessage.error('退出申请加载失败'))
+}
+
+const exitStatusText = (status) => ({ pending: '待审核', approved: '已通过', rejected: '已拒绝' }[status] || status || '-')
+const exitStatusTag = (status) => ({ pending: 'warning', approved: 'success', rejected: 'danger' }[status] || 'info')
+
+const reviewExit = async (row, status) => {
+  const actionText = status === 'approved' ? '通过' : '拒绝'
+  try {
+    const remark = await ElMessageBox.prompt(`请输入${actionText}备注`, `确认${actionText}`, {
+      inputType: 'textarea',
+      inputPattern: /\S+/,
+      inputErrorMessage: '请填写备注'
+    })
+    await reviewExitApplication(row.id || row._id, { status, remark: remark.value })
+    ElMessage.success('审核完成')
+    await loadExitApplications()
+  } catch (_) {}
+}
+
+onMounted(async () => {
+  await loadAll()
+  await loadExitApplications()
+})
 
 </script>
 

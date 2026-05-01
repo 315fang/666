@@ -19,7 +19,7 @@ const DEFAULT_UPGRADE_PIGGY_BANK_CONFIG = {
     min_incremental_amount: 0.01,
     unlock_to_commission_balance: true
 };
-const SELF_PURCHASE_COMMISSION_ENABLED = false;
+const DEFAULT_SELF_PURCHASE_COMMISSION_ENABLED = false;
 
 function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
@@ -70,11 +70,14 @@ function resolveBenefitRoleLevel(roleLevel) {
 
 function normalizePiggyBankConfig(config = {}) {
     const merged = { ...DEFAULT_UPGRADE_PIGGY_BANK_CONFIG, ...(config || {}) };
+    const selfPurchaseCommissionEnabled = merged.self_purchase_commission_enabled === true
+        || merged.self_purchase_commission_enabled === 1
+        || merged.self_purchase_commission_enabled === '1';
     return {
         enabled: merged.enabled !== false,
         include_team_direct: merged.include_team_direct !== false,
         include_team_indirect: merged.include_team_indirect !== false,
-        include_self_purchase: SELF_PURCHASE_COMMISSION_ENABLED && merged.include_self_purchase !== false,
+        include_self_purchase: (selfPurchaseCommissionEnabled || DEFAULT_SELF_PURCHASE_COMMISSION_ENABLED) && merged.include_self_purchase !== false,
         max_target_level: Math.min(5, Math.max(1, normalizeRoleLevel(merged.max_target_level))),
         min_incremental_amount: Math.max(0.01, toNumber(merged.min_incremental_amount, 0.01)),
         unlock_to_commission_balance: merged.unlock_to_commission_balance !== false

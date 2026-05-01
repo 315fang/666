@@ -6,14 +6,12 @@ const {
     resolveGoodsFundBalance
 } = require('./user-contract');
 const {
-    DIRECTED_INVITE_DEFAULT_EXPIRE_DAYS,
+    DEFAULT_DIRECTED_INVITE_RULES,
     DIRECTED_INVITE_FREEZE_STATUS,
     DIRECTED_INVITE_LOCK_STATUS,
-    DIRECTED_INVITE_MAX_PENDING_PER_INVITER,
     DIRECTED_INVITE_REROUTE_REQUIRED_REVIEW_NOTE,
     DIRECTED_INVITE_REVIEW_STATUS,
     DIRECTED_INVITE_STATUS,
-    DIRECTED_INVITE_TARGET_ROLE_LEVEL,
     addDaysIso,
     buildDirectedInvitePath,
     buildDirectedInviteTypeText,
@@ -29,6 +27,7 @@ const {
     normalizeDirectedInviteFreezeStatus,
     normalizeDirectedInviteLockStatus,
     normalizeDirectedInviteReviewStatus,
+    normalizeDirectedInviteRules,
     normalizeDirectedInviteStatus,
     normalizeRoleLevel,
     normalizeTransferAmount,
@@ -39,6 +38,44 @@ const {
 
 function nowIso() {
     return new Date().toISOString();
+}
+
+function parseConfigRowValue(row, fallback = null) {
+    if (!row) return fallback;
+    const raw = row.config_value !== undefined ? row.config_value : row.value;
+    if (raw === undefined || raw === null || raw === '') return fallback;
+    if (typeof raw === 'string') {
+        try {
+            return JSON.parse(raw);
+        } catch (_) {
+            return raw;
+        }
+    }
+    return raw;
+}
+
+async function findConfigRowByKey(db, key) {
+    const byConfigKey = await db.collection('configs')
+        .where({ config_key: key })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    if (byConfigKey.data && byConfigKey.data[0]) return byConfigKey.data[0];
+    const byKey = await db.collection('configs')
+        .where({ key })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return byKey.data && byKey.data[0] ? byKey.data[0] : null;
+}
+
+async function loadDirectedInviteRules(db) {
+    const keys = ['agent_system_directed-invite-rules', 'agent_system_directed_invite_rules'];
+    for (const key of keys) {
+        const row = await findConfigRowByKey(db, key);
+        if (row) return normalizeDirectedInviteRules(parseConfigRowValue(row, DEFAULT_DIRECTED_INVITE_RULES));
+    }
+    return normalizeDirectedInviteRules(DEFAULT_DIRECTED_INVITE_RULES);
 }
 
 async function withDbTransaction(db, work) {
@@ -229,7 +266,7 @@ async function resolveUserParentSnapshot(db, user = {}) {
     return parent ? normalizeUserSnapshot(parent) : null;
 }
 
-async function assessDirectedInviteAcceptance(db, user = {}) {
+async function assessDirectedInviteAcceptance(db, user = {}, rules = DEFAULT_DIRECTED_INVITE_RULES) {
     const base = {
         canAccept: false,
         canReroute: false,
@@ -251,10 +288,10 @@ async function assessDirectedInviteAcceptance(db, user = {}) {
     }
 
     if (!hasBoundParent(user)) {
-        if (!isDirectedInviteTargetEligible(user)) {
+        if (!isDirectedInviteTargetEligible(user, rules)) {
             return {
                 ...base,
-                acceptHint: '当前账号已是 B1 或更高身份'
+                acceptHint: `当前账号已是 Lv${rules.target_role_level} 或更高身份`
             };
         }
         return {
@@ -315,7 +352,7 @@ async function assessDirectedInviteAcceptance(db, user = {}) {
         reroute: true,
         acceptHint: '接受后将进入待审核；审核通过后覆盖 parent/referrer，不回算历史数据',
         rerouteHint: '当前账号已绑定其他团队，但满足 VIP0 严格改线条件，可提交审核',
-        rerouteRequiredReviewNote: DIRECTED_INVITE_REROUTE_REQUIRED_REVIEW_NOTE,
+        rerouteRequiredReviewNote: rules.reroute_required_review_note || DIRECTED_INVITE_REROUTE_REQUIRED_REVIEW_NOTE,
         rerouteFromParentSnapshot
     };
 }
@@ -568,7 +605,7 @@ function normalizeInviteView(invite = {}, currentOpenid = '') {
         ...invite,
         invite_id: pickString(invite.invite_id || invite._id || invite.id),
         invite_type: invite.invite_type || 'directed_b1',
-        target_role_level: toNumber(invite.target_role_level, DIRECTED_INVITE_TARGET_ROLE_LEVEL),
+        target_role_level: toNumber(invite.target_role_level, DEFAULT_DIRECTED_INVITE_RULES.target_role_level),
         transfer_amount: normalizeTransferAmount(invite.transfer_amount),
         frozen_amount: normalizeTransferAmount(invite.frozen_amount || 0),
         freeze_status: freezeStatus,
@@ -668,16 +705,18 @@ async function findInviteById(db, inviteId = '') {
 
 async function createDirectedInvite(db, _, openid, params = {}) {
     return withDbTransaction(db, async (conn) => {
+        const rules = await loadDirectedInviteRules(conn);
+        if (!rules.enabled) throw new Error('定向邀约已停用');
         const inviter = await findUserByOpenid(conn, openid);
         if (!inviter) throw new Error('邀请人不存在');
-        if (!isDirectedInviteInitiator(inviter)) throw new Error('仅 B2、B3 或店主可发起 B1 定向邀约');
+        if (!isDirectedInviteInitiator(inviter, rules)) throw new Error('当前角色不具备定向邀约权限');
 
-        const transferCheck = ensureDirectedInviteTransferAmount(params.transfer_amount);
+        const transferCheck = ensureDirectedInviteTransferAmount(params.transfer_amount, rules);
         if (!transferCheck.ok) throw new Error(transferCheck.message);
 
         const pendingCount = await countPendingInvitesByInviter(conn, openid);
-        if (pendingCount >= DIRECTED_INVITE_MAX_PENDING_PER_INVITER) {
-            throw new Error(`进行中的定向邀约最多 ${DIRECTED_INVITE_MAX_PENDING_PER_INVITER} 条`);
+        if (pendingCount >= rules.max_pending_per_inviter) {
+            throw new Error(`进行中的定向邀约最多 ${rules.max_pending_per_inviter} 条`);
         }
 
         const inviterBalance = roundMoney(resolveGoodsFundBalance(inviter));
@@ -730,7 +769,7 @@ async function createDirectedInvite(db, _, openid, params = {}) {
         const inviteDoc = {
             invite_id: inviteId,
             invite_type: 'directed_b1',
-            target_role_level: DIRECTED_INVITE_TARGET_ROLE_LEVEL,
+            target_role_level: rules.target_role_level,
             inviter_openid: openid,
             inviter_user_id: inviter._id || inviter.id || inviter._legacy_id || openid,
             inviter_role_level: normalizeRoleLevel(inviter),
@@ -747,7 +786,7 @@ async function createDirectedInvite(db, _, openid, params = {}) {
             status: DIRECTED_INVITE_STATUS.SENT,
             review_status: DIRECTED_INVITE_REVIEW_STATUS.NONE,
             ticket_id: ticketId,
-            ticket_expire_at: addDaysIso(DIRECTED_INVITE_DEFAULT_EXPIRE_DAYS),
+            ticket_expire_at: addDaysIso(rules.expire_days),
             accepted_openid: '',
             accepted_user_id: '',
             accepted_at: '',
@@ -786,9 +825,11 @@ async function createDirectedInvite(db, _, openid, params = {}) {
 }
 
 async function listDirectedInvites(db, openid, params = {}) {
+    const rules = await loadDirectedInviteRules(db);
     const inviter = await findUserByOpenid(db, openid);
     if (!inviter) throw new Error('用户不存在');
-    if (!isDirectedInviteInitiator(inviter)) throw new Error('仅 B2、B3 或店主可查看定向邀约');
+    if (!rules.enabled) throw new Error('定向邀约已停用');
+    if (!isDirectedInviteInitiator(inviter, rules)) throw new Error('当前角色不具备定向邀约权限');
     const res = await db.collection('directed_invites')
         .where({ inviter_openid: openid })
         .orderBy('created_at', 'desc')
@@ -804,6 +845,7 @@ async function listDirectedInvites(db, openid, params = {}) {
 }
 
 async function getDirectedInviteTicket(db, openid, params = {}) {
+    const rules = await loadDirectedInviteRules(db);
     const ticketId = params.ticket || params.ticket_id;
     let invite = await findInviteByTicket(db, ticketId);
     if (!invite) throw new Error('定向邀约不存在');
@@ -862,7 +904,7 @@ async function getDirectedInviteTicket(db, openid, params = {}) {
         view.accept_hint = '请先登录后再接受定向邀约';
         return view;
     }
-    const acceptance = await assessDirectedInviteAcceptance(db, user);
+    const acceptance = await assessDirectedInviteAcceptance(db, user, rules);
     const existingAccepted = await listAcceptedPendingInvitesByOpenid(db, openid);
     if (!acceptance.canReroute && existingAccepted.length > 0) {
         view.can_accept = false;
@@ -889,6 +931,8 @@ async function acceptDirectedInvite(db, _, openid, params = {}) {
     if (!ticket) throw new Error('缺少邀约票据');
 
     return withDbTransaction(db, async (conn) => {
+        const rules = await loadDirectedInviteRules(conn);
+        if (!rules.enabled) throw new Error('定向邀约已停用');
         const inviteRes = await conn.collection('directed_invites')
             .where({ ticket_id: ticket })
             .limit(1)
@@ -906,7 +950,7 @@ async function acceptDirectedInvite(db, _, openid, params = {}) {
 
         const user = await findUserByOpenid(conn, openid);
         if (!user) throw new Error('用户不存在，请先完成登录');
-        const acceptance = await assessDirectedInviteAcceptance(conn, user);
+        const acceptance = await assessDirectedInviteAcceptance(conn, user, rules);
         if (!acceptance.canAccept) {
             throw new Error(acceptance.acceptHint || '当前账号不满足 B1 定向邀约接受条件');
         }
