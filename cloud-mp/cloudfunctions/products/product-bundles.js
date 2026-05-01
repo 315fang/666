@@ -241,11 +241,11 @@ async function normalizeBundleForClient(bundle = {}) {
     const optionCount = validGroups.reduce((sum, group) => sum + group.options.length, 0);
     return {
         id: primaryId(bundle),
-        title: pickString(bundle.title),
-        subtitle: pickString(bundle.subtitle),
+        title: pickString(bundle.title || bundle.hero_title),
+        subtitle: pickString(bundle.subtitle || bundle.hero_subtitle),
         scene_type: pickString(bundle.scene_type || 'explosive_bundle', 'explosive_bundle'),
-        hero_title: pickString(bundle.hero_title || bundle.title),
-        hero_subtitle: pickString(bundle.hero_subtitle || bundle.subtitle),
+        hero_title: pickString(bundle.title || bundle.hero_title),
+        hero_subtitle: pickString(bundle.subtitle || bundle.hero_subtitle),
         channel_tags: Array.isArray(bundle.channel_tags) ? bundle.channel_tags.map((item) => pickString(item)).filter(Boolean) : [],
         cover_image: pickString(bundle.cover_file_id || bundle.cover_image),
         cover_file_id: pickString(bundle.cover_file_id),

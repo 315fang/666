@@ -58,8 +58,8 @@
           <text class="bundle-tag">固定套餐价</text>
           <text class="bundle-tag bundle-tag-soft" wx:for="{{item.channel_tags}}" wx:key="index" wx:for-item="tag">{{tag}}</text>
         </view>
-        <text class="bundle-title">{{item.hero_title || item.title}}</text>
-        <text class="bundle-subtitle" wx:if="{{item.hero_subtitle || item.subtitle}}">{{item.hero_subtitle || item.subtitle}}</text>
+        <text class="bundle-title">{{item.title || item.hero_title}}</text>
+        <text class="bundle-subtitle" wx:if="{{item.subtitle || item.hero_subtitle}}">{{item.subtitle || item.hero_subtitle}}</text>
         <view class="bundle-meta">
           <view class="bundle-price-wrap">
             <text class="bundle-price-symbol">¥</text>

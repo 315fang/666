@@ -293,7 +293,7 @@ Page({
     async loadProductBundles(forceRefresh = false) {
         try {
             const res = await cachedGet(get, '/product-bundles', { page: 1, limit: 20 }, {
-                cacheTTL: forceRefresh ? 0 : 3 * 60 * 1000,
+                cacheTTL: 0,
                 showError: false,
                 maxRetries: 0,
                 timeout: 10000

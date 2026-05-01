@@ -658,8 +658,8 @@ const hydrateBundleForm = async (bundle = {}) => {
   form.id = bundle.id || null
   form.title = bundle.title || ''
   form.subtitle = bundle.subtitle || ''
-  form.hero_title = bundle.hero_title || bundle.title || ''
-  form.hero_subtitle = bundle.hero_subtitle || bundle.subtitle || ''
+  form.hero_title = bundle.title || bundle.hero_title || ''
+  form.hero_subtitle = bundle.subtitle || bundle.hero_subtitle || ''
   form.channel_tags_text = Array.isArray(bundle.channel_tags) ? bundle.channel_tags.join(',') : ''
   form.scene_type = bundle.scene_type || 'flex_bundle'
   form.cover_image = bundle.cover_file_id || bundle.cover_image || ''
@@ -818,8 +818,8 @@ const validateForm = () => {
 const buildPayload = () => ({
   title: form.title,
   subtitle: form.subtitle,
-  hero_title: form.hero_title,
-  hero_subtitle: form.hero_subtitle,
+  hero_title: form.title,
+  hero_subtitle: form.subtitle,
   channel_tags: String(form.channel_tags_text || '')
     .split(/[，,]/)
     .map((item) => item.trim())

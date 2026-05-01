@@ -93,8 +93,8 @@
               <text class="bundle-zone-image-placeholder-text">组合</text>
             </view>
             <view class="bundle-zone-info">
-              <text class="bundle-zone-title">{{item.hero_title || item.title}}</text>
-              <text class="bundle-zone-subtitle" wx:if="{{item.hero_subtitle || item.subtitle}}">{{item.hero_subtitle || item.subtitle}}</text>
+              <text class="bundle-zone-title">{{item.title || item.hero_title}}</text>
+              <text class="bundle-zone-subtitle" wx:if="{{item.subtitle || item.hero_subtitle}}">{{item.subtitle || item.hero_subtitle}}</text>
               <view class="bundle-zone-tags" wx:if="{{item.channel_tags && item.channel_tags.length > 0}}">
                 <text class="bundle-zone-tag" wx:for="{{item.channel_tags}}" wx:key="index">{{item}}</text>
               </view>

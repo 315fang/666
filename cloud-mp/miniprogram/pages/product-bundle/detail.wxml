@@ -18,8 +18,8 @@
           <text class="hero-badge">{{bundle.scene_type === 'flex_bundle' ? '特惠随心选' : '组合套装'}}</text>
           <text class="hero-tag" wx:for="{{bundle.channel_tags}}" wx:key="index">{{item}}</text>
         </view>
-        <text class="bundle-title">{{bundle.hero_title || bundle.title}}</text>
-        <text class="bundle-subtitle" wx:if="{{bundle.hero_subtitle || bundle.subtitle}}">{{bundle.hero_subtitle || bundle.subtitle}}</text>
+        <text class="bundle-title">{{bundle.title || bundle.hero_title}}</text>
+        <text class="bundle-subtitle" wx:if="{{bundle.subtitle || bundle.hero_subtitle}}">{{bundle.subtitle || bundle.hero_subtitle}}</text>
         <view class="price-line">
           <view class="price-main">
             <text class="currency">¥</text>

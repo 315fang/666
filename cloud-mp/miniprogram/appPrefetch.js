@@ -115,7 +115,7 @@ module.exports = {
                 maxRetries: 0
             }),
             cachedGet(get, '/product-bundles', { page: 1, limit: 20 }, {
-                cacheTTL: CATEGORY_BOOTSTRAP_TTL,
+                cacheTTL: 0,
                 showError: false,
                 maxRetries: 0
             }),
