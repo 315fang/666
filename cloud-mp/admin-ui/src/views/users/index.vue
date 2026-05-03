@@ -106,9 +106,6 @@
       :member-no-form="memberNoForm"
       :parent-visible="parentVisible"
       :parent-form="parentForm"
-      :parent-search-loading="parentSearchLoading"
-      :parent-search-options="parentSearchOptions"
-      :remote-search-parent="remoteSearchParent"
       :on-show-tag-input="showTagInput"
       :on-add-tag="addTag"
       :on-remove-tag="removeTag"
@@ -121,7 +118,6 @@
       @update:member-no-visible="(value) => { memberNoVisible = value }"
       @update:parent-visible="(value) => { parentVisible = value }"
       @update:tag-input-value="(value) => { tagInputValue = value }"
-      @clear-parent-search="() => { parentSearchOptions = []; if (parentSearchTimer) clearTimeout(parentSearchTimer) }"
     />
 
     <el-dialog v-model="visibilityVisible" :title="visibilityForm.visibility === 'hidden' ? '隐藏账号' : '恢复账号显示'" width="440px">
@@ -783,41 +779,14 @@ const submitMemberNo = async () => {
 }
 
 // ===== 修改上级 =====
+// 子组件 UserActionDialogsSecondary 已在 7/9 commit 切换为 EntityPicker 自治；
+// 父级不再持有 parentSearchOptions / remoteSearchParent 等远程搜索状态。
 const parentVisible = ref(false)
 const parentForm = reactive({ new_parent_id: '', reason: '' })
-const parentSearchLoading = ref(false)
-const parentSearchOptions = ref([])
-let parentSearchTimer = null
-let parentSearchSeq = 0
-
-const remoteSearchParent = (query) => {
-  if (parentSearchTimer) clearTimeout(parentSearchTimer)
-  const q = String(query || '').trim()
-  if (!q) {
-    parentSearchSeq += 1
-    parentSearchOptions.value = []
-    return
-  }
-  parentSearchTimer = setTimeout(async () => {
-    const seq = ++parentSearchSeq
-    parentSearchLoading.value = true
-    try {
-      const res = await searchUsersLite({ keyword: q, limit: 20 })
-      // 排除当前正在编辑的用户本人（不能设置自己为上级）
-      if (seq !== parentSearchSeq) return
-      parentSearchOptions.value = (res?.list || []).filter(u => !currentUser.value || String(u.id) !== String(currentUser.value.id))
-    } catch {
-      if (seq === parentSearchSeq) parentSearchOptions.value = []
-    } finally {
-      if (seq === parentSearchSeq) parentSearchLoading.value = false
-    }
-  }, 300)
-}
 
 const openParent = (row) => {
   currentUser.value = row
   Object.assign(parentForm, { new_parent_id: '', reason: '' })
-  parentSearchOptions.value = []
   parentVisible.value = true
 }
 const submitParent = async () => {
