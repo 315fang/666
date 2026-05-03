@@ -71,39 +71,17 @@
       <el-form-item label="当前上级">
         <span style="color:var(--el-text-color-regular)">{{ displayUserName(currentUser?.parent, '无') }}</span>
       </el-form-item>
-      <el-form-item label="搜索新上级">
-        <el-select
-          v-model="parentForm.new_parent_id"
-          filterable
-          remote
-          clearable
-          reserve-keyword
-          placeholder="输入昵称 / 手机号 / 用户ID 搜索"
-          :remote-method="remoteSearchParent"
-          :loading="parentSearchLoading"
-          no-data-text="无匹配用户，请继续输入"
-          style="width:100%"
-        >
-          <el-option
-            v-for="user in parentSearchOptions"
-            :key="user.id"
-            :label="`${displayUserName(user)}  #${user.id}`"
-            :value="user.id"
-          >
-            <div class="parent-opt-row">
-              <span class="parent-opt-name">{{ displayUserName(user) }}</span>
-              <span class="parent-opt-meta">#{{ user.id }} · {{ ROLE_LABELS[user.role_level] || '用户' }}</span>
-            </div>
-          </el-option>
-        </el-select>
-      </el-form-item>
-      <el-form-item label=" " v-if="selectedParentPreview">
-        <el-tag type="success" size="large" style="max-width:100%;overflow:hidden;text-overflow:ellipsis">
-          已选：{{ displayUserName(selectedParentPreview) }}（#{{ selectedParentPreview.id }} · {{ ROLE_LABELS[selectedParentPreview.role_level] || '用户' }}）
-        </el-tag>
-      </el-form-item>
-      <el-form-item label=" " v-else-if="!parentForm.new_parent_id">
-        <span class="parent-unset-hint">留空并确认将解绑当前上级关系</span>
+      <el-form-item label="新上级">
+        <div style="display:flex; align-items:center; gap:12px; width:100%;">
+          <div v-if="pickedParent" style="flex:1; padding:6px 10px; border:1px solid #ebeef5; border-radius:6px; background:#fafbfc; font-size:13px;">
+            <div style="color:#303133; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ displayUserName(pickedParent) }}</div>
+            <div style="color:#909399; font-size:12px;">#{{ pickedParent.id }} · {{ ROLE_LABELS[pickedParent.role_level] || '用户' }}</div>
+          </div>
+          <div v-else style="flex:1; padding:6px 10px; border:1px dashed #dcdfe6; border-radius:6px; color:#909399; font-size:13px;">未选择（确认即解绑当前上级关系）</div>
+          <el-button @click="parentPickerVisible = true">{{ pickedParent ? '更换' : '选择上级' }}</el-button>
+          <el-button v-if="pickedParent" text type="danger" size="small" @click="clearPickedParent">清空</el-button>
+        </div>
+        <div class="parent-picker-tip">EntityPicker 仅支持按用户列表 ID 选择；如需按手机号 / 用户ID 精确定位请去用户列表页查 ID。</div>
       </el-form-item>
       <el-form-item label="操作原因">
         <el-input v-model="parentForm.reason" placeholder="必填，便于日后审计" />
@@ -113,12 +91,21 @@
       <el-button @click="parentVisibleProxy = false">取消</el-button>
       <el-button type="primary" @click="onSubmitParent" :loading="submitting">确认修改</el-button>
     </template>
+
+    <EntityPicker
+      v-model:visible="parentPickerVisible"
+      v-model="parentForm.new_parent_id"
+      entity="user"
+      :preselected-items="pickedParent ? [pickedParent] : []"
+      @confirm="onParentPicked"
+    />
   </el-dialog>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { getUserNickname } from '@/utils/userDisplay'
+import EntityPicker from '@/components/entity-picker'
 
 const ROLE_LABELS = { 0: 'VIP用户', 1: '初级会员', 2: '高级会员', 3: '推广合伙人', 4: '运营合伙人', 5: '区域合伙人', 6: '线下实体门店' }
 
@@ -135,9 +122,6 @@ const props = defineProps({
   memberNoForm: { type: Object, required: true },
   parentVisible: { type: Boolean, default: false },
   parentForm: { type: Object, required: true },
-  parentSearchLoading: { type: Boolean, default: false },
-  parentSearchOptions: { type: Array, default: () => [] },
-  remoteSearchParent: { type: Function, required: true },
   onShowTagInput: { type: Function, required: true },
   onAddTag: { type: Function, required: true },
   onRemoveTag: { type: Function, required: true },
@@ -152,9 +136,26 @@ const emit = defineEmits([
   'update:inviteVisible',
   'update:memberNoVisible',
   'update:parentVisible',
-  'update:tagInputValue',
-  'clear-parent-search'
+  'update:tagInputValue'
 ])
+
+const parentPickerVisible = ref(false)
+const pickedParent = ref(null)
+
+// 弹窗每次打开时重置 picked 缓存（编辑场景下父组件应显式传 parentForm.new_parent_id 重置）
+watch(() => props.parentVisible, (open) => {
+  if (open) pickedParent.value = null
+})
+
+const onParentPicked = (id, items) => {
+  pickedParent.value = items?.[0] || null
+  // parentForm.new_parent_id 已通过 v-model 自动更新
+}
+
+const clearPickedParent = () => {
+  pickedParent.value = null
+  props.parentForm.new_parent_id = ''
+}
 
 const remarkVisibleProxy = computed({
   get: () => props.remarkVisible,
@@ -181,41 +182,18 @@ const tagInputValue = computed({
   set: (value) => emit('update:tagInputValue', value)
 })
 
-/** 当前已选中的用户对象（用于预览卡片） */
-const selectedParentPreview = computed(() => {
-  if (!props.parentForm.new_parent_id) return null
-  return props.parentSearchOptions.find(u => String(u.id) === String(props.parentForm.new_parent_id)) || null
-})
-
-const onParentDialogClosed = () => emit('clear-parent-search')
+const onParentDialogClosed = () => {
+  pickedParent.value = null
+}
 
 const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 </script>
 
 <style scoped>
-.parent-opt-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-.parent-opt-name {
-  font-weight: 500;
-  color: var(--el-text-color-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 160px;
-}
-.parent-opt-meta {
-  flex-shrink: 0;
+.parent-picker-tip {
+  margin-top: 6px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
-  font-family: ui-monospace, monospace;
-}
-.parent-unset-hint {
-  font-size: 12px;
-  color: var(--el-color-warning);
+  line-height: 1.5;
 }
 </style>
