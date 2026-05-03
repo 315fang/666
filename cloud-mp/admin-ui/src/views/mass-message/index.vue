@@ -102,9 +102,31 @@
             <el-checkbox :label="6">线下实体门店(6)</el-checkbox>
           </el-checkbox-group>
         </el-form-item>
-        <el-form-item label="指定用户ID" v-if="form.target_type === 'by_ids'">
-          <el-input v-model="form.target_ids_text" type="textarea" :rows="3"
-            placeholder="多个用户ID用英文逗号分隔（例如：1, 23, 45）" />
+        <el-form-item label="指定用户" v-if="form.target_type === 'by_ids'">
+          <div style="width:100%;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <el-button @click="userPickerVisible = true">点击挑选用户</el-button>
+              <span style="color:#606266; font-size:13px;">已挑选 <b>{{ form.target_user_items.length }}</b> 人</span>
+              <el-button v-if="form.target_user_items.length" text type="danger" size="small" @click="clearPickedUsers">清空</el-button>
+            </div>
+            <div v-if="form.target_user_items.length" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; max-height:120px; overflow-y:auto;">
+              <el-tag
+                v-for="item in form.target_user_items"
+                :key="item.id"
+                closable
+                @close="removeTargetUser(item.id)"
+              >{{ item.nickname || `#${item.id}` }}</el-tag>
+            </div>
+            <el-collapse style="margin-top:8px;">
+              <el-collapse-item title="高级：粘贴 ID / 会员编号 / 邀请码 / openid">
+                <el-input v-model="form.target_ids_text" type="textarea" :rows="3"
+                  placeholder="多个用户用逗号、分号或换行分隔（例：12, 8H8W69RV, oXXXXXXXXX）" />
+                <div style="font-size:12px;color:#909399;margin-top:4px;">
+                  粘贴内容会与上方挑选的用户<strong>合并去重</strong>，适合按 openid/邀请码批量定向。
+                </div>
+              </el-collapse-item>
+            </el-collapse>
+          </div>
         </el-form-item>
         <el-form-item label="发送时间">
           <el-radio-group v-model="form.send_mode" style="margin-bottom: 8px;">
@@ -161,6 +183,16 @@
         <el-descriptions-item label="创建时间">{{ formatDate(currentMsg.createdAt || currentMsg.created_at) }}</el-descriptions-item>
       </el-descriptions>
     </el-dialog>
+
+    <EntityPicker
+      v-model:visible="userPickerVisible"
+      v-model="form.target_user_ids"
+      entity="user"
+      :multiple="true"
+      :preselected-items="form.target_user_items"
+      dialog-width="1000px"
+      @confirm="onUsersPicked"
+    />
   </div>
 </template>
 
@@ -168,6 +200,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CompactIdCell from '@/components/CompactIdCell.vue'
+import EntityPicker from '@/components/entity-picker'
 import { getMassMessages, previewMassMessage, createMassMessage, sendMassMessage, deleteMassMessage } from '@/api'
 import { formatDate } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'
@@ -183,8 +216,13 @@ const formRef = ref()
 const { pagination, resetPage, applyResponse } = usePagination({ defaultLimit: 10 })
 const tableData = ref([])
 
+const userPickerVisible = ref(false)
+
 const form = reactive({
-  title: '', content: '', target_type: 'all', target_levels: [], target_ids_text: '',
+  title: '', content: '', target_type: 'all', target_levels: [],
+  target_user_ids: [],     // EntityPicker 选出的用户 id 数组
+  target_user_items: [],   // EntityPicker 选出的完整用户对象（仅前端用于显示 / 回填）
+  target_ids_text: '',     // 高级模式：粘贴的 ID/openid/邀请码列表
   send_mode: 'now', send_at: null, jump_path: ''
 })
 const rules = {
@@ -207,8 +245,49 @@ const fetchData = async () => {
 }
 
 const handleCreate = () => {
-  Object.assign(form, { title: '', content: '', target_type: 'all', target_levels: [], target_ids_text: '', send_mode: 'now', send_at: null, jump_path: '' })
+  Object.assign(form, {
+    title: '', content: '', target_type: 'all', target_levels: [],
+    target_user_ids: [], target_user_items: [],
+    target_ids_text: '', send_mode: 'now', send_at: null, jump_path: ''
+  })
   createDialogVisible.value = true
+}
+
+const onUsersPicked = (ids, items) => {
+  form.target_user_ids = ids
+  form.target_user_items = items || []
+}
+
+const removeTargetUser = (id) => {
+  form.target_user_ids = form.target_user_ids.filter((x) => x !== id)
+  form.target_user_items = form.target_user_items.filter((x) => x.id !== id)
+}
+
+const clearPickedUsers = () => {
+  form.target_user_ids = []
+  form.target_user_items = []
+}
+
+/** 解析「指定用户」输入：支持数字 id、文档 _id、openid、会员编号、邀请码等；分隔符支持英文/中文逗号、分号、换行 */
+function parseTargetUsersInput(text) {
+  const raw = String(text || '').trim()
+  if (!raw) return []
+  const parts = raw.split(/[,，;；\r\n]+/).map((s) => s.trim()).filter(Boolean)
+  const seen = new Set()
+  const out = []
+  for (const p of parts) {
+    const key = p.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    if (/^\d+$/.test(p)) {
+      const n = Number(p)
+      if (Number.isFinite(n)) out.push(n)
+      else out.push(p)
+    } else {
+      out.push(p)
+    }
+  }
+  return out
 }
 
 // 将前端表单转成后端期望的参数格式
@@ -227,7 +306,15 @@ const buildPayload = (extra = {}) => {
     payload.targetRoles = form.target_levels
   } else if (form.target_type === 'by_ids') {
     payload.targetType = 'specific'
-    payload.targetUsers = form.target_ids_text.split(',').map(s => s.trim()).filter(Boolean).map(Number).filter(n => !isNaN(n) && n > 0)
+    // EntityPicker 选出的 id + textarea 粘贴的 ID/openid/邀请码 合并去重
+    const merged = [...form.target_user_ids, ...parseTargetUsersInput(form.target_ids_text)]
+    const seen = new Set()
+    payload.targetUsers = merged.filter((v) => {
+      const key = String(v).toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
   } else {
     payload.targetType = form.target_type
   }
@@ -272,8 +359,8 @@ const handleSubmitAndSend = async () => {
     if (form.target_type === 'by_level' && form.target_levels.length === 0) {
       return ElMessage.warning('请选择至少一个用户等级')
     }
-    if (form.target_type === 'by_ids' && !form.target_ids_text.trim()) {
-      return ElMessage.warning('请输入目标用户ID')
+    if (form.target_type === 'by_ids' && form.target_user_ids.length === 0 && !form.target_ids_text.trim()) {
+      return ElMessage.warning('请挑选用户或在高级区粘贴 ID')
     }
 
     // 先获取目标用户预览，弹出确认弹窗
