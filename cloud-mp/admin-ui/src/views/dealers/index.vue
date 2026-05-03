@@ -207,6 +207,7 @@ const fetchData = async () => {
     applyResponse(res)
   } catch (e) {
     console.error('获取经销商列表失败:', e)
+    if (!e?.__handledByRequest) ElMessage.error(e?.message || '获取经销商列表失败')
   } finally {
     loading.value = false
   }
@@ -286,6 +287,7 @@ const submitLevelChange = async () => {
     fetchData()
   } catch (e) {
     console.error('调整失败:', e)
+    if (!e?.__handledByRequest) ElMessage.error(e?.message || '调整失败')
   } finally {
     submitting.value = false
   }
@@ -301,6 +303,7 @@ const submitProfile = async () => {
     fetchData()
   } catch (e) {
     console.error('企业资料保存失败:', e)
+    if (!e?.__handledByRequest) ElMessage.error(e?.message || '企业资料保存失败')
   } finally {
     submitting.value = false
   }

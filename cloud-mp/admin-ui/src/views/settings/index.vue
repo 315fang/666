@@ -508,6 +508,7 @@ const handleSaveSettings = async () => {
     ElMessage.success('配置保存成功')
   } catch (error) {
     console.error('保存配置失败:', error)
+    if (!error?.__handledByRequest) ElMessage.error(error?.message || '保存配置失败')
   } finally {
     saving.value = false
   }
@@ -520,6 +521,7 @@ const handleSaveMiniProgramConfig = async () => {
     ElMessage.success('小程序配置保存成功')
   } catch (error) {
     console.error('保存小程序配置失败:', error)
+    if (!error?.__handledByRequest) ElMessage.error(error?.message || '保存小程序配置失败')
   } finally {
     miniProgramSaving.value = false
   }

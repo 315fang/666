@@ -375,6 +375,7 @@ const fetchBanners = async () => {
     }))
   } catch (e) {
     console.error('获取Banner失败:', e)
+    if (!e?.__handledByRequest) ElMessage.error(e?.message || '获取Banner失败')
   } finally {
     bannerLoading.value = false
   }
@@ -387,6 +388,7 @@ const fetchContents = async () => {
     contents.value = res?.list || (Array.isArray(res) ? res : [])
   } catch (e) {
     console.error('获取内容列表失败:', e)
+    if (!e?.__handledByRequest) ElMessage.error(e?.message || '获取内容列表失败')
   } finally {
     contentLoading.value = false
   }
@@ -469,6 +471,7 @@ const handleBannerSubmit = async () => {
     fetchBanners()
   } catch (e) {
     console.error('提交失败:', e)
+    if (!e?.__handledByRequest) ElMessage.error(e?.message || '提交失败')
   } finally {
     submitting.value = false
   }

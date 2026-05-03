@@ -297,6 +297,7 @@ const fetchData = async () => {
     }
   } catch (e) {
     console.error('获取佣金列表失败:', e)
+    if (!e?.__handledByRequest) ElMessage.error(e?.message || '获取佣金列表失败')
   } finally {
     loading.value = false
   }

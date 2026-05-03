@@ -239,6 +239,7 @@ const fetchData = async () => {
     applyResponse(res)
   } catch (e) {
     console.error('获取群发列表失败:', e)
+    if (!e?.__handledByRequest) ElMessage.error(e?.message || '获取群发列表失败')
   } finally {
     loading.value = false
   }
@@ -332,6 +333,7 @@ const handleSaveDraft = async () => {
       fetchData()
     } catch (e) {
       console.error('保存失败:', e)
+      if (!e?.__handledByRequest) ElMessage.error(e?.message || '保存失败')
     } finally {
       submitting.value = false
     }
@@ -402,6 +404,7 @@ const doMassSend = async () => {
     fetchData()
   } catch (e) {
     console.error('发送失败:', e)
+    if (!e?.__handledByRequest) ElMessage.error(e?.message || '发送失败')
   } finally {
     massConfirming.value = false
   }

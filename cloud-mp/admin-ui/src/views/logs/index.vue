@@ -253,6 +253,7 @@ const fetchData = async () => {
     applyResponse(res)
   } catch (e) {
     console.error('获取日志失败:', e)
+    if (!e?.__handledByRequest) ElMessage.error(e?.message || '获取日志失败')
   } finally {
     loading.value = false
   }
@@ -288,6 +289,7 @@ const handleExport = async () => {
     ElMessage.success('导出成功')
   } catch (e) {
     console.error('导出失败:', e)
+    if (!e?.__handledByRequest) ElMessage.error(e?.message || '导出失败')
   } finally {
     exporting.value = false
   }
