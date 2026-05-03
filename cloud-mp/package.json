@@ -21,6 +21,8 @@
     "audit:response-shape": "node scripts/audit-admin-response-shape.js",
     "audit:user-distribution-contract": "node scripts/audit-user-distribution-contract.js",
     "audit:order-fields": "node scripts/audit-order-fields.js",
+    "audit:cloudfunction-config": "node scripts/audit-cloudfunction-config.js",
+    "audit:cloudfunction-config:strict": "node scripts/audit-cloudfunction-config.js --strict",
     "check:index-plan": "node scripts/check-cloudbase-index-manifest.js",
     "check:foundation": "node scripts/check-cloudbase-foundation.js",
     "check:shared": "node scripts/sync-shared.js --check",
@@ -63,7 +65,7 @@
     "export:paid-orders": "node scripts/export-paid-orders.js",
     "release:finance": "node scripts/release-finance-check.js",
     "test:admin-api": "node --test \"cloudfunctions/admin-api/test/*.test.js\"",
-    "check:baseline": "npm run check:foundation && npm run check:shared && npm run audit:legacy && npm run audit:miniprogram-routes && npm run test:admin-api",
+    "check:baseline": "npm run check:foundation && npm run check:shared && npm run audit:legacy && npm run audit:miniprogram-routes && npm run audit:cloudfunction-config && npm run test:admin-api",
     "check:production": "npm run check:baseline && npm run import:validate && node scripts/check-production-gaps.js",
     "release:check": "npm run check:production",
     "verify:v2:local": "node scripts/verify-v2-local-readiness.js"

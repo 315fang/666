@@ -1,0 +1,259 @@
+{
+  "generated_at": "2026-05-03T04:28:03.387Z",
+  "cloud_functions_total": 13,
+  "critical_gap_count": 4,
+  "conflict_count": 0,
+  "orphaned_rc_entries": [],
+  "rows": [
+    {
+      "name": "admin-api",
+      "sources": {
+        "cloudbaserc": null,
+        "config_json": {
+          "memorySize": 1024,
+          "timeout": 60,
+          "permissions": {
+            "openapi": [
+              "wxacode.getUnlimited"
+            ]
+          }
+        },
+        "package_json": {
+          "memorySize": 1024,
+          "timeout": 60
+        }
+      },
+      "issues": {
+        "no_memory_source": false,
+        "no_timeout_source": false,
+        "memory_conflict": false,
+        "timeout_conflict": false
+      }
+    },
+    {
+      "name": "cart",
+      "sources": {
+        "cloudbaserc": null,
+        "config_json": null,
+        "package_json": null
+      },
+      "issues": {
+        "no_memory_source": true,
+        "no_timeout_source": true,
+        "memory_conflict": false,
+        "timeout_conflict": false
+      }
+    },
+    {
+      "name": "commission-deadline-process",
+      "sources": {
+        "cloudbaserc": {
+          "memorySize": 256,
+          "timeout": 30,
+          "triggers": 1
+        },
+        "config_json": null,
+        "package_json": {
+          "memorySize": 256,
+          "timeout": 30
+        }
+      },
+      "issues": {
+        "no_memory_source": false,
+        "no_timeout_source": false,
+        "memory_conflict": false,
+        "timeout_conflict": false
+      }
+    },
+    {
+      "name": "config",
+      "sources": {
+        "cloudbaserc": null,
+        "config_json": null,
+        "package_json": {
+          "memorySize": 512,
+          "timeout": 30
+        }
+      },
+      "issues": {
+        "no_memory_source": false,
+        "no_timeout_source": false,
+        "memory_conflict": false,
+        "timeout_conflict": false
+      }
+    },
+    {
+      "name": "distribution",
+      "sources": {
+        "cloudbaserc": null,
+        "config_json": {
+          "memorySize": null,
+          "timeout": null,
+          "permissions": {
+            "openapi": [
+              "wxacode.getUnlimited"
+            ]
+          }
+        },
+        "package_json": {
+          "memorySize": 256,
+          "timeout": 20
+        }
+      },
+      "issues": {
+        "no_memory_source": false,
+        "no_timeout_source": false,
+        "memory_conflict": false,
+        "timeout_conflict": false
+      }
+    },
+    {
+      "name": "login",
+      "sources": {
+        "cloudbaserc": null,
+        "config_json": null,
+        "package_json": null
+      },
+      "issues": {
+        "no_memory_source": true,
+        "no_timeout_source": true,
+        "memory_conflict": false,
+        "timeout_conflict": false
+      }
+    },
+    {
+      "name": "order",
+      "sources": {
+        "cloudbaserc": null,
+        "config_json": null,
+        "package_json": {
+          "memorySize": 1024,
+          "timeout": 60
+        }
+      },
+      "issues": {
+        "no_memory_source": false,
+        "no_timeout_source": false,
+        "memory_conflict": false,
+        "timeout_conflict": false
+      }
+    },
+    {
+      "name": "order-auto-confirm",
+      "sources": {
+        "cloudbaserc": {
+          "memorySize": 256,
+          "timeout": 30,
+          "triggers": 1
+        },
+        "config_json": null,
+        "package_json": {
+          "memorySize": 256,
+          "timeout": 30
+        }
+      },
+      "issues": {
+        "no_memory_source": false,
+        "no_timeout_source": false,
+        "memory_conflict": false,
+        "timeout_conflict": false
+      }
+    },
+    {
+      "name": "order-timeout-cancel",
+      "sources": {
+        "cloudbaserc": {
+          "memorySize": 256,
+          "timeout": 30,
+          "triggers": 1
+        },
+        "config_json": null,
+        "package_json": {
+          "memorySize": 256,
+          "timeout": 30
+        }
+      },
+      "issues": {
+        "no_memory_source": false,
+        "no_timeout_source": false,
+        "memory_conflict": false,
+        "timeout_conflict": false
+      }
+    },
+    {
+      "name": "payment",
+      "sources": {
+        "cloudbaserc": null,
+        "config_json": null,
+        "package_json": {
+          "memorySize": 1024,
+          "timeout": 60
+        }
+      },
+      "issues": {
+        "no_memory_source": false,
+        "no_timeout_source": false,
+        "memory_conflict": false,
+        "timeout_conflict": false
+      }
+    },
+    {
+      "name": "products",
+      "sources": {
+        "cloudbaserc": null,
+        "config_json": {
+          "memorySize": null,
+          "timeout": null,
+          "permissions": {
+            "openapi": [
+              "wxacode.get",
+              "wxacode.getUnlimited"
+            ]
+          }
+        },
+        "package_json": null
+      },
+      "issues": {
+        "no_memory_source": true,
+        "no_timeout_source": true,
+        "memory_conflict": false,
+        "timeout_conflict": false
+      }
+    },
+    {
+      "name": "user",
+      "sources": {
+        "cloudbaserc": null,
+        "config_json": null,
+        "package_json": null
+      },
+      "issues": {
+        "no_memory_source": true,
+        "no_timeout_source": true,
+        "memory_conflict": false,
+        "timeout_conflict": false
+      }
+    },
+    {
+      "name": "visitor-account-cleanup",
+      "sources": {
+        "cloudbaserc": {
+          "memorySize": 256,
+          "timeout": 30,
+          "triggers": 1
+        },
+        "config_json": null,
+        "package_json": {
+          "memorySize": 256,
+          "timeout": 30
+        }
+      },
+      "issues": {
+        "no_memory_source": false,
+        "no_timeout_source": false,
+        "memory_conflict": false,
+        "timeout_conflict": false
+      }
+    }
+  ]
+}
