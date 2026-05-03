@@ -95,14 +95,9 @@
         <el-table-column label="申请时间" width="170" class-name="hide-mobile">
           <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="240" fixed="right">
+        <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="row.status === 'pending'" text type="success" size="small" @click="handleApprove(row)">通过</el-button>
-            <el-button v-if="row.status === 'pending'" text type="danger" size="small" @click="handleReject(row)">拒绝</el-button>
-            <el-button v-if="row.status === 'approved'" text type="primary" size="small" @click="handleComplete(row)">确认退款</el-button>
-            <el-button v-if="row.status === 'processing'" text type="primary" size="small" @click="handleSyncStatus(row)">同步状态</el-button>
-            <el-button v-if="row.status === 'failed'" text type="danger" size="small" @click="handleComplete(row)">重试退款</el-button>
-            <el-button text size="small" @click="handleDetail(row)">详情</el-button>
+            <RowActionsMenu :actions="getRefundRowActions(row)" :primary-count="2" />
           </template>
         </el-table-column>
       </el-table>
@@ -233,7 +228,7 @@ import CompactIdCell from '@/components/CompactIdCell.vue'
 import { formatDateTime } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'
 import { useUrlSyncedFilter } from '@/composables/useUrlSyncedFilter'
-import { PageHelpTip } from '@/components/list-toolkit'
+import { PageHelpTip, RowActionsMenu } from '@/components/list-toolkit'
 import { getUserNickname } from '@/utils/userDisplay'
 
 const loading = ref(false)
@@ -499,6 +494,16 @@ const getStatusType = (status) => {
   const map = { pending: 'warning', approved: 'info', processing: 'primary', rejected: 'danger', completed: 'success', failed: 'danger' }
   return map[status] || 'info'
 }
+
+// 操作列按 status 动态生成；前 2 个外露，其它进"更多"下拉
+const getRefundRowActions = (row) => [
+  { label: '通过', type: 'success', onClick: () => handleApprove(row), visible: row.status === 'pending' },
+  { label: '拒绝', type: 'danger', onClick: () => handleReject(row), visible: row.status === 'pending', danger: true },
+  { label: '确认退款', type: 'primary', onClick: () => handleComplete(row), visible: row.status === 'approved' },
+  { label: '同步状态', type: 'primary', onClick: () => handleSyncStatus(row), visible: row.status === 'processing' },
+  { label: '重试退款', type: 'danger', onClick: () => handleComplete(row), visible: row.status === 'failed', danger: true },
+  { label: '详情', onClick: () => handleDetail(row) }
+]
 
 const getStatusText = (status) => {
   const map = { pending: '待审核', approved: '待退款', processing: '退款处理中（等待微信回调）', rejected: '已拒绝', completed: '已退款', failed: '退款失败' }

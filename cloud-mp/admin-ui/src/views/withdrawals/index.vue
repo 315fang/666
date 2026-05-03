@@ -75,13 +75,9 @@
         <el-table-column label="申请时间" width="170" class-name="hide-mobile">
           <template #default="{ row }">{{ formatDateTime(row.created_at) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
-            <el-button v-if="row.status === 'pending'" text type="success" size="small" @click="handleApprove(row)">通过</el-button>
-            <el-button v-if="row.status === 'pending'" text type="danger" size="small" @click="handleReject(row)">拒绝</el-button>
-            <el-button v-if="canAutoCompleteWithdrawal(row)" text type="primary" size="small" @click="handleComplete(row)">{{ getCompleteActionText(row) }}</el-button>
-            <el-button v-if="canSyncWithdrawal(row)" text type="warning" size="small" @click="handleSync(row)">同步状态</el-button>
-            <el-button text size="small" @click="handleDetail(row)">详情</el-button>
+            <RowActionsMenu :actions="getWithdrawalRowActions(row)" :primary-count="2" />
           </template>
         </el-table-column>
       </el-table>
@@ -157,7 +153,7 @@ import CompactIdCell from '@/components/CompactIdCell.vue'
 import { formatDateTime } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'
 import { useUrlSyncedFilter } from '@/composables/useUrlSyncedFilter'
-import { PageHelpTip } from '@/components/list-toolkit'
+import { PageHelpTip, RowActionsMenu } from '@/components/list-toolkit'
 import { getUserNickname } from '@/utils/userDisplay'
 
 const loading = ref(false)
@@ -374,6 +370,15 @@ const handleComplete = async (row) => {
 
 const canAutoCompleteWithdrawal = (row) => ['approved', 'failed'].includes(row?.status) && (getWithdrawAccountType(row) === 'wechat' || isDepositGoodsFundApplication(row))
 const canSyncWithdrawal = (row) => ['processing', 'approved'].includes(row?.status) && !!row?.wx_transfer?.batch_id
+
+// 操作列按 status 动态生成；前 2 个外露，其它进"更多"下拉
+const getWithdrawalRowActions = (row) => [
+  { label: '通过', type: 'success', onClick: () => handleApprove(row), visible: row.status === 'pending' },
+  { label: '拒绝', type: 'danger', onClick: () => handleReject(row), visible: row.status === 'pending', danger: true },
+  { label: getCompleteActionText(row), type: 'primary', onClick: () => handleComplete(row), visible: canAutoCompleteWithdrawal(row) },
+  { label: '同步状态', type: 'warning', onClick: () => handleSync(row), visible: canSyncWithdrawal(row) },
+  { label: '详情', onClick: () => handleDetail(row) }
+]
 
 const handleSync = async (row) => {
   await runWithdrawalMutation(
