@@ -254,43 +254,53 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed, watch, defineAsyncComponent } from 'vue'
+/**
+ * 订单管理页 — 现在是 shell / 路由壳。
+ *
+ * 所有业务逻辑都下沉到 4 个 composable + 1 个 util：
+ *   - utils/orderDisplay.js         纯展示/格式化函数（无响应式状态）
+ *   - composables/useOrderList      列表 / 筛选 / 分页 / 导出 / 路由同步
+ *   - composables/useOrderDetail    详情抽屉 state + handleDetail + detailLineItems
+ *   - composables/useOrderLogistics 物流抽屉 + 小程序 logistics_config + 常用快递缓存
+ *   - composables/useOrderMutations 6 个 mutation 弹窗 + runOrderMutation + handleDropdown
+ *
+ * 弹窗 / 抽屉组件仍保留在 components/ 下：
+ *   - components/OrderTable.vue             主表格
+ *   - components/OrderDetailDrawer.vue      详情抽屉（异步加载）
+ *   - components/OrderLogisticsDrawer.vue   物流抽屉（异步加载）
+ *   - components/OrderMutationDialogs.vue   5 个变更弹窗集合（异步加载）
+ *
+ * Shell 本身的职责：
+ *   1) 连接 router / route / userStore 这些全局依赖，组合 4 个 composable
+ *   2) 提供 goUserManage / goProductManage 两个路由跳转（只跟 router 强绑定）
+ *   3) onMounted 触发一次 fetchMiniProgramConfig 拉小程序物流配置
+ */
+
+import { onMounted, computed, defineAsyncComponent } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  shipOrder,
-  adjustOrderAmount,
-  addOrderRemark,
-  updateOrderTestFlag,
-  updateOrderVisibility,
-  repairOrderFulfillment,
-  forceCompleteOrder,
-  forceCancelOrder,
-} from '@/api'
+import { ElMessage } from 'element-plus'
 import { formatDateTime } from '@/utils/format'
 import { buildUserManagementQuery } from '@/utils/userRouting'
 import { useUserStore } from '@/store/user'
-import { extractReadAt, mergeStrongSuccessMessage } from '@/api/consistency'
 import {
-  money, moneyNumber, normalizeAmount, fmtDateTime,
-  activeCommissionRows, commissionAmountByTypes, referralCommissionTotal,
-  agentFulfillmentProfit, fulfillmentProfitNote,
-  commissionTypeText, commissionStatusText,
-  detailPaymentMethod, paymentMethodText, paymentMethodTagType,
-  refundStatusTagType, refundDestinationText,
-  deliveryTypeText, orderTypeText, orderSourceText,
-  listSkuText, lineUnitPrice, detailSkuText, detailTimeline,
-  normalizeFulfillmentType, fulfillmentText,
-  resolvedAddress, canViewLogistics, getLogisticsTagType,
-  getStatusType, getStatusText,
+  money,
+  orderTypeText, orderSourceText,
+  deliveryTypeText, listSkuText, lineUnitPrice,
+  fulfillmentText, resolvedAddress,
+  detailPaymentMethod, paymentMethodTagType, refundStatusTagType,
+  getStatusType,
   roleText, roleTagType,
   displayBuyerName, displayBuyerAvatar,
-  cleanupCategoryOptions, cleanupCategoryText, inferOrderCleanupCategory,
-  canShipRow, canAdjustAmountRow, normalizeOrderDisplay
+  cleanupCategoryText, cleanupCategoryOptions,
+  agentFulfillmentProfit, referralCommissionTotal, fulfillmentProfitNote,
+  commissionTypeText, commissionStatusText, detailTimeline,
+  canShipRow, canAdjustAmountRow, canViewLogistics,
+  fmtDateTime, getLogisticsTagType
 } from './utils/orderDisplay'
 import { useOrderList } from './composables/useOrderList'
-import { useOrderLogistics } from './composables/useOrderLogistics'
 import { useOrderDetail } from './composables/useOrderDetail'
+import { useOrderLogistics } from './composables/useOrderLogistics'
+import { useOrderMutations } from './composables/useOrderMutations'
 import OrderTable from './components/OrderTable.vue'
 const OrderDetailDrawer = defineAsyncComponent(() => import('./components/OrderDetailDrawer.vue'))
 const OrderLogisticsDrawer = defineAsyncComponent(() => import('./components/OrderLogisticsDrawer.vue'))
@@ -298,9 +308,13 @@ const OrderMutationDialogs = defineAsyncComponent(() => import('./components/Ord
 
 const router = useRouter()
 const route = useRoute()
+const userStore = useUserStore()
+const canAdjustOrderAmount = computed(() => userStore.hasPermission('order_amount_adjust'))
+const canForceCompleteOrder = computed(() => userStore.hasPermission('order_force_complete'))
+const canForceCancelOrder = computed(() => userStore.hasPermission('order_force_cancel'))
+const canManageSettings = computed(() => userStore.hasPermission('settings_manage'))
 
-// ===== 列表（fetch / filter / pagination / export / route sync） =====
-// 所有列表侧状态与动作均由 useOrderList 托管，见 ./composables/useOrderList.js
+// ===== 列表 / 筛选 / 分页 / 导出 / 路由同步 =====
 const {
   loading,
   exporting,
@@ -310,7 +324,6 @@ const {
   pagination,
   searchForm,
   dateRange,
-  resetPage,
   fetchOrders,
   refreshOrders,
   handleSearch,
@@ -319,24 +332,10 @@ const {
   handleExport
 } = useOrderList({ route })
 
-const userStore = useUserStore()
-
-const submittingShip = ref(false)
-const submittingAmount = ref(false)
-const submittingRemark = ref(false)
-const submittingForce = ref(false)
-const submittingTestFlag = ref(false)
-const submittingVisibility = ref(false)
-const canAdjustOrderAmount = computed(() => userStore.hasPermission('order_amount_adjust'))
-const canForceCompleteOrder = computed(() => userStore.hasPermission('order_force_complete'))
-const canForceCancelOrder = computed(() => userStore.hasPermission('order_force_cancel'))
-const canManageSettings = computed(() => userStore.hasPermission('settings_manage'))
-
-// ===== 详情（handleDetail / detailLineItems / drawer state） =====
-// useOrderDetail 需要先于 useOrderLogistics 调用，因为 syncOrderLogistics 会回写 detailData._logistics
+// ===== 详情抽屉 =====
 const { detailVisible, detailData, detailLineItems, handleDetail } = useOrderDetail()
 
-// ===== 物流（抽屉 + 小程序 logistics_config + 常用快递公司缓存） =====
+// ===== 物流抽屉 + 小程序 logistics_config + 常用快递公司 =====
 const {
   logisticsMode,
   logisticsTrackingRequired,
@@ -353,29 +352,47 @@ const {
   refreshLogisticsDrawer
 } = useOrderLogistics({ canManageSettings, tableData, detailData })
 
-const runOrderMutation = async (loadingRef, task, successMessage, onSuccess) => {
-  loadingRef.value = true
-  try {
-    const result = await task()
-    const readAt = extractReadAt(result)
-    if (readAt) lastSyncedAt.value = readAt
-    const finalMessage = typeof successMessage === 'function' ? successMessage(result) : successMessage
-    ElMessage.success(mergeStrongSuccessMessage(result, finalMessage))
-    if (typeof onSuccess === 'function') {
-      await onSuccess(result)
-    }
-    await refreshOrders()
-    return result
-  } catch (e) {
-    if (!e?.__handledByRequest) {
-      ElMessage.error(e?.message || '操作失败')
-    }
-  } finally {
-    loadingRef.value = false
-  }
-}
+// ===== 订单操作（发货 / 改价 / 备注 / 履约修复 / 强制 / 测试标记 / 清理箱） =====
+const {
+  currentOrder,
+  shipDialogVisible,
+  shipForm,
+  shipFulfillmentLabel,
+  submittingShip,
+  handleShip,
+  submitShip,
+  amountVisible,
+  amountForm,
+  submittingAmount,
+  submitAmount,
+  remarkVisible,
+  remarkText,
+  submittingRemark,
+  submitRemark,
+  forceVisible,
+  forceType,
+  forceForm,
+  submittingForce,
+  submitForce,
+  visibilityVisible,
+  visibilityForm,
+  submittingVisibility,
+  submitOrderVisibility,
+  handleDropdown
+} = useOrderMutations({
+  refreshOrders,
+  lastSyncedAt,
+  detailVisible,
+  detailData,
+  handleDetail,
+  logisticsMode,
+  logisticsTrackingRequired,
+  logisticsCompanyRequired,
+  normalizeShippingCompanyName,
+  rememberShippingCompanyOption
+})
 
-
+// ===== 路由跳转（与 router 强绑定，保留在 shell） =====
 const goUserManage = (row) => {
   const query = buildUserManagementQuery(
     row?.buyer || {},
@@ -392,212 +409,6 @@ const goUserManage = (row) => {
 const goProductManage = (row) => {
   const name = row.product?.name
   router.push({ name: 'Products', query: name ? { keyword: name } : {} })
-}
-
-// ===== 发货 =====
-const shipDialogVisible = ref(false)
-const currentOrder = ref(null)
-const shipForm = reactive({ fulfillment_type: 'company', tracking_no: '', logistics_company: '' })
-
-const inferFulfillmentType = (row) => {
-  const type = normalizeFulfillmentType(row)
-  if (type === 'agent' || type === 'agent_pending') return 'agent'
-  return 'company'
-}
-
-const shipFulfillmentLabel = computed(() => (
-  shipForm.fulfillment_type === 'agent'
-    ? '代理商履约'
-    : (logisticsMode.value === 'manual' ? '平台手工发货' : '平台云仓发货')
-))
-
-const handleShip = (row) => {
-  currentOrder.value = row
-  shipForm.fulfillment_type = inferFulfillmentType(row)
-  shipForm.tracking_no = String(row?.tracking_no || '').trim()
-  shipForm.logistics_company = normalizeShippingCompanyName(row?.logistics_company)
-  shipDialogVisible.value = true
-}
-const submitShip = async () => {
-  const trackingNo = String(shipForm.tracking_no || '').trim()
-  const logisticsCompany = normalizeShippingCompanyName(shipForm.logistics_company)
-
-  if (logisticsTrackingRequired.value && !trackingNo) {
-    return ElMessage.warning('请输入物流单号')
-  }
-  if (logisticsCompanyRequired.value && !logisticsCompany) {
-    return ElMessage.warning('请输入承运方名称')
-  }
-  await runOrderMutation(submittingShip, () => shipOrder(currentOrder.value.id, {
-      ...shipForm,
-      tracking_no: trackingNo,
-      logistics_company: logisticsCompany,
-      type: shipForm.fulfillment_type === 'agent' ? 'Agent' : 'Company',
-      fulfillment_type: shipForm.fulfillment_type
-    }, currentOrder.value.order_no), (result) => {
-      if (result?.fulfillment_fallback) {
-        return result.fulfillment_notice || '代理货款不足，已自动改为平台发货'
-      }
-      if (Number(result?.deducted_goods_fund_amount || 0) > 0) {
-        return `发货成功，已扣代理货款 ¥${money(result.deducted_goods_fund_amount)}`
-      }
-      return '发货成功'
-    }, async () => {
-      shipDialogVisible.value = false
-      await rememberShippingCompanyOption(logisticsCompany)
-    })
-}
-
-// ===== 改价 =====
-const amountVisible = ref(false)
-const amountForm = reactive({ pay_amount: 0, reason: '' })
-
-const handleAmount = (row) => {
-  currentOrder.value = row
-  amountForm.pay_amount = moneyNumber(row.pay_amount)
-  amountForm.reason = ''
-  amountVisible.value = true
-}
-const submitAmount = async () => {
-  if (!amountForm.reason.trim()) return ElMessage.warning('请填写调整原因')
-  await runOrderMutation(
-    submittingAmount,
-    () => adjustOrderAmount(currentOrder.value.id, { pay_amount: normalizeAmount(amountForm.pay_amount), reason: amountForm.reason }),
-    '金额修改成功',
-    () => { amountVisible.value = false }
-  )
-}
-
-// ===== 备注 =====
-const remarkVisible = ref(false)
-const remarkText = ref('')
-
-const handleRemarkItem = (row) => {
-  currentOrder.value = row
-  remarkText.value = ''
-  remarkVisible.value = true
-}
-const submitRemark = async () => {
-  if (!remarkText.value.trim()) return ElMessage.warning('请填写备注')
-  await runOrderMutation(
-    submittingRemark,
-    () => addOrderRemark(currentOrder.value.id, { remark: remarkText.value }),
-    '备注添加成功',
-    () => { remarkVisible.value = false }
-  )
-}
-
-const submittingRepair = ref(false)
-const handleRepairFulfillment = async (row) => {
-  currentOrder.value = row
-  await runOrderMutation(
-    submittingRepair,
-    () => repairOrderFulfillment(row.id),
-    '履约链修复成功',
-    async () => {
-      if (detailVisible.value && currentOrder.value) {
-        await handleDetail(currentOrder.value)
-      }
-    }
-  )
-}
-
-// ===== 强制操作 =====
-const forceVisible = ref(false)
-const forceType = ref('') // 'complete' | 'cancel'
-const forceForm = reactive({ reason: '' })
-
-const handleForce = (row, type) => {
-  currentOrder.value = row
-  forceType.value = type
-  forceForm.reason = ''
-  forceVisible.value = true
-}
-const submitForce = async () => {
-  if (!forceForm.reason.trim()) return ElMessage.warning('必填原因')
-  const action = forceType.value === 'complete'
-    ? () => forceCompleteOrder(currentOrder.value.id, forceForm)
-    : () => forceCancelOrder(currentOrder.value.id, forceForm)
-  const message = forceType.value === 'complete' ? '订单已强制完成' : '订单已强制取消并退款'
-  await runOrderMutation(submittingForce, action, message, () => { forceVisible.value = false })
-}
-
-const handleTestFlag = async (row) => {
-  const nextFlag = !row.is_test_order
-  try {
-    await ElMessageBox.confirm(
-      nextFlag
-        ? `确认将订单「${row.order_no}」标记为测试订单？标记后将默认从业务统计和常规列表中排除。`
-        : `确认取消订单「${row.order_no}」的测试订单标记？`,
-      nextFlag ? '标记测试订单' : '取消测试订单标记',
-      { type: 'warning' }
-    )
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error(e?.message || '已取消')
-    return
-  }
-
-  await runOrderMutation(
-    submittingTestFlag,
-    () => updateOrderTestFlag(row.id, {
-      is_test_order: nextFlag,
-      reason: nextFlag ? '管理员标记测试订单' : '管理员取消测试订单标记'
-    }),
-    nextFlag ? '订单已标记为测试订单' : '测试订单标记已取消',
-    (result) => {
-      if (detailVisible.value && currentOrder.value && String(currentOrder.value.id) === String(row.id)) {
-        detailData.value = normalizeOrderDisplay(result?.data || result)
-      }
-    }
-  )
-}
-
-const visibilityVisible = ref(false)
-const visibilityTarget = ref(null)
-const visibilityForm = reactive({
-  visibility: 'hidden',
-  cleanup_category: 'manual_cleanup',
-  reason: ''
-})
-
-const handleOrderVisibility = (row) => {
-  const hidden = row.order_visibility === 'hidden'
-  visibilityTarget.value = row
-  visibilityForm.visibility = hidden ? 'visible' : 'hidden'
-  visibilityForm.cleanup_category = hidden ? (row.cleanup_category || 'manual_cleanup') : inferOrderCleanupCategory(row)
-  visibilityForm.reason = hidden ? '管理员恢复显示' : `管理员移入清理箱：${cleanupCategoryText(visibilityForm.cleanup_category)}`
-  visibilityVisible.value = true
-}
-
-const submitOrderVisibility = async () => {
-  if (!visibilityTarget.value) return
-  if (!visibilityForm.reason.trim()) return ElMessage.warning('请填写操作原因')
-  await runOrderMutation(
-    submittingVisibility,
-    () => updateOrderVisibility(visibilityTarget.value.id, {
-      visibility: visibilityForm.visibility,
-      cleanup_category: visibilityForm.cleanup_category,
-      reason: visibilityForm.reason.trim()
-    }),
-    visibilityForm.visibility === 'hidden' ? '订单已移入清理箱' : '订单已恢复显示',
-    (result) => {
-      visibilityVisible.value = false
-      if (detailVisible.value && visibilityTarget.value && detailData.value && String(detailData.value.id) === String(visibilityTarget.value.id)) {
-        detailData.value = normalizeOrderDisplay(result?.data || result)
-      }
-    }
-  )
-}
-
-// Dropdown dispatch
-const handleDropdown = (cmd, row) => {
-  if (cmd === 'amount') handleAmount(row)
-  else if (cmd === 'remark') handleRemarkItem(row)
-  else if (cmd === 'test_flag') handleTestFlag(row)
-  else if (cmd === 'visibility') handleOrderVisibility(row)
-  else if (cmd === 'repair_fulfillment') handleRepairFulfillment(row)
-  else if (cmd === 'force_complete') handleForce(row, 'complete')
-  else if (cmd === 'force_cancel') handleForce(row, 'cancel')
 }
 
 onMounted(() => {
