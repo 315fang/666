@@ -14,16 +14,10 @@
         </div>
       </template>
 
-      <el-collapse class="tips-collapse">
-        <el-collapse-item title="操作提示（点击展开）" name="1">
-          <el-alert
-            type="info"
-            :closable="false"
-            show-icon
-            title="订单页是高频处理主工作台。默认仅显示主单（不含拆分子单）；可按订单号、会员、收货人、商品名等多条件筛选。请核对支付方式、履约方式、金额与收货信息后再发货或改价。"
-          />
-        </el-collapse-item>
-      </el-collapse>
+      <PageHelpTip
+        title="订单处理须知"
+        message="订单页是高频处理主工作台。默认仅显示主单（不含拆分子单）；可按订单号、会员、收货人、商品名等多条件筛选。请核对支付方式、履约方式、金额与收货信息后再发货或改价。"
+      />
 
       <div class="status-tabs">
         <el-radio-group v-model="searchForm.status_group" size="default" @change="onStatusGroupChange">
@@ -297,6 +291,7 @@ import {
   canShipRow, canAdjustAmountRow, canViewLogistics,
   fmtDateTime, getLogisticsTagType
 } from './utils/orderDisplay'
+import { PageHelpTip } from '@/components/list-toolkit'
 import { useOrderList } from './composables/useOrderList'
 import { useOrderDetail } from './composables/useOrderDetail'
 import { useOrderLogistics } from './composables/useOrderLogistics'

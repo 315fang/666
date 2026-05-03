@@ -2,7 +2,12 @@
   <div class="group_buy-page">
     <el-card>
       <template #header>拼团活动管理</template>
-      
+
+      <PageHelpTip
+        title="拼团活动须知"
+        message="活动开关切换需二次确认。开启后活动立即在小程序生效；结束的活动可以再次开启。商品价格、库存与拼团人数请在编辑表单中维护。"
+      />
+
       <!-- 搜索查询 -->
       <el-form :inline="true" :model="searchForm" class="search-form">
         <el-form-item label="活动名称">
@@ -147,6 +152,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import CompactIdCell from '@/components/CompactIdCell.vue'
 import EntityPicker from '@/components/entity-picker'
+import { PageHelpTip } from '@/components/list-toolkit'
 import { getGroupBuys, createGroupBuy, updateGroupBuy, deleteGroupBuy } from '@/api'
 import { usePagination } from '@/composables/usePagination'
 import { confirmDanger } from '@/composables/useConfirm'

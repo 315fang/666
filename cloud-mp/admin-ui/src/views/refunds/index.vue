@@ -11,12 +11,9 @@
         </div>
       </template>
 
-      <el-alert
-        type="info"
-        :closable="false"
-        show-icon
-        style="margin-bottom: 16px;"
-        title="退款金额由系统按商品实付自动计算；仅退现金，优惠券和积分不返还。"
+      <PageHelpTip
+        title="售后处理须知"
+        message="退款金额由系统按商品实付自动计算；仅退现金，优惠券和积分不返还。审核通过后会自动调用微信支付退款，到账时间一般在 1-3 个工作日内。"
       />
 
       <!-- 搜索栏 -->
@@ -236,6 +233,7 @@ import CompactIdCell from '@/components/CompactIdCell.vue'
 import { formatDateTime } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'
 import { useUrlSyncedFilter } from '@/composables/useUrlSyncedFilter'
+import { PageHelpTip } from '@/components/list-toolkit'
 import { getUserNickname } from '@/utils/userDisplay'
 
 const loading = ref(false)

@@ -11,6 +11,11 @@
         </div>
       </template>
 
+      <PageHelpTip
+        title="提现审核须知"
+        message="审核通过后系统会自动调用微信商户号转账到提现账户；请仔细核对提现金额与到账账号信息。手续费由用户承担，按微信商户号配置自动扣除。"
+      />
+
       <!-- 搜索栏 -->
       <el-form :inline="true" :model="searchForm" class="search-form">
         <el-form-item label="用户搜索">
@@ -152,6 +157,7 @@ import CompactIdCell from '@/components/CompactIdCell.vue'
 import { formatDateTime } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'
 import { useUrlSyncedFilter } from '@/composables/useUrlSyncedFilter'
+import { PageHelpTip } from '@/components/list-toolkit'
 import { getUserNickname } from '@/utils/userDisplay'
 
 const loading = ref(false)
