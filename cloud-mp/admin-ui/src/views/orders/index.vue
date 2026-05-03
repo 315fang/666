@@ -274,14 +274,28 @@ import {
   forceCancelOrder,
   exportOrders
 } from '@/api'
-import CompactIdCell from '@/components/CompactIdCell.vue'
-import { getCommissionTypeLabel } from '@/utils/commission'
 import { formatDateTime } from '@/utils/format'
 import { buildUserManagementQuery } from '@/utils/userRouting'
-import { getUserAvatar, getUserNickname, normalizeUserDisplay } from '@/utils/userDisplay'
 import { usePagination } from '@/composables/usePagination'
 import { useUserStore } from '@/store/user'
 import { extractReadAt, mergeStrongSuccessMessage } from '@/api/consistency'
+import {
+  money, moneyNumber, normalizeAmount, fmtDateTime,
+  activeCommissionRows, commissionAmountByTypes, referralCommissionTotal,
+  agentFulfillmentProfit, fulfillmentProfitNote,
+  commissionTypeText, commissionStatusText,
+  detailPaymentMethod, paymentMethodText, paymentMethodTagType,
+  refundStatusTagType, refundDestinationText,
+  deliveryTypeText, orderTypeText, orderSourceText,
+  listSkuText, lineUnitPrice, detailSkuText, detailTimeline,
+  normalizeFulfillmentType, fulfillmentText,
+  resolvedAddress, canViewLogistics, getLogisticsTagType,
+  getStatusType, getStatusText,
+  roleText, roleTagType,
+  displayBuyerName, displayBuyerAvatar,
+  cleanupCategoryOptions, cleanupCategoryText, inferOrderCleanupCategory,
+  canShipRow, canAdjustAmountRow, normalizeOrderDisplay
+} from './utils/orderDisplay'
 import OrderTable from './components/OrderTable.vue'
 const OrderDetailDrawer = defineAsyncComponent(() => import('./components/OrderDetailDrawer.vue'))
 const OrderLogisticsDrawer = defineAsyncComponent(() => import('./components/OrderLogisticsDrawer.vue'))
@@ -353,9 +367,6 @@ const canAdjustOrderAmount = computed(() => userStore.hasPermission('order_amoun
 const canForceCompleteOrder = computed(() => userStore.hasPermission('order_force_complete'))
 const canForceCancelOrder = computed(() => userStore.hasPermission('order_force_cancel'))
 const canManageSettings = computed(() => userStore.hasPermission('settings_manage'))
-const displayBuyer = (buyer) => normalizeUserDisplay(buyer || {})
-const displayBuyerName = (buyer, fallback = '-') => getUserNickname(displayBuyer(buyer), fallback)
-const displayBuyerAvatar = (buyer) => getUserAvatar(displayBuyer(buyer))
 
 const SHIPPING_COMPANY_STORAGE_KEY = 'admin_shipping_company_options'
 const DEFAULT_SHIPPING_COMPANY_OPTIONS = [
@@ -506,22 +517,6 @@ const runOrderMutation = async (loadingRef, task, successMessage, onSuccess) => 
   }
 }
 
-const cleanupCategoryOptions = [
-  { label: '取消未支付噪音', value: 'cancelled_unpaid_noise' },
-  { label: '测试订单', value: 'test_order' },
-  { label: '无效用户噪音', value: 'invalid_user_noise' },
-  { label: '财务关联保留', value: 'finance_related_keep' },
-  { label: '手动清理', value: 'manual_cleanup' }
-]
-const cleanupCategoryText = (value) => cleanupCategoryOptions.find((item) => item.value === value)?.label || value || '手动清理'
-const inferOrderCleanupCategory = (row = {}) => {
-  if (row.is_test_order) return 'test_order'
-  if (String(row.status || '').trim().toLowerCase() === 'cancelled') return 'cancelled_unpaid_noise'
-  if (['refunding', 'refunded', 'paid', 'shipped', 'completed'].includes(String(row.status || '').trim().toLowerCase())) {
-    return 'finance_related_keep'
-  }
-  return 'manual_cleanup'
-}
 
 watch(
   () => searchForm.status,
@@ -639,141 +634,6 @@ const handleReset = () => {
   handleSearch()
 }
 
-const money = (value) => {
-  const n = Number(value || 0)
-  return Number.isFinite(n) ? n.toFixed(2) : '0.00'
-}
-const moneyNumber = (value) => Number(money(value))
-const activeCommissionRows = (order = {}) => {
-  const rows = Array.isArray(order?.commissions) ? order.commissions : []
-  return rows.filter((item) => !['cancelled', 'void', 'revoked'].includes(String(item?.status || '').trim().toLowerCase()))
-}
-const commissionAmountByTypes = (order = {}, types = []) => {
-  const typeSet = new Set(types.map((item) => String(item || '').trim().toLowerCase()).filter(Boolean))
-  return normalizeAmount(
-    activeCommissionRows(order)
-      .filter((item) => typeSet.has(String(item?.type || '').trim().toLowerCase()))
-      .reduce((sum, item) => sum + Number(item?.amount || 0), 0)
-  )
-}
-const referralCommissionTotal = (order = {}) => commissionAmountByTypes(order, ['direct', 'indirect'])
-const agentFulfillmentProfit = (order = {}) => {
-  const fromCommissions = commissionAmountByTypes(order, ['agent_fulfillment'])
-  if (fromCommissions > 0) return fromCommissions
-  return normalizeAmount(order?.middle_commission_total)
-}
-const fulfillmentProfitNote = (order = {}) => {
-  const hasFulfillmentPartner = !!String(order?.fulfillment_partner_id || order?.fulfillment_partner_openid || '').trim()
-  const referralTotal = referralCommissionTotal(order)
-  const fulfillmentTotal = agentFulfillmentProfit(order)
-  if (!hasFulfillmentPartner && referralTotal > 0) {
-    return '当前订单是平台履约，所以代理发货利润为 0；上级收益走的是推荐佣金，金额已计入“推荐佣金合计”和下方佣金记录。'
-  }
-  if (hasFulfillmentPartner && fulfillmentTotal <= 0) {
-    return '当前订单已锁定代理履约，但还没有生成代理发货利润，请核对发货动作、锁定进货价和佣金记录。'
-  }
-  return ''
-}
-const normalizeAmount = (value) => {
-  const n = Number(value || 0)
-  if (!Number.isFinite(n)) return 0
-  return Math.round((n + Number.EPSILON) * 100) / 100
-}
-const fmtDateTime = (value) => value ? formatDateTime(value) : '-'
-const normalizeOrderDisplay = (row = {}) => {
-  const paymentMethodCode = detailPaymentMethod(row)
-  return {
-    ...row,
-    order_visibility: row.order_visibility === 'hidden' ? 'hidden' : 'visible',
-    cleanup_category: row.cleanup_category || '',
-    display_pay_amount: money(row.pay_amount),
-    display_status_text: row.status_text || getStatusText(row.status),
-    display_payment_method_code: paymentMethodCode,
-    display_payment_method_text: row.payment_method_text || paymentMethodText(paymentMethodCode),
-    display_refund_target_text: row.refund_target_text || refundDestinationText(paymentMethodCode),
-    display_refund_status_text: row.latest_refund?.status_text || row.refund_status_text || '',
-    display_refund_error: row.latest_refund?.error || row.refund_error || ''
-  }
-}
-const canShipRow = (row = {}) => {
-  const status = String(row?.status || '').trim()
-  const deliveryType = String(row?.delivery_type || '').trim().toLowerCase()
-  if (deliveryType === 'pickup') return false
-  if (!['paid', 'agent_confirmed', 'shipping_requested'].includes(status)) return false
-  const type = String(row?.type || row?.order_type || '').trim().toLowerCase()
-  if ((type === 'group' || row?.group_no || row?.group_activity_id) && !row?.group_completed_at) return false
-  return true
-}
-const canAdjustAmountRow = (row = {}) => {
-  const status = String(row?.status || '').trim().toLowerCase()
-  if (!['pending', 'pending_payment'].includes(status)) return false
-  const commissions = Array.isArray(row?.commissions) ? row.commissions : []
-  return commissions.length === 0
-}
-const detailPaymentMethod = (row = {}) => {
-  const raw = String(row.payment_method || '').trim().toLowerCase()
-  if (['wechat', 'wx', 'jsapi', 'miniapp', 'wechatpay', 'weixin'].includes(raw)) return 'wechat'
-  if (['goods_fund'].includes(raw)) return 'goods_fund'
-  if (['wallet', 'balance', 'credit', 'debt'].includes(raw)) return 'wallet'
-  if (row.goods_fund_paid === true) return 'goods_fund'
-  if (row.paid_at) return 'wechat'
-  return raw || ''
-}
-const paymentMethodText = (method) => ({
-  wechat: '微信支付',
-  goods_fund: '货款支付',
-  wallet: '余额支付'
-}[method] || (method || '-'))
-const paymentMethodTagType = (method) => ({
-  wechat: 'success',
-  goods_fund: 'warning',
-  wallet: 'info'
-}[method] || 'info')
-const refundStatusTagType = (status) => ({
-  pending: 'info',
-  approved: 'warning',
-  processing: 'warning',
-  completed: 'success',
-  failed: 'danger',
-  rejected: 'info',
-  cancelled: 'info'
-}[String(status || '').trim().toLowerCase()] || 'info')
-const refundDestinationText = (method) => ({
-  wechat: '原路退回微信支付',
-  goods_fund: '退回货款余额',
-  wallet: '退回账户余额'
-}[method] || '-')
-const orderStatusText = (row = {}) => row.status_text || getStatusText(row.status)
-const orderPaymentMethodText = (row = {}) => row.payment_method_text || paymentMethodText(detailPaymentMethod(row))
-const orderRefundTargetText = (row = {}) => row.refund_target_text || refundDestinationText(detailPaymentMethod(row))
-const deliveryTypeText = (type) => ({
-  express: '快递配送',
-  pickup: '到店自提'
-}[type] || '-')
-
-const orderTypeText = (row) => {
-  const type = String(row?.type || row?.order_type || '').trim().toLowerCase()
-  if (type === 'bundle' || row?.bundle_id || row?.bundle_meta) return '组合订单'
-  if (type === 'group' || row?.group_no || row?.group_activity_id) return '拼团订单'
-  if (type === 'slash' || row?.slash_no || row?.slash_activity_id) return '砍价订单'
-  if (String(row?.delivery_type || '').trim().toLowerCase() === 'pickup') return '自提订单'
-  return '普通订单'
-}
-const orderSourceText = () => '小程序商城'
-
-const listSkuText = (row) => {
-  if (row?.sku?.spec_name || row?.sku?.spec_value) {
-    return `${row.sku.spec_name || '规格'}：${row.sku.spec_value || '-'}`
-  }
-  return '默认'
-}
-
-const lineUnitPrice = (row) => {
-  const q = Number(row?.qty || row?.quantity || 1)
-  const t = Number(row?.total_amount || 0)
-  if (q <= 0) return money(t)
-  return money(t / q)
-}
 
 const goUserManage = (row) => {
   const query = buildUserManagementQuery(
@@ -792,31 +652,6 @@ const goProductManage = (row) => {
   const name = row.product?.name
   router.push({ name: 'Products', query: name ? { keyword: name } : {} })
 }
-const normalizeFulfillmentType = (order = {}) => {
-  const raw = String(order?.fulfillment_type || '').trim().toLowerCase()
-  if (raw === 'agent') return 'agent'
-  if (['agent_pending', 'agent-pending'].includes(raw)) return 'agent_pending'
-  if (['company', 'platform'].includes(raw)) return 'company'
-  if (['agent_confirmed', 'shipping_requested'].includes(order?.status)) return 'agent_pending'
-  if (String(order?.delivery_type || '').trim().toLowerCase() === 'pickup') return 'pickup'
-  return ''
-}
-const fulfillmentText = (order = {}) => ({
-  company: '云仓发货',
-  agent: '代理商发货',
-  agent_pending: '代理待确认',
-  pickup: '到店自提'
-}[normalizeFulfillmentType(order)] || '待确认')
-const resolvedAddress = (order) => order?.address || order?.address_snapshot || null
-const canViewLogistics = (order = {}) => !!String(order?.tracking_no || '').trim()
-const getLogisticsTagType = (status) => ({
-  in_transit: 'primary',
-  delivering: 'warning',
-  delivered: 'success',
-  exception: 'danger',
-  unknown: 'info',
-  manual: 'info'
-}[status] || 'info')
 
 function buildManualLogistics(order = {}) {
   return {
@@ -875,32 +710,6 @@ async function refreshLogisticsDrawer() {
   await loadLogistics(logisticsOrder.value, true)
 }
 
-const detailSkuText = (order) => {
-  if (order?.sku?.spec_name || order?.sku?.spec_value) {
-    return `${order.sku.spec_name || '规格'}：${order.sku.spec_value || '-'}`
-  }
-  return '默认规格'
-}
-const detailTimeline = (order) => {
-  const items = [
-    { label: '会员提交订单', time: fmtDateTime(order?.created_at) },
-    { label: '会员支付订单', time: order?.paid_at ? fmtDateTime(order.paid_at) : '' },
-    { label: '代理确认订单', time: order?.agent_confirmed_at ? fmtDateTime(order.agent_confirmed_at) : '' },
-    { label: '申请发货', time: order?.shipping_requested_at ? fmtDateTime(order.shipping_requested_at) : '' },
-    { label: '商家发货', time: order?.shipped_at ? fmtDateTime(order.shipped_at) : '' },
-    { label: '订单完成', time: order?.completed_at ? fmtDateTime(order.completed_at) : '' }
-  ]
-  return items.filter(item => item.time)
-}
-const commissionTypeText = (type) => getCommissionTypeLabel(type)
-const commissionStatusText = (status) => ({
-  pending: '预计入账',
-  frozen: '冻结中',
-  pending_approval: '待审批',
-  approved: '已审批',
-  settled: '已结算',
-  cancelled: '已取消'
-}[status] || status || '-')
 
 // ===== 详情 =====
 const detailVisible = ref(false)
@@ -1156,33 +965,6 @@ const handleDropdown = (cmd, row) => {
   else if (cmd === 'force_cancel') handleForce(row, 'cancel')
 }
 
-// ===== 工具 =====
-const roleText = (r) => (['VIP用户', '初级会员', '高级会员', '推广合伙人', '运营合伙人', '区域合伙人', '线下实体门店'][r] ?? '未知')
-const roleTagType = (r) => (['', 'success', 'warning', 'danger', 'danger', 'danger'][r] ?? '')
-const getStatusType = (s) => (
-  ['pending', 'pending_payment'].includes(s)
-    ? 'warning'
-    : s === 'pending_group'
-      ? 'warning'
-      : ['paid', 'pickup_pending', 'agent_confirmed', 'shipping_requested', 'shipped'].includes(s)
-        ? 'primary'
-        : ['completed'].includes(s)
-          ? 'success'
-          : 'info'
-)
-const getStatusText = (s) => ({
-  pending: '待付款',
-  pending_payment: '待付款',
-  pending_group: '待成团',
-  paid: '待发货',
-  pickup_pending: '待核销',
-  agent_confirmed: '代理已确认',
-  shipping_requested: '代理申请发货',
-  shipped: '已发货',
-  completed: '已完成',
-  cancelled: '已取消',
-  refunded: '已退款'
-}[s] || s)
 watch(
   () => route.query,
   (query) => {
