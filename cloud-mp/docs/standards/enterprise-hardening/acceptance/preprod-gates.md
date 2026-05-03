@@ -1,5 +1,7 @@
 # 预发阻断门槛
 
+> ⚠️ 2026-05-03 更新：本文件中的 `npm run release:check` 仍可执行（保留为 `check:production` 的 alias）。日常基线推荐改用 `npm run check:baseline`。详见 `AGENTS.md` 与 `cloud-mp/docs/audit/2026-05-03-comprehensive-code-review.md` §2 P1-5。
+
 日期：2026-04-14
 
 ## 1. 使用规则

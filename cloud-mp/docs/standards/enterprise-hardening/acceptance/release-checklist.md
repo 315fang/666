@@ -1,5 +1,7 @@
 # 发布前检查表
 
+> ⚠️ 2026-05-03 更新：本文件第 4 节"预发门槛"中的 `npm run release:check` 仍可执行（保留为 alias），但当前项目已把 release gate 拆分。日常 PR 推荐 `npm run check:baseline`，发布前才跑 `npm run check:production`（即 `release:check` 别名指向）。详见 `AGENTS.md` 与 `cloud-mp/docs/audit/2026-05-03-comprehensive-code-review.md` §2 P1-5。
+
 日期：2026-04-14
 
 ## 1. 代码与文档

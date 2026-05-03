@@ -1,5 +1,7 @@
 # 企业级发布执行手册
 
+> ⚠️ 2026-05-03 更新：第 2 节中的 `npm run release:check` 仍可执行（保留为 `check:production` 的 alias），但发布前推荐显式跑 `npm run check:production`，日常 PR 跑 `npm run check:baseline`。详见 `AGENTS.md` 与 `cloud-mp/docs/audit/2026-05-03-comprehensive-code-review.md` §2 P1-5。
+
 日期：2026-04-14
 
 ## 1. 使用规则

@@ -1,135 +1,69 @@
 # zz 项目
 
-微信电商分销系统仓库，包含三个主要部分：
+微信电商分销系统仓库。**当前主体已迁至 `cloud-mp/`（微信 CloudBase 云开发）**；根目录仍保留 `backend/`、`admin-ui/`、`miniprogram/` 三个旧目录作为迁移历史资产，已基本不再作为运行目标。
 
-- `backend/`: 后端 API、业务服务、定时任务、后台接口
-- `admin-ui/`: 管理后台，Vue 3 + Vite + Pinia + Element Plus
-- `miniprogram/`: 微信原生小程序
+> 协作约定与"当前真相源"以根 [`AGENTS.md`](./AGENTS.md) 为准。当本 README 与 `AGENTS.md` 冲突时，以 `AGENTS.md` 为准并把本文同步更新。
 
-## 当前状态
+## 顶层目录
 
-本仓库正在进行一次全面收口，目标不是新增功能，而是恢复项目可信度：
+| 路径 | 角色 | 说明 |
+| --- | --- | --- |
+| `cloud-mp/` | **当前主体** | CloudBase 云开发：云函数、小程序、管理后台、脚本、配置 |
+| `backend/` | 旧版（待评估废弃） | 原 Node.js + Express + Sequelize + MySQL 自建后端 |
+| `admin-ui/` | 旧版（待评估废弃） | 早期 Vue 3 管理后台代码（已被 `cloud-mp/admin-ui/` 取代） |
+| `miniprogram/` | 旧版（待评估废弃） | 早期微信小程序代码（已被 `cloud-mp/miniprogram/` 取代） |
+| `docs/` | 收口资料 | 全仓级审计报告、收口计划、规则。其中 `docs/audit/2026-04-06-repo-audit.md` 是收口起点 |
 
-- 修正文档与真实实现不一致的问题
-- 清理仓库中的历史污染与无效说明
-- 统一测试、权限、构建、运行约定
-- 为后续结构拆分建立基线
+旧版三个目录里的功能已经在 `cloud-mp/` 重写过一遍，是否物理删除取决于后续阶段决策（见 `AGENTS.md` "当前优先目标"第 3 项）。
 
-当前收口基线文档：
+## 当前阶段
 
-- 审计报告：[`docs/audit/2026-04-06-repo-audit.md`](/C:/Users/21963/WeChatProjects/zz/docs/audit/2026-04-06-repo-audit.md)
-- 收口方案：[`docs/plans/2026-04-06-repo-closure-program.md`](/C:/Users/21963/WeChatProjects/zz/docs/plans/2026-04-06-repo-closure-program.md)
-- 任务清单：[`docs/plans/2026-04-06-repo-closure-tasklist.md`](/C:/Users/21963/WeChatProjects/zz/docs/plans/2026-04-06-repo-closure-tasklist.md)
+`AGENTS.md` 指明当前处于 **"MySQL 后清理 + CloudBase 收口"** 阶段，优先级如下：
 
-## 真实技术栈
+1. 清理已完成迁移的 MySQL 残余代码和引用
+2. 修正 CloudBase 云函数中的逻辑 bug 和安全问题
+3. 统一 `cloud-mp/` 与旧版 `admin-ui/` / `miniprogram/` 的差异
+4. 修复测试体系可信度
+5. 控制大文件和上帝模块继续膨胀
 
-### Backend
+最近一份综合审计：[`cloud-mp/docs/audit/2026-05-03-comprehensive-code-review.md`](./cloud-mp/docs/audit/2026-05-03-comprehensive-code-review.md)
 
-- Node.js
-- Express
-- Sequelize
-- MySQL
-- Jest（当前测试体系正在收口）
+## 开发与发布入口
 
-### Admin UI
-
-- Vue 3
-- Vite
-- Pinia
-- Element Plus
-
-### Miniprogram
-
-- 微信原生小程序
-
-## 目录
-
-```text
-backend/
-admin-ui/
-miniprogram/
-docs/
-docker/
-scripts/
-```
-
-说明：
-
-- `docs/` 目前正在整理，部分历史资料会迁移到 `docs/archive/`
-- 根目录下若存在工具目录、临时目录、历史目录，不应视为项目主结构的一部分
-
-## 真相源与边界
-
-当前项目的唯一有效说明入口是：
-
-- 运行行为以代码为准
-- 项目说明、流程、规则以 `docs/` 为准
-- 若代码与文档冲突，以当前较新的、已验证的一方为准，并在同轮把另一侧同步更新
-
-以下内容不再视为项目资产：
-
-- `.agent/`
-- `.opencode/`
-- `.worktrees/`
-- `skill/`
-- 日志、压缩包、数据库快照、上传产物、本地工具缓存
-
-这些目录和产物即使再次出现在工作区，也不应作为项目主入口或规范来源。
-
-## 开发命令
-
-### Backend
+`cloud-mp/` 下的常用命令（详见 `AGENTS.md` "`cloud-mp` 常用工作流"）：
 
 ```powershell
-cd backend
-npm install
-npm run dev
-```
+cd cloud-mp
 
-测试：
+node --test "cloudfunctions/admin-api/test/*.test.js"
+npm run check:foundation
+npm run audit:miniprogram-routes
 
-```powershell
-cd backend
-npm test
-```
-
-注意：
-
-- 后端测试体系当前正在修复，详见审计报告
-
-### Admin UI
-
-```powershell
-cd admin-ui
-npm install
-npm run dev
-```
-
-构建：
-
-```powershell
 cd admin-ui
 npm run build
 ```
 
-### Miniprogram
+更细粒度：
 
-- 使用微信开发者工具打开 `miniprogram/`
-- 小程序运行依赖本地环境配置与后端服务
+- `npm run check:baseline`：PR 友好基线（foundation + shared + audit:legacy + miniprogram-routes + admin-api 测试）
+- `npm run check:production`：发布门槛（baseline + import 校验 + production-gaps 检查）
+- `npm run release:check`：保留为 `check:production` 的别名
 
-## 当前工作原则
+发布流程见 [`cloud-mp/docs/CLOUDBASE_RELEASE_RUNBOOK.md`](./cloud-mp/docs/CLOUDBASE_RELEASE_RUNBOOK.md)。
 
-1. 以当前真实实现为准，不以旧文档自述为准。
-2. 先修可信度问题，再做结构优化。
-3. 权限、接口、路由、文档必须逐步收口到单一真相源。
-4. 历史资料默认归档，不继续作为主入口说明。
-5. 仓库默认只保留源码、配置、当前文档，不保留工具残留和运行产物。
+## 真相源边界
 
-## 下一步
+- 协作约定：[`AGENTS.md`](./AGENTS.md)
+- cloud-mp 开发指南：[`cloud-mp/docs/CLOUD_MP_DEVELOPMENT_GUIDE.md`](./cloud-mp/docs/CLOUD_MP_DEVELOPMENT_GUIDE.md)
+- 发布运行手册：[`cloud-mp/docs/CLOUDBASE_RELEASE_RUNBOOK.md`](./cloud-mp/docs/CLOUDBASE_RELEASE_RUNBOOK.md)
+- 当前综合审计：[`cloud-mp/docs/audit/2026-05-03-comprehensive-code-review.md`](./cloud-mp/docs/audit/2026-05-03-comprehensive-code-review.md)
+- 历史审计起点：[`docs/audit/2026-04-06-repo-audit.md`](./docs/audit/2026-04-06-repo-audit.md)
 
-当前优先级：
+历史阶段文档、旧计划、设计稿、修复日志默认不作为现状依据。已归档的过时内容请进入 `cloud-mp/docs/archive/`。
 
-1. 维持当前收口基线，不让旧规则回流
-2. 权限 alias 完成数据清理后再移除兼容层
-3. 恢复业务开发
-4. 将前端进一步健康化列入第二阶段，而不是继续无限打磨
+## 工作原则
+
+1. 不根据失真的旧文档做决策。
+2. 不继续向大而杂的入口文件塞新职责（典型受害者：`cloud-mp/cloudfunctions/admin-api/src/app.js`）。
+3. 收口期间优先做可信度修复，而不是新增功能。
+4. 仓库默认只保留源码、配置、当前文档，不保留工具残留和运行产物（参见 `cloud-mp/.gitignore`）。
