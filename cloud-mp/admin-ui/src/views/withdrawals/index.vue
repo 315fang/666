@@ -144,17 +144,16 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { getWithdrawals, approveWithdrawal, rejectWithdrawal, completeWithdrawal, syncWithdrawal } from '@/api'
 import { extractReadAt, mergeStrongSuccessMessage } from '@/api/consistency'
 import CompactIdCell from '@/components/CompactIdCell.vue'
 import { formatDateTime } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'
+import { useUrlSyncedFilter } from '@/composables/useUrlSyncedFilter'
 import { getUserNickname } from '@/utils/userDisplay'
 
-const route = useRoute()
 const loading = ref(false)
 const submitting = ref(false)
 const rejectDialogVisible = ref(false)
@@ -167,12 +166,12 @@ const searchForm = reactive({
   keyword: ''
 })
 
-const applyRouteQueryToFilters = (query = {}) => {
-  searchForm.status = query?.status ? String(query.status) : ''
-  searchForm.keyword = query?.keyword ? String(query.keyword) : ''
-}
-
 const { pagination, resetPage, applyResponse } = usePagination({ defaultLimit: 10 })
+
+// URL ↔ form 双向同步：刷新/分享链接都能还原筛选 + 翻页状态
+useUrlSyncedFilter({ searchForm, pagination, fetchFn: () => refreshWithdrawals(), defaults: { status: '', keyword: '' } })
+
+onMounted(() => refreshWithdrawals())
 
 const tableData = ref([])
 
@@ -420,15 +419,6 @@ const getStatusText = (rowOrStatus) => {
   return map[status] || status
 }
 
-watch(
-  () => route.query,
-  (query) => {
-    applyRouteQueryToFilters(query || {})
-    resetPage()
-    refreshWithdrawals()
-  },
-  { immediate: true }
-)
 </script>
 
 <style scoped>
