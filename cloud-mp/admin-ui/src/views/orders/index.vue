@@ -258,7 +258,6 @@ import { ref, reactive, onMounted, computed, watch, defineAsyncComponent } from 
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  getOrderDetail,
   shipOrder,
   adjustOrderAmount,
   addOrderRemark,
@@ -291,6 +290,7 @@ import {
 } from './utils/orderDisplay'
 import { useOrderList } from './composables/useOrderList'
 import { useOrderLogistics } from './composables/useOrderLogistics'
+import { useOrderDetail } from './composables/useOrderDetail'
 import OrderTable from './components/OrderTable.vue'
 const OrderDetailDrawer = defineAsyncComponent(() => import('./components/OrderDetailDrawer.vue'))
 const OrderLogisticsDrawer = defineAsyncComponent(() => import('./components/OrderLogisticsDrawer.vue'))
@@ -332,10 +332,9 @@ const canForceCompleteOrder = computed(() => userStore.hasPermission('order_forc
 const canForceCancelOrder = computed(() => userStore.hasPermission('order_force_cancel'))
 const canManageSettings = computed(() => userStore.hasPermission('settings_manage'))
 
-// ===== 详情（抽屉数据） — detailLineItems/handleDetail 等处理函数仍在下方 =====
-// 声明提前，因为 useOrderLogistics 的 syncOrderLogistics 需要读写 detailData._logistics
-const detailVisible = ref(false)
-const detailData = ref(null)
+// ===== 详情（handleDetail / detailLineItems / drawer state） =====
+// useOrderDetail 需要先于 useOrderLogistics 调用，因为 syncOrderLogistics 会回写 detailData._logistics
+const { detailVisible, detailData, detailLineItems, handleDetail } = useOrderDetail()
 
 // ===== 物流（抽屉 + 小程序 logistics_config + 常用快递公司缓存） =====
 const {
@@ -393,52 +392,6 @@ const goUserManage = (row) => {
 const goProductManage = (row) => {
   const name = row.product?.name
   router.push({ name: 'Products', query: name ? { keyword: name } : {} })
-}
-
-// ===== 详情 =====
-
-const detailLineItems = computed(() => {
-  const o = detailData.value
-  if (!o) return []
-  const sourceItems = Array.isArray(o.items) && o.items.length
-    ? o.items
-    : [{
-        snapshot_image: o.product?.images?.[0],
-        snapshot_name: o.product?.name || '-',
-        snapshot_spec: detailSkuText(o),
-        qty: Number(o.qty || o.quantity || 1),
-        item_amount: Number(o.total_amount || 0),
-        unit_price: Number(o.total_amount || 0) / Math.max(1, Number(o.qty || o.quantity || 1))
-      }]
-  return sourceItems.map((item) => {
-    const qty = Math.max(1, Number(item.qty || item.quantity || 1))
-    const itemAmount = Number(item.item_amount ?? item.total_amount ?? item.price ?? 0)
-    const unitPrice = Number(item.unit_price ?? (qty > 0 ? itemAmount / qty : itemAmount))
-    return {
-      image: item.snapshot_image || o.product?.images?.[0],
-      name: item.snapshot_name || o.product?.name || '-',
-      spec: item.snapshot_spec || detailSkuText(o),
-      unitPrice: money(unitPrice),
-      qty,
-      lineTotal: money(itemAmount)
-    }
-  })
-})
-
-const handleDetail = async (row) => {
-  try {
-    const res = await getOrderDetail(row.id)
-    detailData.value = normalizeOrderDisplay(res?.data || res)
-    if (detailData.value?.address_snapshot && !detailData.value.address) {
-      detailData.value.address = detailData.value.address_snapshot
-    }
-    detailVisible.value = true
-  } catch (e) {
-    console.error(e)
-    if (!e?.__handledByRequest) {
-      ElMessage.error(e?.message || '加载订单详情失败')
-    }
-  }
 }
 
 // ===== 发货 =====
