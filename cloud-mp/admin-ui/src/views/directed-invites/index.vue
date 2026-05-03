@@ -102,7 +102,7 @@
         v-model:current-page="pagination.page"
         v-model:page-size="pagination.limit"
         :total="pagination.total"
-        :page-sizes="[10, 20, 50]"
+        :page-sizes="pagination.pageSizes"
         layout="total, sizes, prev, pager, next, jumper"
         @size-change="handleSearch"
         @current-change="fetchList"

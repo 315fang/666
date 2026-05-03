@@ -98,7 +98,7 @@
 
           <el-pagination
             v-model:current-page="pagination.page" v-model:page-size="pagination.limit"
-            :total="pagination.total" :page-sizes="[10,20,50]"
+            :total="pagination.total" :page-sizes="pagination.pageSizes"
             layout="total, sizes, prev, pager, next"
             @size-change="fetchAdmins" @current-change="fetchAdmins"
             style="margin-top:16px;justify-content:flex-end"
