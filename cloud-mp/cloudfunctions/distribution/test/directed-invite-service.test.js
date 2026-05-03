@@ -220,7 +220,7 @@ test('revokeDirectedInvite releases frozen goods fund for inviter', async () => 
                 status: 'sent',
                 review_status: '',
                 ticket_id: 'ticket-1',
-                ticket_expire_at: '2026-04-27T00:00:00.000Z',
+                ticket_expire_at: '2099-01-01T00:00:00.000Z',
                 created_at: '2026-04-20T00:00:00.000Z',
                 updated_at: '2026-04-20T00:00:00.000Z'
             }
@@ -289,7 +289,7 @@ test('getDirectedInviteTicket exposes strict reroute capability for bound VIP0 w
                 status: 'sent',
                 review_status: '',
                 ticket_id: 'ticket-2',
-                ticket_expire_at: '2026-04-27T00:00:00.000Z',
+                ticket_expire_at: '2099-01-01T00:00:00.000Z',
                 created_at: '2026-04-20T00:00:00.000Z',
                 updated_at: '2026-04-20T00:00:00.000Z'
             }
@@ -356,7 +356,7 @@ test('acceptDirectedInvite records reroute metadata for bound VIP0 with clean hi
                 status: 'sent',
                 review_status: '',
                 ticket_id: 'ticket-2',
-                ticket_expire_at: '2026-04-27T00:00:00.000Z',
+                ticket_expire_at: '2099-01-01T00:00:00.000Z',
                 created_at: '2026-04-20T00:00:00.000Z',
                 updated_at: '2026-04-20T00:00:00.000Z'
             }
@@ -432,7 +432,7 @@ test('acceptDirectedInvite rejects reroute when bound VIP0 has non-test paid ord
                 status: 'sent',
                 review_status: '',
                 ticket_id: 'ticket-2',
-                ticket_expire_at: '2026-04-27T00:00:00.000Z',
+                ticket_expire_at: '2099-01-01T00:00:00.000Z',
                 created_at: '2026-04-20T00:00:00.000Z',
                 updated_at: '2026-04-20T00:00:00.000Z'
             }

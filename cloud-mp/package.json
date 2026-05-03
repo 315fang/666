@@ -65,7 +65,8 @@
     "export:paid-orders": "node scripts/export-paid-orders.js",
     "release:finance": "node scripts/release-finance-check.js",
     "test:admin-api": "node --test \"cloudfunctions/admin-api/test/*.test.js\"",
-    "check:baseline": "npm run check:foundation && npm run check:shared && npm run audit:legacy && npm run audit:miniprogram-routes && npm run audit:cloudfunction-config && npm run test:admin-api",
+    "test:cloudfunctions": "node --test \"cloudfunctions/*/test/*.test.js\"",
+    "check:baseline": "npm run check:foundation && npm run check:shared && npm run audit:legacy && npm run audit:miniprogram-routes && npm run audit:cloudfunction-config && npm run test:cloudfunctions",
     "check:production": "npm run check:baseline && npm run import:validate && node scripts/check-production-gaps.js",
     "release:check": "npm run check:production",
     "verify:v2:local": "node scripts/verify-v2-local-readiness.js"
