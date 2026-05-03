@@ -258,6 +258,14 @@
       </el-tab-pane>
     </el-tabs>
 
+    <EntityPicker
+      v-model:visible="claimantPickerVisible"
+      v-model="stationForm.claimant_id"
+      entity="user"
+      :preselected-items="stationForm.claimant ? [stationForm.claimant] : []"
+      @confirm="onClaimantPicked"
+    />
+
     <el-dialog v-model="stationDialogVisible" :title="stationForm.id ? '编辑区域代理' : '新增区域代理'" width="680px">
       <el-form :model="stationForm" label-width="110px">
         <el-form-item label="区域名称"><el-input v-model="stationForm.name" placeholder="如：浦东新区区域代理" /></el-form-item>
@@ -276,32 +284,18 @@
           </el-row>
         </el-form-item>
         <el-form-item label="认领人">
-          <el-select
-            v-model="stationForm.claimant_id"
-            filterable
-            remote
-            reserve-keyword
-            clearable
-            placeholder="输入昵称 / 手机号 / 用户ID / 会员码搜索"
-            :remote-method="searchClaimantUsers"
-            :loading="claimantSearching"
-            style="width:100%"
-          >
-            <el-option
-              v-for="option in claimantOptions"
-              :key="option.id"
-              :label="formatClaimantOption(option)"
-              :value="option.id"
-            />
-          </el-select>
-          <div class="form-tip">支持按昵称、手机号、用户ID、会员码搜索；选中后自动绑定，不需要手填 OPENID。</div>
-        </el-form-item>
-        <el-form-item v-if="selectedClaimant" label="认领人信息">
-          <div class="claimant-preview">
-            <div>{{ displayUserName(selectedClaimant, `用户${selectedClaimant.id}`) }}</div>
-            <div class="sub">ID: {{ selectedClaimant.id }} / 会员码: {{ selectedClaimant.invite_code || selectedClaimant.member_no || '—' }}</div>
-            <div class="sub" v-if="selectedClaimant.phone">手机号: {{ selectedClaimant.phone }}</div>
+          <div style="display:flex; align-items:center; gap:12px; width:100%;">
+            <div v-if="selectedClaimant" style="flex:1; padding:6px 10px; border:1px solid #ebeef5; border-radius:6px; background:#fafbfc; font-size:13px;">
+              <div style="color:#303133; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ displayUserName(selectedClaimant, `用户${selectedClaimant.id}`) }}</div>
+              <div style="color:#909399; font-size:12px;">ID: {{ selectedClaimant.id }}<span v-if="selectedClaimant.invite_code || selectedClaimant.member_no"> / 会员码: {{ selectedClaimant.invite_code || selectedClaimant.member_no }}</span></div>
+            </div>
+            <div v-else style="flex:1; padding:6px 10px; border:1px dashed #dcdfe6; border-radius:6px; color:#909399; font-size:13px;">尚未选择认领人</div>
+            <el-button @click="claimantPickerVisible = true">{{ selectedClaimant ? '更换' : '选择认领人' }}</el-button>
           </div>
+          <div class="form-tip">EntityPicker 仅支持按用户列表 ID 选择；如需按手机号 / 会员码 / OPENID 精确定位，请去用户列表页查 ID 后再回来。</div>
+        </el-form-item>
+        <el-form-item v-if="selectedClaimant && selectedClaimant.phone" label="认领人电话">
+          <span class="sub">{{ selectedClaimant.phone }}</span>
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="stationForm.status" style="width: 220px">
@@ -327,9 +321,9 @@ import {
   getBranchAgentPolicy, updateBranchAgentPolicy,
   getBranchAgentStations, createBranchAgentStation, updateBranchAgentStation, deleteBranchAgentStation,
   getBranchAgentClaims, reviewBranchAgentClaim,
-  getBranchAgentEarnings,
-  searchUsersLite
+  getBranchAgentEarnings
 } from '@/api'
+import EntityPicker from '@/components/entity-picker'
 import { getUserNickname } from '@/utils/userDisplay'
 
 function defaultRegionRewardTiers() {
@@ -364,8 +358,7 @@ const loadingClaims = ref(false)
 const loadingEarnings = ref(false)
 const savingStation = ref(false)
 const stationDialogVisible = ref(false)
-const claimantSearching = ref(false)
-const claimantOptions = ref([])
+const claimantPickerVisible = ref(false)
 
 const policy = reactive({
   enabled: true,
@@ -388,7 +381,7 @@ const earnings = reactive({
 const stationForm = reactive({
   id: null, name: '', branch_type: 'district',
   province: '', city: '', district: '',
-  claimant_id: '', status: 'active'
+  claimant_id: '', claimant: null, status: 'active'
 })
 
 const branchTypeText = (v) => ({ district: '区代理', area: '区代理', city: '市代理', province: '省代理', school: '学校代理（停用）' }[v] || v)
@@ -402,7 +395,7 @@ function displayStoreOwner(row = {}) {
   return displayUserName(row.claimant, row.claimant_id || '-')
 }
 
-function buildClaimantOption(user = {}) {
+function buildClaimantSnapshot(user = {}) {
   return {
     ...user,
     id: user.id || user._id || user._legacy_id || user.openid || user.user_id || ''
@@ -410,38 +403,15 @@ function buildClaimantOption(user = {}) {
 }
 
 const selectedClaimant = computed(() => {
+  if (stationForm.claimant) return stationForm.claimant
   const current = String(stationForm.claimant_id || '')
   if (!current) return null
-  const matchesCurrent = (user = {}) => [user.id, user._id, user._legacy_id, user.user_id, user.openid]
-    .filter((value) => value !== null && value !== undefined && value !== '')
-    .some((value) => String(value) === current)
-  return claimantOptions.value.find(matchesCurrent)
-    || stations.value.find((row) => String(row.claimant_id || '') === current)?.claimant
-    || null
+  return stations.value.find((row) => String(row.claimant_id || '') === current)?.claimant || null
 })
 
-function formatClaimantOption(user = {}) {
-  const displayId = user._legacy_id || user.user_id || user.id || user._id || user.openid || ''
-  const nickname = displayUserName(user, `用户${displayId}`)
-  const memberNo = user.invite_code || user.member_no || '无会员码'
-  const phone = user.phone ? ` / ${user.phone}` : ''
-  const role = user.role_name || (user.role_level != null ? `Lv${user.role_level}` : '')
-  return `${nickname}${phone} / ID:${displayId} / ${memberNo}${role ? ` / ${role}` : ''}`
-}
-
-async function searchClaimantUsers(keyword) {
-  const q = String(keyword || '').trim()
-  if (!q) {
-    claimantOptions.value = selectedClaimant.value ? [buildClaimantOption(selectedClaimant.value)] : []
-    return
-  }
-  claimantSearching.value = true
-  try {
-    const res = await searchUsersLite({ keyword: q, limit: 20 })
-    claimantOptions.value = (res?.list || []).map((item) => buildClaimantOption(item))
-  } finally {
-    claimantSearching.value = false
-  }
+const onClaimantPicked = (id, items) => {
+  stationForm.claimant_id = id
+  stationForm.claimant = items?.[0] || null
 }
 
 const loadPolicy = async () => {
@@ -480,7 +450,6 @@ const loadStations = async () => {
 }
 
 const openStationDialog = (row = null) => {
-  claimantOptions.value = []
   if (row) {
     Object.assign(stationForm, {
       id: row.id,
@@ -490,16 +459,16 @@ const openStationDialog = (row = null) => {
       city: row.city || '',
       district: row.district || '',
       claimant_id: row.claimant_id || '',
+      claimant: row.claimant
+        ? buildClaimantSnapshot({ ...row.claimant, id: row.claimant_id || row.claimant.id })
+        : null,
       status: row.status || 'active'
     })
-    if (row.claimant) {
-      claimantOptions.value = [buildClaimantOption({ ...row.claimant, id: row.claimant_id || row.claimant.id })]
-    }
   } else {
     Object.assign(stationForm, {
       id: null, name: '', branch_type: 'district',
       province: '', city: '', district: '',
-      claimant_id: '', status: 'active'
+      claimant_id: '', claimant: null, status: 'active'
     })
   }
   stationDialogVisible.value = true
