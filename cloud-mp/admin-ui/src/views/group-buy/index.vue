@@ -149,6 +149,7 @@ import CompactIdCell from '@/components/CompactIdCell.vue'
 import EntityPicker from '@/components/entity-picker'
 import { getGroupBuys, createGroupBuy, updateGroupBuy, deleteGroupBuy } from '@/api'
 import { usePagination } from '@/composables/usePagination'
+import { confirmDanger } from '@/composables/useConfirm'
 
 // ====== 列表逻辑 ======
 const loading = ref(false)
@@ -253,11 +254,22 @@ const submitForm = async () => {
 
 // ====== 快速操作 ======
 const handleStatusChange = async (row, val) => {
+  const oldVal = val === 1 ? 0 : 1
+  try {
+    await confirmDanger({
+      title: val === 1 ? '开启活动' : '结束活动',
+      message: `确认${val === 1 ? '开启' : '结束'}活动「${row.name}」？`,
+      type: 'warning'
+    })
+  } catch (_) {
+    row.status = oldVal
+    return
+  }
   try {
     await updateGroupBuy(row.id, { status: val })
     ElMessage.success(val === 1 ? '活动开启' : '活动结束')
   } catch (e) {
-    row.status = val === 1 ? 0 : 1
+    row.status = oldVal
   }
 }
 

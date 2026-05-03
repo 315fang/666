@@ -440,6 +440,7 @@ import { useRoute } from 'vue-router'
 import CompactIdCell from '@/components/CompactIdCell.vue'
 import { getProducts, createProduct, updateProduct, updateProductStatus, getCategories, deleteProduct, createCategory, updateCategory, deleteCategory } from '@/api'
 import { usePagination } from '@/composables/usePagination'
+import { confirmDanger } from '@/composables/useConfirm'
 import MediaPicker from '@/components/MediaPicker.vue'
 import { buildPersistentAssetRef, warnTemporaryAssetUrls } from '@/utils/assetUrlAudit'
 
@@ -502,12 +503,23 @@ const handleSearch = () => { resetPage(); fetchProducts() }
 const handleReset = () => { Object.assign(searchForm, { keyword: '', category_id: '', status: '' }); handleSearch() }
 
 const handleStatusChange = async (row, val) => {
+  const oldVal = val === 1 ? 0 : 1
+  try {
+    await confirmDanger({
+      title: val === 1 ? '上架商品' : '下架商品',
+      message: `确认${val === 1 ? '上架' : '下架'}「${row.name}」？`,
+      type: 'warning'
+    })
+  } catch (_) {
+    row.status = oldVal
+    return
+  }
   try {
     await updateProductStatus(row.id, { status: val })
     ElMessage.success(val === 1 ? '已上架' : '已下架')
     await fetchProducts()
   } catch (e) {
-    row.status = val === 1 ? 0 : 1
+    row.status = oldVal
     if (!e?.__handledByRequest) {
       ElMessage.error(e?.message || '更新上架状态失败')
     }
