@@ -17,6 +17,10 @@ const {
 } = require('./wechat-pay-v3');
 const orderContract = require('./order-contract');
 const userContract = require('./user-contract');
+// WARNING naming-misleading: finance-firewall is NOT a real fund firewall, only a finance-log helper.
+//   See ./finance-firewall.js header comment (2026-05-03 audit P0-3).
+//   Fund safety invariants (server-side amount recompute / CAS / transaction / idempotency key) MUST be
+//   enforced by callers; do NOT assume the 'firewall' in the name guarantees anything.
 const { createFinanceFirewall } = require('./finance-firewall');
 const configContract = require('./config-contract');
 
@@ -429,6 +433,11 @@ function nowIso() {
     return new Date().toISOString();
 }
 
+// These 4 helpers ONLY do log-write + adjustment-reason validation. They do NOT enforce balance
+// consistency, authz, idempotency, or atomic write-back. Callers (appendWalletLogEntry / appendGoodsFundLogEntry
+// / appendPointLogEntry / requireManualAdjustmentReason) MUST self-enforce: server-side amount recompute,
+// atomic write, CAS old-value check, idempotency key, role-based authz.
+// See ./finance-firewall.js header + cloud-mp/docs/production/FINANCE_FIREWALL_STANDARD.md banner.
 const {
     appendWalletLogEntry,
     appendGoodsFundLogEntry,
