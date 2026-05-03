@@ -48,6 +48,13 @@
                 <transition name="nav-label">
                   <span v-if="!isCollapse" class="nav-label">{{ item.title }}</span>
                 </transition>
+                <el-badge
+                  v-if="pendingCounts[item.path] > 0"
+                  :value="pendingCounts[item.path]"
+                  :max="99"
+                  class="nav-badge"
+                  type="danger"
+                />
                 <span v-if="isActive && !isCollapse" class="active-indicator" />
               </a>
             </router-link>
@@ -207,6 +214,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/store/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { changePassword } from '@/api'
+import { getOperationsDashboard } from '@/api/modules/system'
 import {
   buildAdminBreadcrumbs,
   buildAdminNavigationTree,
@@ -222,6 +230,29 @@ const isCollapse = ref(false)
 const mobileMenuOpen = ref(false)
 const passwordDialogVisible = ref(false)
 const commandPaletteVisible = ref(false)
+
+// 侧边栏 menu 角标：菜单 path -> pending count
+// 数据来源 getOperationsDashboard()，每 60s 轮询一次
+const pendingCounts = ref({
+  '/orders': 0,
+  '/refunds': 0,
+  '/withdrawals': 0,
+  '/commissions': 0
+})
+
+const refreshPendingCounts = async () => {
+  try {
+    const data = await getOperationsDashboard({ skipErrorMessage: true })
+    pendingCounts.value = {
+      '/orders': Number(data?.kpi?.pendingShip ?? data?.kpi?.pending_ship ?? 0),
+      '/refunds': Number(data?.pending?.refunds ?? 0),
+      '/withdrawals': Number(data?.pending?.withdrawals ?? 0),
+      '/commissions': Number(data?.pending?.commissions ?? 0)
+    }
+  } catch (_) { /* 角标失败静默，dashboard 会展示真实错误 */ }
+}
+
+let pendingCountsTimer = null
 
 // 路由变化时自动关闭手机端菜单
 watch(route, () => { mobileMenuOpen.value = false })
@@ -242,10 +273,13 @@ const handleGlobalKeydown = (e) => {
 onMounted(() => {
   window.addEventListener('resize', handleResize)
   window.addEventListener('keydown', handleGlobalKeydown)
+  refreshPendingCounts()
+  pendingCountsTimer = setInterval(refreshPendingCounts, 60_000)
 })
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
   window.removeEventListener('keydown', handleGlobalKeydown)
+  if (pendingCountsTimer) clearInterval(pendingCountsTimer)
 })
 const passwordFormRef = ref()
 const changingPwd = ref(false)
@@ -489,6 +523,18 @@ const handlePasswordSubmit = async () => {
 
 .nav-label {
   white-space: nowrap;
+}
+
+.nav-badge {
+  margin-left: auto;
+  margin-right: 12px;
+}
+.nav-badge :deep(.el-badge__content) {
+  font-size: 11px;
+  height: 16px;
+  line-height: 16px;
+  padding: 0 5px;
+  border: none;
 }
 
 .active-indicator {
