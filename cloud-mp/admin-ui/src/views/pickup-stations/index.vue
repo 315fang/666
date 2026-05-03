@@ -225,27 +225,16 @@
 
     <el-dialog v-model="staffFormVisible" :title="staffForm.id ? '编辑门店成员' : '添加门店成员'" width="520px" destroy-on-close>
       <el-form :model="staffForm" label-width="100px">
-        <el-form-item label="搜索成员" required>
-          <el-select
-            v-model="staffForm.user_id"
-            filterable
-            remote
-            reserve-keyword
-            clearable
-            placeholder="输入昵称 / 用户ID / 会员码搜索"
-            :remote-method="searchStationMembers"
-            :loading="staffUserSearching"
-            :disabled="!!staffForm.id"
-            style="width:100%"
-          >
-            <el-option
-              v-for="option in staffUserOptions"
-              :key="option.id"
-              :label="formatStationUserOption(option)"
-              :value="option.id"
-            />
-          </el-select>
-          <div class="form-tip">支持按昵称、用户ID、会员码搜索，选中后自动写入成员ID。</div>
+        <el-form-item label="选择成员" required>
+          <div style="display:flex; align-items:center; gap:12px; width:100%;">
+            <div v-if="selectedStaffUser" style="flex:1; padding:6px 10px; border:1px solid #ebeef5; border-radius:6px; background:#fafbfc; font-size:13px;">
+              <div style="color:#303133; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ displayUserName(selectedStaffUser, `用户${staffForm.user_id}`) }}</div>
+              <div style="color:#909399; font-size:12px;">ID: {{ staffForm.user_id }}</div>
+            </div>
+            <div v-else style="flex:1; padding:6px 10px; border:1px dashed #dcdfe6; border-radius:6px; color:#909399; font-size:13px;">尚未选择成员</div>
+            <el-button :disabled="!!staffForm.id" @click="staffPickerVisible = true">{{ selectedStaffUser ? '更换' : '选择成员' }}</el-button>
+          </div>
+          <div class="form-tip">EntityPicker 仅支持按用户列表 ID 选择；原会员码 / OPENID / 邀请码兜底入口已移除（运维如需，可去用户列表页直接定位）。</div>
         </el-form-item>
         <el-form-item label="成员信息" v-if="selectedStaffUser">
           <div class="staff-user-preview">
@@ -274,6 +263,14 @@
       </template>
     </el-dialog>
     <MapPickerDialog v-model="mapPickerVisible" :seed="mapPickerSeed" @confirm="onMapPickerConfirm" />
+
+    <EntityPicker
+      v-model:visible="staffPickerVisible"
+      v-model="staffForm.user_id"
+      entity="user"
+      :preselected-items="staffForm.user ? [staffForm.user] : []"
+      @confirm="onStaffUserPicked"
+    />
   </div>
 </template>
 
@@ -288,11 +285,11 @@ import {
   updatePickupStation,
   getPickupStationStaff,
   addPickupStationStaff,
-  removePickupStationStaff,
-  searchUsersLite
+  removePickupStationStaff
 } from '@/api'
 import { usePagination } from '@/composables/usePagination'
 import MapPickerDialog from '@/components/MapPickerDialog.vue'
+import EntityPicker from '@/components/entity-picker'
 import { getUserNickname } from '@/utils/userDisplay'
 
 const weekDays = [
@@ -320,8 +317,7 @@ const mapPickerVisible = ref(false)
 const staffDialogVisible = ref(false)
 const staffFormVisible = ref(false)
 const staffSaving = ref(false)
-const staffUserSearching = ref(false)
-const staffUserOptions = ref([])
+const staffPickerVisible = ref(false)
 
 const staffState = reactive({
   stationId: null,
@@ -335,6 +331,7 @@ const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fa
 const defaultStaffForm = () => ({
   id: null,
   user_id: '',
+  user: null, // EntityPicker 选出的完整用户对象（仅前端用于预览/回填）
   role: 'staff',
   can_verify: 1,
   remark: ''
@@ -347,14 +344,6 @@ function normalizeStaffLookupValue(value) {
   return /^-?\d+$/.test(text) ? Number(text) : text
 }
 
-function buildStaffUserOption(user = {}) {
-  return {
-    ...user,
-    id: user.id || user._id || user.openid || user.user_id || '',
-    _legacy_id: user._legacy_id ?? user.user_id ?? null
-  }
-}
-
 function resolveStaffUserIdentity(user) {
   if (!user) return normalizeStaffLookupValue(staffForm.user_id)
   const preferred = user._legacy_id ?? user.user_id ?? user.id ?? user._id ?? user.openid ?? staffForm.user_id
@@ -363,15 +352,10 @@ function resolveStaffUserIdentity(user) {
 
 const staffForm = reactive(defaultStaffForm())
 const selectedStaffUser = computed(() => {
+  if (staffForm.user) return staffForm.user
   const current = String(staffForm.user_id ?? '')
   if (!current) return null
-  const matchesCurrent = (user = {}) => [user.id, user._id, user._legacy_id, user.user_id, user.openid]
-    .filter((value) => value !== null && value !== undefined && value !== '')
-    .some((value) => String(value) === current)
-
-  return staffUserOptions.value.find(matchesCurrent)
-    || staffState.list.find((item) => String(item.user_id ?? item.openid ?? '') === current)?.user
-    || null
+  return staffState.list.find((item) => String(item.user_id ?? item.openid ?? '') === current)?.user || null
 })
 
 const mapPickerSeed = computed(() => ({
@@ -517,7 +501,6 @@ async function openStaffDialog(row) {
 
 function openStaffForm(row) {
   Object.assign(staffForm, defaultStaffForm())
-  staffUserOptions.value = []
   if (row) {
     staffForm.id = row.id
     staffForm.user_id = row.user_id != null ? String(row.user_id) : ''
@@ -525,33 +508,22 @@ function openStaffForm(row) {
     staffForm.can_verify = Number(row.can_verify) === 1 ? 1 : 0
     staffForm.remark = row.remark || ''
     if (row.user) {
-      staffUserOptions.value = [buildStaffUserOption({ ...row.user, user_id: row.user_id, openid: row.openid || row.user.openid || '' })]
+      // 用 row.user 作为 EntityPicker 回填项，并保留 _legacy_id / user_id / openid 以便 submit 时正确解析身份
+      staffForm.user = {
+        ...row.user,
+        id: row.user.id || row.user._id || row.user_id || row.user.openid || '',
+        _legacy_id: row.user._legacy_id ?? row.user_id ?? null,
+        user_id: row.user_id,
+        openid: row.openid || row.user.openid || ''
+      }
     }
   }
   staffFormVisible.value = true
 }
 
-function formatStationUserOption(user) {
-  const displayId = user._legacy_id || user.user_id || user.id
-  const nickname = displayUserName(user, `用户${displayId}`)
-  const inviteCode = user.invite_code || user.member_no || '无用户ID'
-  const openidHint = user.openid ? ` / OPENID:${String(user.openid).slice(0, 8)}...` : ''
-  return `${nickname} / ID:${displayId}${openidHint} / 用户ID:${inviteCode}`
-}
-
-async function searchStationMembers(keyword) {
-  const q = String(keyword || '').trim()
-  if (!q) {
-    staffUserOptions.value = []
-    return
-  }
-  staffUserSearching.value = true
-  try {
-    const res = await searchUsersLite({ keyword: q, limit: 20 })
-    staffUserOptions.value = (res?.list || []).map((item) => buildStaffUserOption(item))
-  } finally {
-    staffUserSearching.value = false
-  }
+const onStaffUserPicked = (id, items) => {
+  staffForm.user_id = id
+  staffForm.user = items?.[0] || null
 }
 
 async function loadStaffList(stationId = staffState.stationId) {
