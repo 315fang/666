@@ -97,12 +97,17 @@
           <el-input v-model="form.name" placeholder="请输入活动名称（如：秋装特惠2人拼团）" />
         </el-form-item>
         <el-form-item label="关联商品" prop="product_id">
-          <el-select v-model="form.product_id" filterable remote :remote-method="searchProducts" placeholder="搜索关键词选择商品参与活动" style="width:100%">
-            <el-option v-for="item in productOptions" :key="item.id" :label="item.name" :value="item.id">
-              <span style="float:left">{{ item.name }}</span>
-              <span style="float:right; color:#8492a6; font-size:13px">¥{{ item.retail_price }}</span>
-            </el-option>
-          </el-select>
+          <div style="display:flex; align-items:center; gap:12px; width:100%;">
+            <div v-if="form.product" style="flex:1; display:flex; align-items:center; gap:10px; padding:6px 10px; border:1px solid #ebeef5; border-radius:6px; background:#fafbfc;">
+              <el-avatar v-if="form.product.cover_image || form.product.images?.[0]" shape="square" :size="36" :src="form.product.cover_image || form.product.images?.[0]" />
+              <div style="flex:1; min-width:0;">
+                <div style="font-size:13px; color:#303133; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ form.product.name }}</div>
+                <div style="font-size:12px; color:#909399;">ID: {{ form.product.id }} · ¥{{ form.product.retail_price }}</div>
+              </div>
+            </div>
+            <div v-else style="flex:1; padding:6px 10px; border:1px dashed #dcdfe6; border-radius:6px; color:#909399; font-size:13px;">尚未选择商品</div>
+            <el-button @click="productPickerVisible = true">{{ form.product ? '更换' : '选择商品' }}</el-button>
+          </div>
           <div style="font-size:12px;color:#909399;margin-top:4px">
             此处选的是<strong>商品（SPU）</strong>和<strong>统一拼团价</strong>。小程序详情里的「规格」仍要选，因为库存、发货按 SKU 计算；未单独限定 SKU 时，<strong>任一有货规格</strong>都可以走该拼团价下单。
           </div>
@@ -126,6 +131,14 @@
         <el-button type="primary" @click="submitForm" :loading="submitting">确 定</el-button>
       </template>
     </el-dialog>
+
+    <EntityPicker
+      v-model:visible="productPickerVisible"
+      v-model="form.product_id"
+      entity="product"
+      :preselected-items="form.product ? [form.product] : []"
+      @confirm="onProductPicked"
+    />
   </div>
 </template>
 
@@ -133,7 +146,8 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import CompactIdCell from '@/components/CompactIdCell.vue'
-import { getGroupBuys, createGroupBuy, updateGroupBuy, deleteGroupBuy, getProducts } from '@/api'
+import EntityPicker from '@/components/entity-picker'
+import { getGroupBuys, createGroupBuy, updateGroupBuy, deleteGroupBuy } from '@/api'
 import { usePagination } from '@/composables/usePagination'
 
 // ====== 列表逻辑 ======
@@ -170,12 +184,13 @@ const handleReset = () => {
 const formVisible = ref(false)
 const formRef = ref()
 const submitting = ref(false)
-const productOptions = ref([])
+const productPickerVisible = ref(false)
 
 const defaultForm = () => ({
   id: null,
   name: '',
   product_id: null,
+  product: null, // 完整商品对象，仅用于 UI 显示 + EntityPicker 回填，提交时不发往后端
   group_price: 0,
   required_members: 2,
   expire_hours: 24,
@@ -190,15 +205,9 @@ const rules = {
   group_price: [{ required: true, message: '必填项', trigger: 'blur' }]
 }
 
-const searchProducts = async (query) => {
-  if (query !== '') {
-    try {
-      const res = await getProducts({ keyword: query, limit: 50, status: 1 })
-      productOptions.value = res?.list || []
-    } catch(e){}
-  } else {
-    productOptions.value = []
-  }
+const onProductPicked = (id, items) => {
+  form.product_id = id
+  form.product = items?.[0] || null
 }
 
 const openForm = (row) => {
@@ -207,19 +216,15 @@ const openForm = (row) => {
       id: row.id,
       name: row.name,
       product_id: row.product_id,
+      product: row.product || null,
       group_price: row.group_price,
       required_members: row.required_members,
       expire_hours: row.expire_hours,
       stock_limit: row.stock_limit,
       status: row.status
     })
-    // 默认展示关联的商品名
-    if (row.product) {
-      productOptions.value = [row.product]
-    }
   } else {
     Object.assign(form, defaultForm())
-    productOptions.value = []
   }
   formVisible.value = true
 }
@@ -230,7 +235,7 @@ const submitForm = async () => {
     if (!valid) return
     submitting.value = true
     try {
-      const data = { ...form }
+      const { product: _product, ...data } = form
       if (data.id) {
         await updateGroupBuy(data.id, data)
         ElMessage.success('更新成功')
