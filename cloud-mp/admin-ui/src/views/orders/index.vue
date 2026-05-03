@@ -260,15 +260,11 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   getOrderDetail,
   shipOrder,
-  getAdminOrderLogistics,
-  refreshAdminLogistics,
   adjustOrderAmount,
   addOrderRemark,
   updateOrderTestFlag,
   updateOrderVisibility,
   repairOrderFulfillment,
-  getMiniProgramConfig,
-  updateMiniProgramConfig,
   forceCompleteOrder,
   forceCancelOrder,
 } from '@/api'
@@ -294,6 +290,7 @@ import {
   canShipRow, canAdjustAmountRow, normalizeOrderDisplay
 } from './utils/orderDisplay'
 import { useOrderList } from './composables/useOrderList'
+import { useOrderLogistics } from './composables/useOrderLogistics'
 import OrderTable from './components/OrderTable.vue'
 const OrderDetailDrawer = defineAsyncComponent(() => import('./components/OrderDetailDrawer.vue'))
 const OrderLogisticsDrawer = defineAsyncComponent(() => import('./components/OrderLogisticsDrawer.vue'))
@@ -330,72 +327,32 @@ const submittingRemark = ref(false)
 const submittingForce = ref(false)
 const submittingTestFlag = ref(false)
 const submittingVisibility = ref(false)
-const logisticsMode = ref('third_party')
-const logisticsTrackingRequired = ref(true)
-const logisticsCompanyRequired = ref(false)
-const miniProgramConfigSnapshot = ref(null)
-const logisticsVisible = ref(false)
-const logisticsLoading = ref(false)
-const logisticsOrder = ref(null)
-const logisticsData = ref(null)
 const canAdjustOrderAmount = computed(() => userStore.hasPermission('order_amount_adjust'))
 const canForceCompleteOrder = computed(() => userStore.hasPermission('order_force_complete'))
 const canForceCancelOrder = computed(() => userStore.hasPermission('order_force_cancel'))
 const canManageSettings = computed(() => userStore.hasPermission('settings_manage'))
 
-const SHIPPING_COMPANY_STORAGE_KEY = 'admin_shipping_company_options'
-const DEFAULT_SHIPPING_COMPANY_OPTIONS = [
-  '顺丰速运',
-  '申通快递',
-  '中通快递',
-  '圆通速递',
-  '韵达速递',
-  '京东快递',
-  '邮政EMS',
-  '极兔速递',
-  '德邦快递',
-  '同城配送'
-]
+// ===== 详情（抽屉数据） — detailLineItems/handleDetail 等处理函数仍在下方 =====
+// 声明提前，因为 useOrderLogistics 的 syncOrderLogistics 需要读写 detailData._logistics
+const detailVisible = ref(false)
+const detailData = ref(null)
 
-function normalizeShippingCompanyName(value) {
-  return String(value || '').trim()
-}
-
-function dedupeStringList(list = []) {
-  return [...new Set(
-    list
-      .map((item) => normalizeShippingCompanyName(item))
-      .filter(Boolean)
-  )]
-}
-
-function mergeShippingCompanyOptions(...groups) {
-  return dedupeStringList(groups.flat())
-}
-
-function readLocalShippingCompanyOptions() {
-  if (typeof window === 'undefined') return []
-  try {
-    const raw = JSON.parse(localStorage.getItem(SHIPPING_COMPANY_STORAGE_KEY) || '[]')
-    return Array.isArray(raw) ? dedupeStringList(raw) : []
-  } catch (_) {
-    return []
-  }
-}
-
-function persistLocalShippingCompanyOptions(list) {
-  if (typeof window === 'undefined') return
-  try {
-    localStorage.setItem(SHIPPING_COMPANY_STORAGE_KEY, JSON.stringify(dedupeStringList(list)))
-  } catch (_) {
-    // ignore local cache write failures
-  }
-}
-
-const shippingCompanyOptions = ref(
-  mergeShippingCompanyOptions(DEFAULT_SHIPPING_COMPANY_OPTIONS, readLocalShippingCompanyOptions())
-)
-
+// ===== 物流（抽屉 + 小程序 logistics_config + 常用快递公司缓存） =====
+const {
+  logisticsMode,
+  logisticsTrackingRequired,
+  logisticsCompanyRequired,
+  logisticsVisible,
+  logisticsLoading,
+  logisticsOrder,
+  logisticsData,
+  shippingCompanyOptions,
+  normalizeShippingCompanyName,
+  fetchMiniProgramConfig,
+  rememberShippingCompanyOption,
+  openLogisticsDrawer,
+  refreshLogisticsDrawer
+} = useOrderLogistics({ canManageSettings, tableData, detailData })
 
 const runOrderMutation = async (loadingRef, task, successMessage, onSuccess) => {
   loadingRef.value = true
@@ -420,69 +377,6 @@ const runOrderMutation = async (loadingRef, task, successMessage, onSuccess) => 
 }
 
 
-const fetchMiniProgramConfig = async () => {
-  if (!canManageSettings.value) {
-    miniProgramConfigSnapshot.value = null
-    logisticsMode.value = 'third_party'
-    logisticsTrackingRequired.value = true
-    logisticsCompanyRequired.value = false
-    shippingCompanyOptions.value = mergeShippingCompanyOptions(
-      DEFAULT_SHIPPING_COMPANY_OPTIONS,
-      [],
-      readLocalShippingCompanyOptions()
-    )
-    return
-  }
-  try {
-    const data = await getMiniProgramConfig({ skipErrorMessage: true })
-    miniProgramConfigSnapshot.value = data || null
-    logisticsMode.value = data?.logistics_config?.shipping_mode || 'third_party'
-    logisticsTrackingRequired.value = data?.logistics_config?.shipping_tracking_no_required !== false
-    logisticsCompanyRequired.value = !!data?.logistics_config?.shipping_company_name_required
-    shippingCompanyOptions.value = mergeShippingCompanyOptions(
-      DEFAULT_SHIPPING_COMPANY_OPTIONS,
-      data?.logistics_config?.shipping_company_options || [],
-      readLocalShippingCompanyOptions()
-    )
-    persistLocalShippingCompanyOptions(shippingCompanyOptions.value)
-  } catch (e) {
-    console.error('获取小程序物流配置失败:', e)
-  }
-}
-
-const rememberShippingCompanyOption = async (value) => {
-  const companyName = normalizeShippingCompanyName(value)
-  if (!companyName) return
-
-  const nextOptions = mergeShippingCompanyOptions(
-    shippingCompanyOptions.value,
-    [companyName]
-  )
-  shippingCompanyOptions.value = nextOptions
-  persistLocalShippingCompanyOptions(nextOptions)
-
-  if (!canManageSettings.value || !miniProgramConfigSnapshot.value) return
-
-  const remoteOptions = dedupeStringList(
-    miniProgramConfigSnapshot.value?.logistics_config?.shipping_company_options || []
-  )
-  if (remoteOptions.includes(companyName)) return
-
-  const nextConfig = JSON.parse(JSON.stringify(miniProgramConfigSnapshot.value))
-  nextConfig.logistics_config = {
-    ...(nextConfig.logistics_config || {}),
-    shipping_company_options: mergeShippingCompanyOptions(remoteOptions, [companyName])
-  }
-
-  try {
-    await updateMiniProgramConfig(nextConfig)
-    miniProgramConfigSnapshot.value = nextConfig
-  } catch (error) {
-    console.error('保存常用快递公司失败:', error)
-    ElMessage.warning('快递公司已在当前浏览器记住，未能同步到共享配置')
-  }
-}
-
 const goUserManage = (row) => {
   const query = buildUserManagementQuery(
     row?.buyer || {},
@@ -501,67 +395,7 @@ const goProductManage = (row) => {
   router.push({ name: 'Products', query: name ? { keyword: name } : {} })
 }
 
-function buildManualLogistics(order = {}) {
-  return {
-    status: 'manual',
-    statusText: '手工发货',
-    traces: order?.shipped_at
-      ? [{ time: fmtDateTime(order.shipped_at), desc: '当前订单走手工发货模式，可查看单号和发货时间' }]
-      : []
-  }
-}
-
-function syncOrderLogistics(orderId, nextData) {
-  const normalizedId = String(orderId || '')
-  if (!normalizedId) return
-  const target = tableData.value.find((row) => String(row.id) === normalizedId || String(row.order_no) === normalizedId)
-  if (target) target._logistics = nextData
-  if (detailData.value && (String(detailData.value.id) === normalizedId || String(detailData.value.order_no) === normalizedId)) {
-    detailData.value._logistics = nextData
-  }
-}
-
-async function loadLogistics(order, forceRefresh = false) {
-  logisticsLoading.value = true
-  try {
-    if (logisticsMode.value === 'manual') {
-      const manual = buildManualLogistics(order)
-      logisticsData.value = manual
-      syncOrderLogistics(order?.id || order?.order_no, manual)
-      return
-    }
-    const res = forceRefresh
-      ? await refreshAdminLogistics(order.id)
-      : await getAdminOrderLogistics(order.id)
-    const data = res?.data || res || null
-    logisticsData.value = data
-    syncOrderLogistics(order?.id || order?.order_no, data)
-  } catch (error) {
-    console.error('加载物流轨迹失败:', error)
-    if (!error?.__handledByRequest) {
-      ElMessage.error(error?.message || '物流查询失败')
-    }
-  } finally {
-    logisticsLoading.value = false
-  }
-}
-
-async function openLogisticsDrawer(order) {
-  logisticsOrder.value = order
-  logisticsData.value = order?._logistics || null
-  logisticsVisible.value = true
-  await loadLogistics(order, false)
-}
-
-async function refreshLogisticsDrawer() {
-  if (!logisticsOrder.value) return
-  await loadLogistics(logisticsOrder.value, true)
-}
-
-
 // ===== 详情 =====
-const detailVisible = ref(false)
-const detailData = ref(null)
 
 const detailLineItems = computed(() => {
   const o = detailData.value
