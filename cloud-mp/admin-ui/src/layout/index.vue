@@ -149,6 +149,9 @@
       </main>
     </div>
 
+    <!-- ===== 全局命令面板（Ctrl/Cmd + K） ===== -->
+    <CommandPalette v-model:visible="commandPaletteVisible" />
+
     <!-- ===== 修改密码对话框 ===== -->
     <el-dialog
       v-model="passwordDialogVisible"
@@ -209,6 +212,7 @@ import {
   buildAdminNavigationTree,
   buildShortcutItems
 } from '@/config/adminNavigation'
+import { CommandPalette } from '@/components/list-toolkit'
 
 const router = useRouter()
 const route = useRoute()
@@ -217,6 +221,7 @@ const userStore = useUserStore()
 const isCollapse = ref(false)
 const mobileMenuOpen = ref(false)
 const passwordDialogVisible = ref(false)
+const commandPaletteVisible = ref(false)
 
 // 路由变化时自动关闭手机端菜单
 watch(route, () => { mobileMenuOpen.value = false })
@@ -225,8 +230,23 @@ watch(route, () => { mobileMenuOpen.value = false })
 const handleResize = () => {
   if (window.innerWidth >= 768) mobileMenuOpen.value = false
 }
-onMounted(() => window.addEventListener('resize', handleResize))
-onUnmounted(() => window.removeEventListener('resize', handleResize))
+
+// 全局快捷键 Ctrl/Cmd+K 打开命令面板
+const handleGlobalKeydown = (e) => {
+  if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+    e.preventDefault()
+    commandPaletteVisible.value = true
+  }
+}
+
+onMounted(() => {
+  window.addEventListener('resize', handleResize)
+  window.addEventListener('keydown', handleGlobalKeydown)
+})
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  window.removeEventListener('keydown', handleGlobalKeydown)
+})
 const passwordFormRef = ref()
 const changingPwd = ref(false)
 
