@@ -154,18 +154,17 @@
     <el-dialog v-model="itemDialogVisible" :title="itemEditing ? '编辑限时商品' : '新增限时商品'" width="720px">
       <el-form label-width="96px">
         <el-form-item label="关联商品">
-          <el-select
-            v-model="itemForm.product_id"
-            filterable
-            remote
-            clearable
-            :remote-method="searchProducts"
-            :loading="productSearchLoading"
-            placeholder="输入商品名称搜索"
-            style="width:100%"
-          >
-            <el-option v-for="item in productOptions" :key="item.id" :label="item.name" :value="item.id" />
-          </el-select>
+          <div style="display:flex; align-items:center; gap:12px; width:100%;">
+            <div v-if="itemForm.product" style="flex:1; display:flex; align-items:center; gap:10px; padding:6px 10px; border:1px solid #ebeef5; border-radius:6px; background:#fafbfc;">
+              <el-image v-if="itemForm.product.cover_image || itemForm.product.image_url || (Array.isArray(itemForm.product.images) ? itemForm.product.images[0] : '')" fit="cover" style="width:36px;height:36px;border-radius:4px;" :src="itemForm.product.cover_image || itemForm.product.image_url || (Array.isArray(itemForm.product.images) ? itemForm.product.images[0] : '')" />
+              <div style="flex:1; min-width:0;">
+                <div style="font-size:13px; color:#303133; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ itemForm.product.name || itemForm.product.product_name || `商品#${itemForm.product_id}` }}</div>
+                <div style="font-size:12px; color:#909399;">ID: {{ itemForm.product_id }}<span v-if="itemForm.product.retail_price"> · ¥{{ itemForm.product.retail_price }}</span></div>
+              </div>
+            </div>
+            <div v-else style="flex:1; padding:6px 10px; border:1px dashed #dcdfe6; border-radius:6px; color:#909399; font-size:13px;">尚未选择商品</div>
+            <el-button @click="productPickerVisible = true">{{ itemForm.product ? '更换' : '选择商品' }}</el-button>
+          </div>
         </el-form-item>
         <el-form-item label="SKU ID">
           <el-input v-model="itemForm.sku_id" placeholder="可选，留空表示商品默认规格" />
@@ -202,6 +201,14 @@
       :max="1"
       @confirm="handleSlotMediaConfirm"
     />
+
+    <EntityPicker
+      v-model:visible="productPickerVisible"
+      v-model="itemForm.product_id"
+      entity="product"
+      :preselected-items="itemForm.product ? [itemForm.product] : []"
+      @confirm="onProductPicked"
+    />
   </div>
 </template>
 
@@ -216,10 +223,10 @@ import {
   getLimitedSaleItems,
   getLimitedSaleSlots,
   updateLimitedSaleItem,
-  updateLimitedSaleSlot,
-  getProducts
+  updateLimitedSaleSlot
 } from '@/api'
 import MediaPicker from '@/components/MediaPicker.vue'
+import EntityPicker from '@/components/entity-picker'
 import { buildPersistentAssetRef } from '@/utils/assetUrlAudit'
 
 const CHINA_TIME_ZONE = 'Asia/Shanghai'
@@ -243,14 +250,13 @@ const itemSaving = ref(false)
 const slotRows = ref([])
 const itemRows = ref([])
 const activeSlotId = ref(null)
-const productSearchLoading = ref(false)
-const productOptions = ref([])
 
 const slotDialogVisible = ref(false)
 const slotEditing = ref(false)
 const itemDialogVisible = ref(false)
 const itemEditing = ref(false)
 const slotMediaPickerVisible = ref(false)
+const productPickerVisible = ref(false)
 
 const slotForm = reactive({
   id: null,
@@ -267,6 +273,7 @@ const slotForm = reactive({
 const itemForm = reactive({
   id: null,
   product_id: '',
+  product: null, // 完整商品对象，仅前端用于 EntityPicker 预览/回填，提交时剥离
   sku_id: '',
   enable_points: true,
   enable_money: true,
@@ -352,6 +359,7 @@ const resetItemForm = () => {
   Object.assign(itemForm, {
     id: null,
     product_id: '',
+    product: null,
     sku_id: '',
     enable_points: true,
     enable_money: true,
@@ -434,6 +442,9 @@ const openItemDialog = (row = null) => {
     Object.assign(itemForm, {
       id: row.id,
       product_id: row.product_id || '',
+      product: row.product
+        ? { ...row.product, id: row.product.id || row.product_id, name: row.product.name || row.product_name }
+        : (row.product_name ? { id: row.product_id, name: row.product_name } : null),
       sku_id: row.sku_id || '',
       enable_points: row.enable_points !== false,
       enable_money: row.enable_money !== false,
@@ -447,6 +458,11 @@ const openItemDialog = (row = null) => {
     itemForm.sort_order = (itemRows.value.at(-1)?.sort_order || 0) + 10
   }
   itemDialogVisible.value = true
+}
+
+const onProductPicked = (id, items) => {
+  itemForm.product_id = id
+  itemForm.product = items?.[0] || null
 }
 
 const clearSlotCover = () => {
@@ -540,22 +556,6 @@ const handleDeleteItem = async (row) => {
   await deleteLimitedSaleItem(row.id)
   ElMessage.success('档期商品已删除')
   await fetchItems()
-}
-
-const searchProducts = async (keyword) => {
-  if (!keyword) {
-    productOptions.value = []
-    return
-  }
-  productSearchLoading.value = true
-  try {
-    const res = await getProducts({ keyword, limit: 20, status: 1 })
-    productOptions.value = Array.isArray(res?.list) ? res.list : (Array.isArray(res) ? res : [])
-  } catch (_) {
-    productOptions.value = []
-  } finally {
-    productSearchLoading.value = false
-  }
 }
 
 onMounted(async () => {
