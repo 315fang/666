@@ -2,38 +2,7 @@
   <div class="home-sections-page">
     <el-tabs v-model="pageTab">
       <el-tab-pane label="弹窗广告" name="popup">
-        <el-card>
-          <template #header>
-            <div class="card-header">
-              <span>首页弹窗配置</span>
-              <el-button type="primary" :loading="popupSaving" @click="savePopupAd">保存配置</el-button>
-            </div>
-          </template>
-          <el-alert
-            title="首页当前真正生效的是这一块弹窗配置。"
-            type="info"
-            :closable="false"
-            show-icon
-            style="margin-bottom: 16px"
-          />
-          <el-form label-width="120px" style="max-width:680px;">
-            <el-form-item label="启用弹窗">
-              <el-switch v-model="popupForm.enabled" active-text="开启" inactive-text="关闭" />
-            </el-form-item>
-            <el-form-item label="弹出频率">
-              <el-select v-model="popupForm.frequency" style="width:220px;">
-                <el-option label="每次进入" value="every_time" />
-                <el-option label="每天一次" value="once_daily" />
-                <el-option label="每次会话一次" value="once_session" />
-              </el-select>
-            </el-form-item>
-            <el-divider content-position="left">内容配置（选商品自动填入图片和跳转，或上传自定义图）</el-divider>
-            <ContentBlockEditor v-model="popupBlockData" :fields="['title']" />
-            <el-form-item label="按钮文字">
-              <el-input v-model="popupForm.button_text" placeholder="如：立即查看、马上抢购" style="width:220px;" />
-            </el-form-item>
-          </el-form>
-        </el-card>
+        <PopupAdSection v-if="pageTab === 'popup'" />
       </el-tab-pane>
 
       <el-tab-pane v-if="canManageSettings" label="品牌背书" name="brand">
@@ -346,11 +315,10 @@ import { useUserStore } from '@/store/user'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ContentBlockEditor from '@/components/ContentBlockEditor.vue'
 import MediaPicker from '@/components/MediaPicker.vue'
+import PopupAdSection from './PopupAdSection.vue'
 import SplashScreenSection from './SplashScreenSection.vue'
 import { buildPersistentAssetRef, warnTemporaryAssetUrls } from '@/utils/assetUrlAudit'
 import {
-  getPopupAdConfig,
-  updatePopupAdConfig,
   getSettings,
   updateSettings,
   getHomeSections,
@@ -432,55 +400,7 @@ const createBrandCertificationEntry = () => ({
 })
 
 // ===== 弹窗广告 =====
-const popupSaving = ref(false)
-const popupForm = reactive({
-  enabled: false,
-  frequency: 'once_daily',
-  image_url: '',
-  file_id: '',
-  link_type: 'none',
-  link_value: '',
-  button_text: '',
-  product_id: null
-})
-
-const loadPopupAd = async () => {
-  try {
-    const data = await getPopupAdConfig()
-    Object.assign(popupForm, data || {})
-  } catch (_) {}
-}
-
-const popupBlockData = computed({
-  get: () => ({
-    image_url: popupForm.image_url,
-    file_id: popupForm.file_id,
-    title: popupForm.button_text,
-    link_type: popupForm.link_type,
-    link_value: popupForm.link_value,
-    product_id: popupForm.product_id
-  }),
-  set: (v) => {
-    popupForm.image_url = v.image_url || ''
-    popupForm.file_id = v.file_id || ''
-    popupForm.button_text = v.title || popupForm.button_text
-    popupForm.link_type = v.link_type || 'none'
-    popupForm.link_value = v.link_value || ''
-    popupForm.product_id = v.product_id || null
-  }
-})
-
-const savePopupAd = async () => {
-  popupSaving.value = true
-  try {
-    await updatePopupAdConfig({ ...popupForm })
-    ElMessage.success('弹窗广告配置已保存')
-  } catch (_) {
-    ElMessage.error('保存失败')
-  } finally {
-    popupSaving.value = false
-  }
-}
+// 2026-05-03 megapage 拆分 §P1-2：popup 弹窗广告 tab 已迁至 ./PopupAdSection.vue。
 
 // ===== 品牌配置 =====
 const brandSaving = ref(false)
@@ -1074,7 +994,6 @@ onMounted(() => {
   if (availableTabs.value.includes(tab)) {
     pageTab.value = tab
   }
-  loadPopupAd()
   if (canManageSettings.value) loadBrandConfig()
 })
 </script>
