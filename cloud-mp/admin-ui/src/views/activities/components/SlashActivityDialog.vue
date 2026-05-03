@@ -2,22 +2,17 @@
   <el-dialog :model-value="visible" :title="isEdit ? '编辑砍价活动' : '新增砍价活动'" width="min(600px, 94vw)" @update:model-value="emit('update:visible', $event)">
     <el-form ref="internalFormRef" :model="form" label-width="120px">
       <el-form-item label="关联商品" prop="product_id" :rules="[{ required: true, message: '请选择商品' }]">
-        <el-select
-          v-model="form.product_id"
-          filterable
-          remote
-          :remote-method="searchProducts"
-          :loading="productSearchLoading"
-          placeholder="搜索商品"
-          style="width:min(300px, 100%);"
-        >
-          <el-option v-for="p in productOptions" :key="p.id" :label="p.name" :value="p.id">
-            <div style="display:flex;align-items:center;gap:8px;">
-              <el-image :src="p.images && p.images[0]" style="width:28px;height:28px;border-radius:3px;" fit="cover" />
-              <span>{{ p.name }}</span>
+        <div style="display:flex; align-items:center; gap:12px; width:100%;">
+          <div v-if="form.product" style="flex:1; display:flex; align-items:center; gap:10px; padding:6px 10px; border:1px solid #ebeef5; border-radius:6px; background:#fafbfc;">
+            <el-image v-if="form.product.cover_image || (Array.isArray(form.product.images) ? form.product.images[0] : '')" fit="cover" style="width:36px;height:36px;border-radius:4px;" :src="form.product.cover_image || (Array.isArray(form.product.images) ? form.product.images[0] : '')" />
+            <div style="flex:1; min-width:0;">
+              <div style="font-size:13px; color:#303133; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ form.product.name }}</div>
+              <div style="font-size:12px; color:#909399;">ID: {{ form.product.id }}<span v-if="form.product.retail_price"> · ¥{{ form.product.retail_price }}</span></div>
             </div>
-          </el-option>
-        </el-select>
+          </div>
+          <div v-else style="flex:1; padding:6px 10px; border:1px dashed #dcdfe6; border-radius:6px; color:#909399; font-size:13px;">尚未选择商品</div>
+          <el-button @click="productPickerVisible = true">{{ form.product ? '更换' : '选择商品' }}</el-button>
+        </div>
       </el-form-item>
       <el-form-item label="活动原价">
         <el-input-number v-model="form.original_price" :precision="2" :min="0" :step="1" placeholder="展示用原价" />
@@ -61,24 +56,36 @@
       <el-button @click="emit('update:visible', false)">取消</el-button>
       <el-button type="primary" :loading="submitting" @click="emit('submit')">确定</el-button>
     </template>
+
+    <EntityPicker
+      v-model:visible="productPickerVisible"
+      v-model="form.product_id"
+      entity="product"
+      :preselected-items="form.product ? [form.product] : []"
+      @confirm="onProductPicked"
+    />
   </el-dialog>
 </template>
 
 <script setup>
 import { ref } from 'vue'
+import EntityPicker from '@/components/entity-picker'
 
-defineProps({
+const props = defineProps({
   visible: { type: Boolean, default: false },
   isEdit: { type: Boolean, default: false },
   form: { type: Object, required: true },
-  productOptions: { type: Array, default: () => [] },
-  productSearchLoading: { type: Boolean, default: false },
-  submitting: { type: Boolean, default: false },
-  searchProducts: { type: Function, required: true }
+  submitting: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['update:visible', 'submit'])
 const internalFormRef = ref()
+const productPickerVisible = ref(false)
+
+const onProductPicked = (id, items) => {
+  props.form.product_id = id
+  props.form.product = items?.[0] || null
+}
 
 defineExpose({
   validate: (...args) => internalFormRef.value?.validate?.(...args)
