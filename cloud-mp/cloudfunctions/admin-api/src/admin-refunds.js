@@ -677,7 +677,25 @@ function registerRefundRoutes(app, deps) {
         }
     });
 
+    /**
+     * @deprecated 2026-05-03 审计 P0-2：退款异步通知 canonical 路径是
+     *   `payment` 云函数 → `payment-callback.js` `handleRefundCallback`。
+     *
+     * 证据（详见 cloud-mp/docs/audit/2026-05-03-comprehensive-code-review.md §3 P0-2）：
+     *   - CLOUDBASE_RELEASE_RUNBOOK.md L99-L106 明确 "WeChat Pay notify URL points to the formal payment HTTP path"
+     *   - PHASE1_SMOKE_CHECKLIST.md 仅围绕 payment 网关 /payment 与 /payment-notify
+     *   - admin-api 这条 wechat-notify 与 payment 共用同一份 PAYMENT_WECHAT_NOTIFY_URL 环境变量；
+     *     线上若按 runbook 把该 URL 配成 payment 网关，本路由将不会被微信命中
+     *
+     * 保留原因：仓库内无法 100% 证明线上 admin-api 的 PAYMENT_WECHAT_NOTIFY_URL
+     *   是否曾被独立配置过。删除前需要从生产日志确认本路由"长期 0 次命中"。
+     *
+     * 监控办法：路由内的 console.warn('[DEPRECATED-NOTIFY-HIT]') 一旦在生产日志出现，
+     *   说明本路由仍在线收流量，**移除前必须迁移**。
+     */
     app.post('/admin/api/refunds/wechat-notify', async (req, res) => {
+        // 主代理监控信号：每次进入都打一行警告，便于 Stage 3 真删之前从日志确认是否仍活
+        console.warn('[DEPRECATED-NOTIFY-HIT] /admin/api/refunds/wechat-notify reached. canonical=payment.handleRefundCallback. audit=2026-05-03 P0-2');
         const verified = await verifyRefundNotifyRequest(req);
         if (!verified.ok) {
             return res.status(verified.status || 401).json({

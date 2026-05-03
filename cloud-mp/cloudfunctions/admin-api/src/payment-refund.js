@@ -8,8 +8,12 @@ const cloud = require('wx-server-sdk');
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 
+// 证书 cloud fileID（2026-05-03 审计 P0-1 改造）：
+// fileID 同时含 envId 与 bucket name，无法仅替换环境 ID 段。
+// 给整个 fileID 一个环境变量逃生口；不设变量则走原硬编码（线上零影响）。
 const CERT_FILE_IDS = {
-    privateKey: 'cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/payment-certs/apiclient_key.pem'
+    privateKey: process.env.PAYMENT_PRIVATE_KEY_FILE_ID
+        || 'cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/payment-certs/apiclient_key.pem'
 };
 
 let cachedPrivateKey = null;
