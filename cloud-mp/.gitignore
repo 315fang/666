@@ -13,3 +13,10 @@ tmp_*.jpeg
 /.tmp-pdf-pages/
 /.tmp-pdf-review/
 /xiufu/
+
+# Stage 1 cleanup (2026-05-03 audit §6.2)
+admin-ui/dist*.zip
+*.tmp.json
+project.private.config.json
+admin-ui-vite.*.log
+

@@ -98,7 +98,17 @@ function renderMarkdown(results) {
 
 function main() {
   const results = {};
+  const skipped = [];
   for (const target of targets) {
+    if (!fs.existsSync(target.root)) {
+      // 旧版 admin-ui/backend 等目录在 cloud-mp 收口后可能已不存在；跳过而非抛错，
+      // 让脚本在新旧两种仓库形态下都能作为 baseline 运行。
+      skipped.push({ name: target.name, root: target.root });
+      results[target.name] = Object.fromEntries(
+        checks.map((check) => [check.key, { count: 0, files: [], skipped: true }])
+      );
+      continue;
+    }
     results[target.name] = collectMatches(target);
   }
   fs.mkdirSync(reportDir, { recursive: true });
@@ -109,7 +119,7 @@ function main() {
     key: check.key,
     total: targets.reduce((sum, target) => sum + results[target.name][check.key].count, 0)
   }));
-  console.log(JSON.stringify({ reportPath, jsonPath, totals }, null, 2));
+  console.log(JSON.stringify({ reportPath, jsonPath, totals, skipped }, null, 2));
 }
 
 main();

@@ -162,7 +162,7 @@ const ADMIN_NAV_OVERRIDES = {
 
   '/products': { group: '商品货架', section: '商品基础', sectionOrder: 1, order: 1 },
   '/categories': { group: '商品货架', section: '商品基础', sectionOrder: 1, order: 2 },
-  '/product-bundles': { group: '商品货架', section: '组合价规则', sectionOrder: 2, order: 1 },
+  '/product-bundles': { group: '商品货架', section: '自由选套餐', sectionOrder: 2, order: 1 },
   '/limited-sales': { group: '商品货架', section: '限时货架', sectionOrder: 3, order: 1 },
 
   '/coupons': { group: '营销活动', section: '优惠与券', sectionOrder: 1, order: 1 },
@@ -184,7 +184,7 @@ const ADMIN_NAV_OVERRIDES = {
   '/settings': { group: '平台运维', section: '运营配置', sectionOrder: 1, order: 1 },
   '/admins': { group: '平台运维', section: '权限治理', sectionOrder: 2, order: 1 },
   '/ops-monitor': { group: '平台运维', section: '运维排障', sectionOrder: 3, order: 1 },
-  '/logs': { group: '平台运维', section: '运维排障', sectionOrder: 3, order: 2, permission: 'super_admin' }
+  '/logs': { group: '平台运维', section: '运维排障', sectionOrder: 3, order: 2 }
 }
 
 function getRootChildren(routes = []) {

@@ -1,0 +1,69 @@
+name: cloud-mp baseline
+
+on:
+  pull_request:
+    paths:
+      - 'cloud-mp/**'
+      - '.github/workflows/cloud-mp-baseline.yml'
+  push:
+    branches: [main, master]
+    paths:
+      - 'cloud-mp/**'
+      - '.github/workflows/cloud-mp-baseline.yml'
+  workflow_dispatch:
+
+# 同一 PR 重复推送时取消旧任务，节省 CI 资源
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cloud-mp-baseline:
+    name: cloud-mp baseline (foundation + shared + legacy + routes + admin-api tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloud-mp
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: |
+            cloud-mp/package-lock.json
+            cloud-mp/cloudfunctions/admin-api/package-lock.json
+
+      - name: Install cloud-mp deps
+        run: npm ci
+
+      - name: Install admin-api function deps (for node --test)
+        working-directory: cloud-mp/cloudfunctions/admin-api
+        run: npm ci || npm install --no-audit --no-fund
+
+      - name: check:baseline
+        run: npm run check:baseline
+
+  admin-ui-build:
+    name: admin-ui build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cloud-mp/admin-ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: cloud-mp/admin-ui/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        run: npm run build
