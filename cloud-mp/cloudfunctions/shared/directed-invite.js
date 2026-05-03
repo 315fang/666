@@ -6,6 +6,16 @@ const DIRECTED_INVITE_TARGET_ROLE_LEVEL = 3;
 const DIRECTED_INVITE_MIN_TRANSFER_AMOUNT = 3000;
 const DIRECTED_INVITE_MAX_PENDING_PER_INVITER = 20;
 const DIRECTED_INVITE_DEFAULT_EXPIRE_DAYS = 7;
+const DIRECTED_INVITE_REROUTE_REQUIRED_REVIEW_NOTE = '当前账号为已绑定团队的 VIP0，满足严格改线条件；审核通过后覆盖 parent/referrer，不回算历史订单、佣金与资金数据。';
+const DEFAULT_DIRECTED_INVITE_RULES = {
+    enabled: true,
+    initiator_min_role_level: 4,
+    target_role_level: DIRECTED_INVITE_TARGET_ROLE_LEVEL,
+    min_transfer_amount: DIRECTED_INVITE_MIN_TRANSFER_AMOUNT,
+    max_pending_per_inviter: DIRECTED_INVITE_MAX_PENDING_PER_INVITER,
+    expire_days: DIRECTED_INVITE_DEFAULT_EXPIRE_DAYS,
+    reroute_required_review_note: DIRECTED_INVITE_REROUTE_REQUIRED_REVIEW_NOTE
+};
 
 const DIRECTED_INVITE_STATUS = {
     SENT: 'sent',
@@ -59,12 +69,31 @@ function normalizeRoleLevel(user = {}) {
     return toNumber(user.role_level ?? user.distributor_level ?? user.level ?? user.agent_level, 0);
 }
 
-function isDirectedInviteInitiator(user = {}) {
-    return normalizeRoleLevel(user) >= 4;
+function normalizeDirectedInviteRules(raw = {}) {
+    const source = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    return {
+        enabled: source.enabled !== false,
+        initiator_min_role_level: Math.max(0, Math.floor(toNumber(source.initiator_min_role_level, DEFAULT_DIRECTED_INVITE_RULES.initiator_min_role_level))),
+        target_role_level: Math.max(0, Math.floor(toNumber(source.target_role_level, DEFAULT_DIRECTED_INVITE_RULES.target_role_level))),
+        min_transfer_amount: roundMoney(Math.max(0, toNumber(source.min_transfer_amount, DEFAULT_DIRECTED_INVITE_RULES.min_transfer_amount))),
+        max_pending_per_inviter: Math.max(1, Math.floor(toNumber(source.max_pending_per_inviter, DEFAULT_DIRECTED_INVITE_RULES.max_pending_per_inviter))),
+        expire_days: Math.max(1, Math.floor(toNumber(source.expire_days, DEFAULT_DIRECTED_INVITE_RULES.expire_days))),
+        reroute_required_review_note: pickString(source.reroute_required_review_note, DEFAULT_DIRECTED_INVITE_RULES.reroute_required_review_note)
+    };
 }
 
-function isB1OrAbove(user = {}) {
-    return normalizeRoleLevel(user) >= DIRECTED_INVITE_TARGET_ROLE_LEVEL;
+function isDirectedInviteInitiator(user = {}, rules = DEFAULT_DIRECTED_INVITE_RULES) {
+    const normalizedRules = normalizeDirectedInviteRules(rules);
+    return normalizeRoleLevel(user) >= normalizedRules.initiator_min_role_level;
+}
+
+function isB1OrAbove(user = {}, rules = DEFAULT_DIRECTED_INVITE_RULES) {
+    const normalizedRules = normalizeDirectedInviteRules(rules);
+    return normalizeRoleLevel(user) >= normalizedRules.target_role_level;
+}
+
+function isVip0(user = {}) {
+    return normalizeRoleLevel(user) === 0;
 }
 
 function hasBoundParent(user = {}) {
@@ -77,9 +106,9 @@ function hasBoundParent(user = {}) {
     );
 }
 
-function isDirectedInviteTargetEligible(user = {}) {
+function isDirectedInviteTargetEligible(user = {}, rules = DEFAULT_DIRECTED_INVITE_RULES) {
     if (!user || typeof user !== 'object') return false;
-    if (isB1OrAbove(user)) return false;
+    if (isB1OrAbove(user, rules)) return false;
     if (hasBoundParent(user)) return false;
     return true;
 }
@@ -142,13 +171,14 @@ function normalizeTransferAmount(amount) {
     return roundMoney(Math.max(0, toNumber(amount, 0)));
 }
 
-function ensureDirectedInviteTransferAmount(amount) {
+function ensureDirectedInviteTransferAmount(amount, rules = DEFAULT_DIRECTED_INVITE_RULES) {
+    const normalizedRules = normalizeDirectedInviteRules(rules);
     const normalized = normalizeTransferAmount(amount);
-    if (normalized < DIRECTED_INVITE_MIN_TRANSFER_AMOUNT) {
+    if (normalized < normalizedRules.min_transfer_amount) {
         return {
             ok: false,
             amount: normalized,
-            message: `定向邀约货款不得低于 ${DIRECTED_INVITE_MIN_TRANSFER_AMOUNT} 元`
+            message: `定向邀约货款不得低于 ${normalizedRules.min_transfer_amount} 元`
         };
     }
     return {
@@ -183,10 +213,12 @@ module.exports = {
     DIRECTED_INVITE_MIN_TRANSFER_AMOUNT,
     DIRECTED_INVITE_MAX_PENDING_PER_INVITER,
     DIRECTED_INVITE_LOCK_STATUS,
+    DIRECTED_INVITE_REROUTE_REQUIRED_REVIEW_NOTE,
     DIRECTED_INVITE_REVIEW_STATUS,
     DIRECTED_INVITE_FREEZE_STATUS,
     DIRECTED_INVITE_STATUS,
     DIRECTED_INVITE_TARGET_ROLE_LEVEL,
+    DEFAULT_DIRECTED_INVITE_RULES,
     addDaysIso,
     buildDirectedInvitePath,
     buildDirectedInviteTypeText,
@@ -201,10 +233,12 @@ module.exports = {
     isDirectedInviteInitiator,
     isDirectedInvitePendingStatus,
     isDirectedInviteTargetEligible,
+    isVip0,
     normalizeDirectedInviteReviewStatus,
     normalizeDirectedInviteFreezeStatus,
     normalizeDirectedInviteLockStatus,
     normalizeDirectedInviteStatus,
+    normalizeDirectedInviteRules,
     normalizeRoleLevel,
     normalizeTransferAmount,
     pickString,

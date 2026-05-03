@@ -5,6 +5,35 @@
  * 所有云函数使用统一的错误格式
  */
 
+const TRANSIENT_DB_PATTERNS = [
+    'DATABASE_REQUEST_FAILED',
+    'collection.get:fail',
+    'i/o timeout',
+    'handshake failure',
+    'Invoking task timed out after',
+    'database request fail'
+];
+const TRANSIENT_DB_USER_MESSAGE = '数据服务暂时不可用，请稍后重试';
+
+function delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getRawErrorMessage(error) {
+    if (!error) return '';
+    if (typeof error === 'string') return error;
+    if (typeof error.message === 'string' && error.message) return error.message;
+    if (typeof error.errMsg === 'string' && error.errMsg) return error.errMsg;
+    if (typeof error.errorMessage === 'string' && error.errorMessage) return error.errorMessage;
+    return '';
+}
+
+function isTransientDbError(error) {
+    const message = getRawErrorMessage(error);
+    if (!message) return false;
+    return TRANSIENT_DB_PATTERNS.some((pattern) => message.includes(pattern));
+}
+
 /**
  * CloudBase 标准错误类
  */
@@ -45,6 +74,41 @@ class CloudBaseError extends Error {
     }
 }
 
+function logTransientDbError(error, meta = {}) {
+    console.error('[TransientDbError]', {
+        action: meta.action || '',
+        openid: meta.openid || '',
+        requestId: meta.requestId || '',
+        attempt: meta.attempt || 1,
+        errorType: 'transient_db',
+        rawMessage: getRawErrorMessage(error)
+    });
+}
+
+function toTransientDbError(error, meta = {}) {
+    logTransientDbError(error, meta);
+    return new CloudBaseError(500, TRANSIENT_DB_USER_MESSAGE, {
+        errorType: 'transient_db',
+        rawMessage: getRawErrorMessage(error)
+    });
+}
+
+async function withTransientDbReadRetry(handler, meta = {}) {
+    try {
+        return await handler();
+    } catch (error) {
+        if (!isTransientDbError(error)) throw error;
+        logTransientDbError(error, { ...meta, attempt: 1 });
+        await delay(300);
+        try {
+            return await handler();
+        } catch (retryError) {
+            if (!isTransientDbError(retryError)) throw retryError;
+            throw toTransientDbError(retryError, { ...meta, attempt: 2 });
+        }
+    }
+}
+
 /**
  * 常见错误实例
  */
@@ -74,7 +138,7 @@ const ERRORS = {
 /**
  * 错误处理中间件（用于云函数包装）
  */
-function handleError(error) {
+function handleError(error, meta = {}) {
     // 已经是 CloudBaseError
     if (error instanceof CloudBaseError) {
         return error.toResponse();
@@ -83,6 +147,10 @@ function handleError(error) {
     // 已经是标准响应对象（例如 throw badRequest(...)）
     if (error && typeof error === 'object' && 'code' in error && 'success' in error && 'message' in error) {
         return error;
+    }
+
+    if (isTransientDbError(error)) {
+        return toTransientDbError(error, meta).toResponse();
     }
 
     // 标准 Error 对象
@@ -111,7 +179,10 @@ function wrapCloudFunction(handler) {
             }
             return { code: 0, success: true, data: result };
         } catch (error) {
-            return handleError(error);
+            return handleError(error, {
+                action: event && event.action,
+                requestId: event && (event.requestId || event.request_id)
+            });
         }
     };
 }
@@ -133,8 +204,11 @@ module.exports = {
     CloudBaseError,
     ERRORS,
     ERROR_CODES,
+    TRANSIENT_DB_USER_MESSAGE,
     handleError,
     errorHandler: handleError,  // 别名
+    isTransientDbError,
+    withTransientDbReadRetry,
     wrapCloudFunction,
     cloudFunctionWrapper: wrapCloudFunction  // 别名：兼容所有云函数的导入名
 };

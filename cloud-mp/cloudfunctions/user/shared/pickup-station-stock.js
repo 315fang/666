@@ -71,6 +71,10 @@ function buildStationStockDocId(stationId, productId, skuId = '') {
     return `station_stock_${stationToken}_${scopeToken}`;
 }
 
+function buildStationStockKey(stationId, productId, skuId = '') {
+    return `${pickString(stationId)}::${pickString(skuId) || `product:${pickString(productId)}`}`;
+}
+
 function normalizeStationStockRow(row = {}) {
     return {
         ...row,
@@ -222,6 +226,7 @@ module.exports = {
     roundMoney,
     rowMatchesLookup,
     buildStationStockDocId,
+    buildStationStockKey,
     normalizeStationStockRow,
     findStationStockRow,
     normalizePickupSelectionItem,

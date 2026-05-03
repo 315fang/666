@@ -1,5 +1,8 @@
 'use strict';
 
+/**
+ * 与 cloudfunctions/shared/asset-url.js 保持一致（本云函数独立部署目录内须自带副本）
+ */
 const cloud = require('wx-server-sdk');
 
 try {

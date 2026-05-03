@@ -18,18 +18,17 @@ const ROOT = path.resolve(__dirname, '..');
 const CF_DIR = path.join(ROOT, 'cloudfunctions');
 const SHARED_DIR = path.join(CF_DIR, 'shared');
 
-const DEFAULT_MANAGED_SHARED_FILES = [
-    'agent-config.js',
-    'goods-fund-transfer.js',
-    'growth.js',
-    'response.js',
-    'utils.js',
-    'validators.js'
-];
-
+// 2026-05-03 治理后：默认管理 cloudfunctions/shared/ 下**全部** .js 文件。
+//
+// 历史上这里维护过一份 6 个文件的保守白名单（DEFAULT_MANAGED_SHARED_FILES），
+// 结果造成 4 个白名单外文件（errors / asset-url / directed-invite / pickup-station-stock）
+// 在多个云函数 mirror 中累计漂移 9 处、共数百行业务逻辑无机制保护。详见
+// cloud-mp/docs/audit/2026-05-03-comprehensive-code-review.md §3 P1-3。
+//
+// 收口后规则：所有 cloudfunctions/shared/*.js 都视为统一治理对象；
+// 加新 shared 模块无需再改本脚本，自动纳入管理。--all 旗标保留向后兼容（已为 noop）。
 const args = process.argv.slice(2);
 const checkOnly = args.includes('--check');
-const syncAll = args.includes('--all');
 const filesArg = args.find((arg) => arg.startsWith('--files='));
 
 function listSharedFiles() {
@@ -40,10 +39,7 @@ function listSharedFiles() {
             .map((item) => item.trim())
             .filter(Boolean);
     }
-    if (syncAll) {
-        return fs.readdirSync(SHARED_DIR).filter((f) => f.endsWith('.js'));
-    }
-    return DEFAULT_MANAGED_SHARED_FILES;
+    return fs.readdirSync(SHARED_DIR).filter((f) => f.endsWith('.js'));
 }
 
 // 需要同步的 shared 文件
@@ -68,9 +64,15 @@ for (const cfName of CF_SUBDIRS) {
     const sharedDest = path.join(cfPath, 'shared');
     let functionChecked = 0;
 
-    // 1. 创建 shared 目录（如果不存在）
-    if (!fs.existsSync(sharedDest) && !checkOnly) {
-        fs.mkdirSync(sharedDest, { recursive: true });
+    // 1. 仅对**已存在 shared 目录**的云函数做同步。
+    //    不再自动 mkdir：是否需要 shared 镜像应由开发者 `mkdir cloudfunctions/<name>/shared`
+    //    显式声明，作为「该云函数从此开始用 shared 镜像」的信号。
+    //    （2026-05-03 修：之前的 mkdir 行为意外为 commission-deadline-process /
+    //    order-auto-confirm / visitor-account-cleanup 这类无 require 的定时器云函数
+    //    凭空创建了一堆 mirror 文件，造成仓库膨胀。）
+    if (!fs.existsSync(sharedDest)) {
+        if (!checkOnly) console.log(`[skip] ${cfName}/shared/ ← no shared dir, skipped`);
+        continue;
     }
 
     // 2. 复制 shared 文件
@@ -132,7 +134,11 @@ function getAllJsFiles(dir) {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
         // 跳过 shared 目录本身（已复制，不需要再 patch）
-        if (entry.name === 'shared') continue;
+        // 跳过 test/：测试位于云函数子目录内，`require('../shared/...')` 是**正确**路径，
+        //   不能被改成 `./shared/...`（否则会指向不存在的 test/shared/）。
+        //   2026-05-03 治理时实际遇到这个 bug，三个 test 文件被错误 patch。
+        // 跳过 node_modules：第三方代码不属于我们维护范畴。
+        if (entry.name === 'shared' || entry.name === 'test' || entry.name === 'node_modules') continue;
         const fullPath = path.join(dir, entry.name);
         if (entry.isDirectory()) {
             results.push(...getAllJsFiles(fullPath));
