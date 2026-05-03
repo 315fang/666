@@ -75,36 +75,27 @@
       </div>
     </el-card>
 
-    <el-dialog v-model="addDialogVisible" title="添加关联商品" width="560px">
+    <el-dialog v-model="addDialogVisible" title="添加关联商品" width="600px">
       <el-form label-width="90px">
-        <el-form-item label="搜索商品">
-          <el-select
-            v-model="selectedProducts"
-            multiple
-            filterable
-            remote
-            reserve-keyword
-            :remote-method="searchProducts"
-            :loading="searchLoading"
-            style="width:100%;"
-            placeholder="输入商品名称搜索后可多选"
-          >
-            <el-option
-              v-for="item in productOptions"
-              :key="item.id"
-              :label="item.name"
-              :value="item.id"
-            >
-              <div class="option-row">
-                <el-image
-                  :src="(Array.isArray(item.images) ? item.images[0] : '')"
-                  style="width:24px;height:24px;border-radius:4px;"
-                  fit="cover"
-                />
-                <span>{{ item.name }}</span>
-              </div>
-            </el-option>
-          </el-select>
+        <el-form-item label="挑选商品">
+          <div style="width:100%;">
+            <div style="display:flex; align-items:center; gap:10px;">
+              <el-button @click="productPickerVisible = true">点击挑选商品</el-button>
+              <span style="color:#606266; font-size:13px;">已挑选 <b>{{ selectedProductItems.length }}</b> 件</span>
+              <el-button v-if="selectedProductItems.length" text type="danger" size="small" @click="clearPickedProducts">清空</el-button>
+            </div>
+            <div v-if="selectedProductItems.length" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px; max-height:140px; overflow-y:auto;">
+              <el-tag
+                v-for="item in selectedProductItems"
+                :key="item.id"
+                closable
+                @close="removeSelectedProduct(item.id)"
+              >{{ item.name || `商品#${item.id}` }}</el-tag>
+            </div>
+            <div style="font-size:12px; color:#909399; margin-top:6px;">
+              EntityPicker 仅支持按商品列表 ID 挑选，已挑选项跨页保留勾选；不再保留按 SKU/编码兜底输入框。
+            </div>
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -112,6 +103,16 @@
         <el-button type="primary" :loading="submitting" @click="confirmAdd">添加</el-button>
       </template>
     </el-dialog>
+
+    <EntityPicker
+      v-model:visible="productPickerVisible"
+      v-model="selectedProducts"
+      entity="product"
+      :multiple="true"
+      :preselected-items="selectedProductItems"
+      dialog-width="1000px"
+      @confirm="onProductsPicked"
+    />
 
     <el-dialog v-model="boardDialogVisible" title="新增商品分组" width="420px">
       <el-form label-width="90px">
@@ -149,14 +150,13 @@ import {
   addBoardProducts,
   updateBoardProduct,
   deleteBoardProduct,
-  sortBoardProducts,
-  getProducts
+  sortBoardProducts
 } from '@/api/index'
+import EntityPicker from '@/components/entity-picker'
 
 const featuredLoading = ref(false)
 const savingSort = ref(false)
 const addDialogVisible = ref(false)
-const searchLoading = ref(false)
 const submitting = ref(false)
 const boardId = ref(null)
 const productBoards = ref([])
@@ -171,8 +171,9 @@ const boardDraft = reactive({
   sort_order: 0
 })
 const featuredRows = ref([])
-const productOptions = ref([])
-const selectedProducts = ref([])
+const selectedProducts = ref([])      // EntityPicker 选出的商品 id 数组
+const selectedProductItems = ref([])  // EntityPicker 选出的完整商品对象（仅前端用于 chip 显示 / 跨页回填）
+const productPickerVisible = ref(false)
 let dragFrom = -1
 
 const productBoardLookup = computed(() => {
@@ -331,21 +332,23 @@ const openAddDialog = () => {
     return
   }
   selectedProducts.value = []
-  productOptions.value = []
+  selectedProductItems.value = []
   addDialogVisible.value = true
 }
 
-const searchProducts = async (keyword) => {
-  if (!keyword) return
-  searchLoading.value = true
-  try {
-    const res = await getProducts({ keyword, limit: 20, status: 1 })
-    productOptions.value = res?.list || (Array.isArray(res) ? res : [])
-  } catch (_) {
-    productOptions.value = []
-  } finally {
-    searchLoading.value = false
-  }
+const onProductsPicked = (ids, items) => {
+  selectedProducts.value = ids
+  selectedProductItems.value = items || []
+}
+
+const removeSelectedProduct = (id) => {
+  selectedProducts.value = selectedProducts.value.filter((x) => x !== id)
+  selectedProductItems.value = selectedProductItems.value.filter((x) => x.id !== id)
+}
+
+const clearPickedProducts = () => {
+  selectedProducts.value = []
+  selectedProductItems.value = []
 }
 
 const confirmAdd = async () => {
