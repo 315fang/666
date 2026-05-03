@@ -1,3 +1,23 @@
+/**
+ * @deprecated 2026-05-03 审计 P1（Stage 3.10）：本 provider 在 cloud-mp 仓库**实际是死路径**。
+ *
+ * 决策证据：
+ *   1. config.js line 23/47：`enforceCloudbaseRuntime = isFunctionRuntime || ADMIN_FORCE_CLOUDBASE`，
+ *      `dataSource = enforceCloudbaseRuntime ? 'cloudbase' : defaultDataSource`。
+ *      → 任何运行在云函数里的 admin-api（线上 100%），dataSource 都被强制为 'cloudbase'，
+ *        永不进入本 provider。
+ *   2. `loadBackendModels()` 期望 `cloudfunctions/models` 目录，但 cloud-mp 收口后已剥离旧
+ *      Sequelize 模型层；本地手动设 ADMIN_DATA_SOURCE=mysql 也会立刻 throw MYSQL_MODELS_MISSING，
+ *      然后 store/index.js 兜底到 buildUnsupportedStore('mysql')。
+ *   3. 测试集（76 个 admin-api test）无任何 ADMIN_DATA_SOURCE 引用，不依赖 mysql 路径。
+ *
+ * 保留原因：
+ *   - store/index.js 仍硬 `require('./providers/mysql')`，删 require 是结构改动，归 Stage 4 物理移除。
+ *   - 给监控信号留观察期：store/index.js 的 mysql 分支若被命中会打 [DEPRECATED-MYSQL-PROVIDER-HIT]，
+ *     生产日志连续 ≥1 个发布周期 0 命中后即可物理删本文件。
+ *
+ * 详见：cloud-mp/docs/audit/2026-05-03-comprehensive-code-review.md §Stage 3.10
+ */
 const path = require('path');
 const fs = require('fs');
 const { createFilesystemStore } = require('./filesystem');

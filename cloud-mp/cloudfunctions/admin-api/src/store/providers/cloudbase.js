@@ -30,6 +30,10 @@ function createCloudBaseStore(options) {
         isFunctionRuntime = false
     } = options;
 
+    // 2026-05-03 审计（Stage 3.10）：fallbackStore 仅在下方 line ~132 的 "envId 缺失应急 store"
+    // 路径中被使用（getSingleton/saveSingleton 各 1 处）。生产 admin-api 部署在云函数里，
+    // ADMIN_CLOUDBASE_ENV_ID 必由 wx-server-sdk 注入，envId 永远存在 → 此 fallback 是冷应急。
+    // 详见 providers/filesystem.js 文件头说明。
     const fallbackStore = createFilesystemStore({
         dataRoot,
         normalizedDataRoot,
@@ -361,9 +365,9 @@ function createCloudBaseStore(options) {
             let flushedRows = 0;
             while (dirty.has(key)) {
                 dirty.delete(key);
-                const rows = cache.get(key) || [];
+                const rows = cloneRows(cache.get(key) || []);
                 flushedRows = rows.length;
-                const snapshot = collectionSnapshots.get(key) || [];
+                const snapshot = cloneRows(collectionSnapshots.get(key) || []);
                 try {
                     await syncCollectionDiff(key, snapshot, rows);
                     collectionSnapshots.set(key, cloneRows(rows));
@@ -519,7 +523,7 @@ function createCloudBaseStore(options) {
         },
         saveCollection(name, rows) {
             const key = normalizeSourceName(name);
-            cache.set(key, Array.isArray(rows) ? rows : []);
+            cache.set(key, cloneRows(rows));
             setCollectionState(key, {
                 status: 'loaded',
                 loaded_at: nowIso(),

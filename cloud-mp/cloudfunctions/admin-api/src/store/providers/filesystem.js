@@ -1,3 +1,19 @@
+/**
+ * 2026-05-03 审计（Stage 3.10）：filesystem provider 在生产**非主路径**。
+ *
+ * 实际定位：
+ *   - 当 dataSource='filesystem' 时是独立 store——但生产被 enforceCloudbaseRuntime 拦截，永不命中。
+ *   - cloudbase.js 在 envId 缺失时构造的"应急 store"用本 provider 提供 singleton 读写
+ *     （参见 cloudbase.js line 132-174）；生产 admin-api 在云函数中运行，envId 必存在，应急路径冷。
+ *   - mysql.js 内部用本 provider 做 cache/fallback；mysql 路径本身已 deprecated。
+ *
+ * 不能删的原因：
+ *   - cloudbase.js 与 mysql.js 顶层均 require 本文件，删了会破 module 解析。
+ *   - 应急 fallbackStore 在配置异常时仍是有用的安全网（避免直接崩在请求路径上）。
+ *
+ * 策略：保留代码不动，仅以本注释明确角色。Stage 4 物理清理 mysql 路径后再评估是否
+ * 收敛进 cloudbase 内部 helper。详见 cloud-mp/docs/audit/2026-05-03-comprehensive-code-review.md。
+ */
 const path = require('path');
 const fs = require('fs');
 

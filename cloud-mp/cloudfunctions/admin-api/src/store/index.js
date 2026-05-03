@@ -154,6 +154,11 @@ function createDataStore() {
     });
 
     if (dataSource === 'mysql') {
+        // 2026-05-03 审计 P1（Stage 3.10）：mysql 路径在云函数运行时被 enforceCloudbaseRuntime
+        // 强制改写为 cloudbase（详见 config.js line 47）；只有本地 ADMIN_DATA_SOURCE=mysql + 非云函数
+        // 环境才可能命中。每次命中都打警告：如果生产日志真出现这一行，就要排查为什么 admin-api
+        // 在生产被以非云函数模式启动了。详见 providers/mysql.js 文件头 deprecation 说明。
+        console.warn('[DEPRECATED-MYSQL-PROVIDER-HIT] admin-api dataSource=mysql selected. enforceCloudbaseRuntime=false. expected cloudbase in production. audit=2026-05-03 Stage3.10');
         try {
             return withCommonStoreHelpers(createMysqlStore({
                 mysql,
