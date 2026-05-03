@@ -223,6 +223,7 @@ const slashIsEdit = ref(false)
 const slashFormRef = ref()
 const slashForm = reactive({
   id: null, product_id: null, sku_id: null,
+  product: null, // 完整商品对象，仅用于 SlashActivityDialog 内 EntityPicker 预览/回填，提交时剥离
   original_price: 0, floor_price: 0, initial_price: 0,
   min_slash_per_helper: 0.10, max_slash_per_helper: 5.00,
   max_helpers: 20, expire_hours: 48, stock_limit: 100,
@@ -251,6 +252,7 @@ const openSlashDialog = (row = null) => {
   if (row) {
     Object.assign(slashForm, {
       id: row.id, product_id: row.product_id, sku_id: row.sku_id,
+      product: row.product || null,
       original_price: parseFloat(row.original_price),
       floor_price: parseFloat(row.floor_price),
       initial_price: parseFloat(row.initial_price),
@@ -263,6 +265,7 @@ const openSlashDialog = (row = null) => {
   } else {
     Object.assign(slashForm, {
       id: null, product_id: null, sku_id: null,
+      product: null,
       original_price: 0, floor_price: 0, initial_price: 0,
       min_slash_per_helper: 0.10, max_slash_per_helper: 5.00,
       max_helpers: 20, expire_hours: 48, stock_limit: 100,
@@ -287,11 +290,12 @@ const submitSlash = async () => {
     if (!valid) return
     submitting.value = true
     try {
+      const { product: _product, ...payload } = slashForm
       if (slashIsEdit.value) {
-        await updateSlashActivity(slashForm.id, slashForm)
+        await updateSlashActivity(slashForm.id, payload)
         ElMessage.success('更新成功')
       } else {
-        await createSlashActivity(slashForm)
+        await createSlashActivity(payload)
         ElMessage.success('创建成功')
       }
       slashDialogVisible.value = false
