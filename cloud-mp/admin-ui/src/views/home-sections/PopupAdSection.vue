@@ -98,3 +98,12 @@ onMounted(() => {
   loadPopupAd()
 })
 </script>
+
+<style scoped>
+/* 子组件需要重复 .card-header：parent 的 scoped .card-header 无法穿透到子组件 DOM。 */
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+</style>
