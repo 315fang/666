@@ -283,7 +283,7 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CompactIdCell from '@/components/CompactIdCell.vue'
 import ContentBlockEditor from '@/components/ContentBlockEditor.vue'
-import { getBanners, createBanner, updateBanner, deleteBanner, uploadFile, getProducts, deleteContent, getContents, createContent, updateContent } from '@/api'
+import { getBanners, createBanner, updateBanner, deleteBanner, uploadFile, deleteContent, getContents, createContent, updateContent } from '@/api'
 import { formatDate } from '@/utils/format'
 import { buildPersistentAssetRef, warnTemporaryAssetUrls } from '@/utils/assetUrlAudit'
 import { findMiniProgramTarget } from '@/config/miniProgramTargets'
@@ -324,19 +324,6 @@ const bannerRules = {}
 
 const resolveAssetUrl = (item = {}) => item.image_url || item.url || item.image || item.cover_image || item.file_id || ''
 
-// 商品搜索
-const productSearchLoading = ref(false)
-const productOptions = ref([])
-const selectedProduct = ref(null)
-
-const autoPreviewUrl = computed(() => {
-  if (bannerForm.link_type === 'product' && selectedProduct.value) {
-    const imgs = selectedProduct.value.images
-    return Array.isArray(imgs) ? imgs[0] : null
-  }
-  return null
-})
-
 const linkTypeLabel = (t) => bannerLinkTypeMap[t]?.label || t
 const linkTypeTagType = (t) => bannerLinkTypeMap[t]?.tagType || 'info'
 const positionLabel = (p) => bannerPositionMap[p] || p
@@ -344,32 +331,6 @@ const displayLinkTarget = (row = {}) => {
   const target = findMiniProgramTarget(row.link_type, row.link_value)
   if (target) return `${target.title}${target.note ? ` · ${target.note}` : ''}`
   return row.link_value || ''
-}
-
-const searchProducts = async (query) => {
-  if (!query) return
-  productSearchLoading.value = true
-  try {
-    const res = await getProducts({ keyword: query, limit: 20, status: 1 })
-    productOptions.value = res?.list || (Array.isArray(res) ? res : [])
-  } catch (e) {
-    console.error('搜索商品失败:', e)
-  } finally {
-    productSearchLoading.value = false
-  }
-}
-
-const handleProductSelect = (id) => {
-  selectedProduct.value = productOptions.value.find(p => p.id === id) || null
-  if (selectedProduct.value) {
-    bannerForm.link_value = String(id)
-  }
-}
-
-const handleLinkTypeChange = () => {
-  bannerForm.link_value = ''
-  bannerForm.product_id = null
-  selectedProduct.value = null
 }
 
 const bannerBlockData = computed({
@@ -437,8 +398,6 @@ const handleTabChange = (name) => {
 
 const handleAddBanner = () => {
   bannerIsEdit.value = false
-  selectedProduct.value = null
-  productOptions.value = []
   Object.assign(bannerForm, {
     id: null, title: '', subtitle: '', kicker: '',
     file_id: '', image_url: '', link_type: 'none', link_value: '',
@@ -450,8 +409,6 @@ const handleAddBanner = () => {
 
 const handleEditBanner = (row) => {
   bannerIsEdit.value = true
-  selectedProduct.value = null
-  productOptions.value = []
   const position = row.position || 'home'
   const imageOnly = isHomeBannerPosition(position)
   Object.assign(bannerForm, {
@@ -470,11 +427,6 @@ const handleEditBanner = (row) => {
     start_time: row.start_time || null,
     end_time: row.end_time || null
   })
-  // 恢复商品信息
-  if (row.product_id && row.product) {
-    selectedProduct.value = row.product
-    productOptions.value = [row.product]
-  }
   bannerDialogVisible.value = true
 }
 
