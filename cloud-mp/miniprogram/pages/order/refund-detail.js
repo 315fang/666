@@ -27,10 +27,15 @@ Page({
             exchange: '换货'
         },
         reasonText: {
-            quality: '商品质量问题',
-            wrong_item: '商品与描述不符',
-            not_needed: '不想要了/买多了',
+            quality: '质量问题',
+            wrong_item: '货物与描述不符',
+            not_needed: '不想要了/买重复了',
             damaged: '商品破损/缺件',
+            merchant_agreed: '与商家协商一致退货',
+            reorder_checkout: '要合并结账重新拍',
+            wrong_address_delivery: '地址/提货方式选错了',
+            merchant_wrong_item: '商家发错货了',
+            not_as_described: '货物与描述不符',
             other: '其他原因'
         }
     },

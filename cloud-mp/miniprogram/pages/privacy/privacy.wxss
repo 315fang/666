@@ -47,6 +47,9 @@
 .content {
   flex: 1;
   background: #F5F2EE;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 /* 日期 */

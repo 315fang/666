@@ -25,6 +25,9 @@ export const rejectWithdrawal = (id, data) => {
   }).then(normalizeStrongMutationPayload)
 }
 
+export const batchApproveWithdrawals = (data) => request({ url: '/withdrawals/batch-approve', method: 'post', data }).then(normalizeStrongMutationPayload)
+export const batchRejectWithdrawals = (data) => request({ url: '/withdrawals/batch-reject', method: 'post', data }).then(normalizeStrongMutationPayload)
+
 export const completeWithdrawal = (id, data) => {
   return request({
     url: `/withdrawals/${id}/complete`,
@@ -63,6 +66,9 @@ export const rejectRefund = (id, data) => {
     data
   }).then(normalizeStrongMutationPayload)
 }
+
+export const batchApproveRefunds = (data) => request({ url: '/refunds/batch-approve', method: 'post', data }).then(normalizeStrongMutationPayload)
+export const batchRejectRefunds = (data) => request({ url: '/refunds/batch-reject', method: 'post', data }).then(normalizeStrongMutationPayload)
 
 export const completeRefund = (id) => {
   return request({

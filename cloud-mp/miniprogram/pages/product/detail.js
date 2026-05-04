@@ -1320,7 +1320,7 @@ Page({
                 params.sku_id = selectedSku.id;
             }
 
-            const res = await get('/commissions/preview', params);
+            const res = await get('/commissions/preview', params, { showError: false, maxRetries: 0 });
 
             if (res.code === 0) {
                 const data = res.data || res;

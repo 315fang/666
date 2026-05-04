@@ -60,7 +60,6 @@ async function ensureWalletAccountForUser(db, user = {}, seedBalance = 0) {
 
     const docId = `wallet-${String(user._id || user.id || user._legacy_id || user.openid || Date.now()).replace(/[^a-zA-Z0-9_-]/g, '_')}`;
     const row = {
-        _id: docId,
         user_id: user.id || user._legacy_id || user._id || user.openid,
         openid: pickString(user.openid),
         balance: roundMoney(seedBalance),
@@ -74,7 +73,7 @@ async function ensureWalletAccountForUser(db, user = {}, seedBalance = 0) {
     } catch (err) {
         console.error('[pickup-stock] wallet account seed write failed', docId, err);
     }
-    return row;
+    return { ...row, _id: docId, id: docId };
 }
 
 async function appendGoodsFundLog(db, entry = {}) {
@@ -97,7 +96,36 @@ async function appendStationStockLog(db, entry = {}) {
 
 async function listStationStockRows(db, stationId) {
     const rows = await getAllRecords(db, 'station_sku_stocks').catch(() => []);
-    return rows.filter((row) => pickString(row.station_id) === pickString(stationId));
+    const lookupTokens = new Set(normalizeLookupTokens(stationId));
+    if (!lookupTokens.size) return [];
+    return rows.filter((row) => lookupTokens.has(pickString(row.station_id)));
+}
+
+function normalizeLookupTokens(values = []) {
+    const seen = new Set();
+    const list = [];
+    toArray(values).forEach((value) => {
+        if (Array.isArray(value)) {
+            normalizeLookupTokens(value).forEach((token) => {
+                if (seen.has(token)) return;
+                seen.add(token);
+                list.push(token);
+            });
+            return;
+        }
+        if (!hasValue(value)) return;
+        const raw = String(value).trim();
+        if (!raw) return;
+        const candidates = [raw];
+        const num = Number(raw);
+        if (Number.isFinite(num)) candidates.push(String(num));
+        candidates.forEach((candidate) => {
+            if (!candidate || seen.has(candidate)) return;
+            seen.add(candidate);
+            list.push(candidate);
+        });
+    });
+    return list;
 }
 
 function buildOrderReservationLine(item = {}) {
@@ -146,22 +174,24 @@ function buildRefundAllocations(order = {}, refund = {}) {
     return allocations;
 }
 
-async function reservePickupStationInventory(db, { stationId, orderNo, items = [] } = {}) {
-    const stationToken = pickString(stationId);
+async function reservePickupStationInventory(db, { stationId, stationLookupIds = [], orderNo, items = [] } = {}) {
+    const stationLookupTokens = normalizeLookupTokens([stationId, ...toArray(stationLookupIds)]);
+    const stationToken = stationLookupTokens[0] || pickString(stationId);
     if (!stationToken) throw new Error('缺少自提门店');
-    const stockRows = await listStationStockRows(db, stationToken);
+    const stockRows = await listStationStockRows(db, stationLookupTokens);
     const reservations = [];
     try {
         for (const rawItem of toArray(items)) {
             const item = buildOrderReservationLine(rawItem);
-            const stockRow = findStationStockRow(stockRows, stationToken, item.product_id, item.sku_id);
+            const stockRow = findStationStockRow(stockRows, stationLookupTokens, item.product_id, item.sku_id);
             if (!stockRow) {
                 throw new Error(`${item.name || '当前商品'}在所选门店暂无库存`);
             }
             if (roundQuantity(stockRow.available_qty) < item.quantity) {
                 throw new Error(`${item.name || '当前商品'}在所选门店库存不足`);
             }
-            const stockId = pickString(stockRow._id || stockRow.id || buildStationStockDocId(stationToken, item.product_id, item.sku_id));
+            const stockStationId = pickString(stockRow.station_id, stationToken);
+            const stockId = pickString(stockRow._id || stockRow.id || buildStationStockDocId(stockStationId, item.product_id, item.sku_id));
             const updateRes = await db.collection('station_sku_stocks')
                 .where({ _id: stockId, available_qty: db.command.gte(item.quantity) })
                 .update({
@@ -178,13 +208,13 @@ async function reservePickupStationInventory(db, { stationId, orderNo, items = [
             const reservation = {
                 ...item,
                 stock_id: stockId,
-                station_id: stationToken,
+                station_id: stockStationId,
                 unit_cost: roundMoney(stockRow.cost_price),
                 total_cost: roundMoney(stockRow.cost_price * item.quantity)
             };
             reservations.push(reservation);
             await appendStationStockLog(db, {
-                station_id: stationToken,
+                station_id: stockStationId,
                 stock_id: stockId,
                 product_id: item.product_id,
                 sku_id: item.sku_id,

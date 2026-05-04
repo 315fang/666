@@ -7,7 +7,7 @@
       v1.0.0
     </el-descriptions-item>
     <el-descriptions-item label="运行环境">
-      Node.js + MySQL
+      Node.js + CloudBase
     </el-descriptions-item>
     <el-descriptions-item label="服务状态">
       <el-tag v-if="systemStatus.status === 'ok' || systemStatus.status === 'online'" type="success">

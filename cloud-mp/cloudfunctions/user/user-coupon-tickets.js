@@ -118,12 +118,9 @@ async function getLatestTemplateCoupon(conn, couponTemplateId) {
     return null;
 }
 
-async function hasOwnedTemplateCoupon(conn, identity, couponTemplateId) {
-    const normalizedId = pickString(couponTemplateId);
-    if (!normalizedId) return false;
-    const numericId = Number(normalizedId);
-    const couponIdCandidates = [normalizedId];
-    if (Number.isFinite(numericId)) couponIdCandidates.push(numericId);
+async function hasOwnedTemplateCoupon(conn, identity, couponTemplate) {
+    const couponIdCandidates = userCoupons.getCouponIdentityCandidates(couponTemplate);
+    if (!couponIdCandidates.length) return false;
 
     const openidHit = await conn.collection('user_coupons')
         .where({ openid: identity.openid, coupon_id: _.in(couponIdCandidates) })
@@ -261,7 +258,10 @@ async function claimCouponByTicket(openid, ticketId) {
             if (!latestTemplate) {
                 return { success: false, message: '优惠券不存在或已下架' };
             }
-            if (await hasOwnedTemplateCoupon(conn, identity, latestTemplate.id != null ? latestTemplate.id : (latestTemplate._id || ticket.coupon_template_id))) {
+            if (await hasOwnedTemplateCoupon(conn, identity, {
+                ...latestTemplate,
+                coupon_id: ticket.coupon_template_id || ticket.coupon_snapshot?.id
+            })) {
                 return { success: false, message: '已领取此优惠券' };
             }
             const availability = userCoupons.resolveTemplateClaimAvailability(latestTemplate, { alreadyOwned: false });
@@ -269,7 +269,8 @@ async function claimCouponByTicket(openid, ticketId) {
                 return { success: false, message: availability.message || '当前不可领取' };
             }
             const userCouponDoc = buildTemplateCouponDoc(identity, ticket, latestTemplate);
-            await conn.collection('user_coupons').doc(userCouponDoc._id).set({ data: userCouponDoc });
+            const { _id: userCouponDocId, ...tplCouponPayload } = userCouponDoc;
+            await conn.collection('user_coupons').doc(userCouponDocId).set({ data: tplCouponPayload });
             if (latestTemplate._id) {
                 await conn.collection('coupons').doc(String(latestTemplate._id)).update({
                     data: {
@@ -285,23 +286,24 @@ async function claimCouponByTicket(openid, ticketId) {
                     status: 'claimed',
                     claimed_by_openid: identity.openid,
                     claimed_user_id: identity.user?.id || identity.user?._id || identity.user?._legacy_id || identity.openid,
-                    claimed_user_coupon_id: userCouponDoc._id,
+                    claimed_user_coupon_id: userCouponDocId,
                     claimed_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 }
             });
-            return { success: true, id: userCouponDoc._id, coupon_type: 'template_coupon' };
+            return { success: true, id: userCouponDocId, coupon_type: 'template_coupon' };
         }
 
         if (pickString(ticket.benefit_kind) === 'exchange_coupon') {
             const userCouponDoc = buildExchangeCouponDoc(identity, ticket);
-            await conn.collection('user_coupons').doc(userCouponDoc._id).set({ data: userCouponDoc });
+            const { _id: exchangeDocId, ...exchangeCouponPayload } = userCouponDoc;
+            await conn.collection('user_coupons').doc(exchangeDocId).set({ data: exchangeCouponPayload });
             await conn.collection('coupon_claim_tickets').doc(normalizedTicketId).update({
                 data: {
                     status: 'claimed',
                     claimed_by_openid: identity.openid,
                     claimed_user_id: identity.user?.id || identity.user?._id || identity.user?._legacy_id || identity.openid,
-                    claimed_user_coupon_id: userCouponDoc._id,
+                    claimed_user_coupon_id: exchangeDocId,
                     claimed_at: new Date().toISOString(),
                     updated_at: new Date().toISOString()
                 }
@@ -314,7 +316,7 @@ async function claimCouponByTicket(openid, ticketId) {
                     }
                 }).catch(() => null);
             }
-            return { success: true, id: userCouponDoc._id, coupon_type: 'exchange_coupon' };
+            return { success: true, id: exchangeDocId, coupon_type: 'exchange_coupon' };
         }
 
         return { success: false, message: '暂不支持的领取码类型' };

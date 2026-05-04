@@ -237,17 +237,31 @@ const pendingCounts = ref({
   '/orders': 0,
   '/refunds': 0,
   '/withdrawals': 0,
+  '/goods-fund-transfers': 0,
   '/commissions': 0
 })
+
+const toPendingCount = (...values) => {
+  for (const value of values) {
+    const num = Number(value)
+    if (Number.isFinite(num) && num > 0) return num
+  }
+  return 0
+}
 
 const refreshPendingCounts = async () => {
   try {
     const data = await getOperationsDashboard({ skipErrorMessage: true })
     pendingCounts.value = {
-      '/orders': Number(data?.kpi?.pendingShip ?? data?.kpi?.pending_ship ?? 0),
-      '/refunds': Number(data?.pending?.refunds ?? 0),
-      '/withdrawals': Number(data?.pending?.withdrawals ?? 0),
-      '/commissions': Number(data?.pending?.commissions ?? 0)
+      '/orders': toPendingCount(data?.kpi?.pendingShip, data?.kpi?.pending_ship, data?.todo?.pending_ship),
+      '/refunds': toPendingCount(data?.pending?.refunds, data?.pending?.pending_refund, data?.todo?.pending_refund),
+      '/withdrawals': toPendingCount(data?.pending?.withdrawals, data?.pending?.pending_withdrawal, data?.todo?.pending_withdrawal),
+      '/goods-fund-transfers': toPendingCount(
+        data?.pending?.goodsFundTransfers,
+        data?.pending?.goods_fund_transfers,
+        data?.todo?.pending_goods_fund_transfer
+      ),
+      '/commissions': toPendingCount(data?.pending?.commissions, data?.pending?.pending_commission, data?.todo?.pending_commission)
     }
   } catch (_) { /* 角标失败静默，dashboard 会展示真实错误 */ }
 }

@@ -46,7 +46,10 @@
 .main-scroll {
   flex: 1;
   height: 0;
+  width: 100%;
   padding-bottom: env(safe-area-inset-bottom);
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .hero-card {

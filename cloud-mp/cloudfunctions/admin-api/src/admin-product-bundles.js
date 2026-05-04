@@ -96,6 +96,36 @@ function registerProductBundleRoutes(app, deps) {
         return findByLookup(products, productLookup, (item) => [item.id, item._id, item._legacy_id]);
     }
 
+    function pickBundleProduct(bundleProductLookup) {
+        if (bundleProductLookup === null || bundleProductLookup === undefined || bundleProductLookup === '') return null;
+        const rows = getCollection('bundle_products');
+        return findByLookup(rows, bundleProductLookup, (item) => [item.id, item._id, item._legacy_id]);
+    }
+
+    function isEnabledRow(row = {}) {
+        return toBoolean(row.status ?? row.enabled ?? row.is_active, true);
+    }
+
+    function resolveBundleOptionProduct(raw = {}) {
+        const bundleProductLookup = raw.bundle_product_id || raw.bundleProductId;
+        const bundleProduct = bundleProductLookup ? pickBundleProduct(bundleProductLookup) : null;
+        if (bundleProductLookup && !bundleProduct) {
+            throw new Error('候选商品不在组合商品库中');
+        }
+        if (bundleProduct && !isEnabledRow(bundleProduct)) {
+            throw new Error(`组合商品库「${pickString(bundleProduct.name || bundleProduct.display_name || bundleProductLookup)}」已停用`);
+        }
+
+        const productLookup = bundleProduct
+            ? (bundleProduct.source_product_id || bundleProduct.product_id)
+            : (raw.product_id || raw.productId);
+        const product = pickProduct(productLookup);
+        if (!product) {
+            throw new Error('候选商品关联的正式商品不存在');
+        }
+        return { product, bundleProduct };
+    }
+
     function pickSku(skuLookup) {
         const skus = getCollection('skus');
         return findByLookup(skus, skuLookup, (item) => [item.id, item._id, item._legacy_id]);
@@ -126,10 +156,7 @@ function registerProductBundleRoutes(app, deps) {
     }
 
     function normalizeBundleOption(raw = {}, index = 0) {
-        const product = pickProduct(raw.product_id || raw.productId);
-        if (!product) {
-            throw new Error(`第 ${index + 1} 个候选商品不存在`);
-        }
+        const { product, bundleProduct } = resolveBundleOptionProduct(raw);
         const skuLookup = raw.sku_id || raw.skuId;
         const sku = skuLookup ? pickSku(skuLookup) : null;
         if (skuLookup && !sku) {
@@ -161,6 +188,8 @@ function registerProductBundleRoutes(app, deps) {
         );
         return {
             option_key: normalizeKey(raw.option_key || raw.optionKey, `option_${index + 1}`),
+            bundle_product_id: bundleProduct ? primaryId(bundleProduct) : pickString(raw.bundle_product_id || raw.bundleProductId || ''),
+            product_library_source: bundleProduct ? 'bundle_products' : 'products',
             product_id: lookupId(product),
             sku_id: sku ? lookupId(sku) : '',
             default_qty: defaultQty,
@@ -270,11 +299,18 @@ function registerProductBundleRoutes(app, deps) {
         const groups = (Array.isArray(row.groups) ? row.groups : []).map((group) => ({
             ...group,
             options: (Array.isArray(group.options) ? group.options : []).map((option) => {
+                const bundleProduct = option.bundle_product_id ? pickBundleProduct(option.bundle_product_id) : null;
                 const product = pickProduct(option.product_id);
                 const sku = option.sku_id ? pickSku(option.sku_id) : null;
                 return {
                     ...option,
-                    product_name: pickString(product?.name || product?.title || '商品已删除'),
+                    bundle_product_id: bundleProduct ? primaryId(bundleProduct) : pickString(option.bundle_product_id || ''),
+                    product_library_source: bundleProduct ? 'bundle_products' : pickString(option.product_library_source || 'products', 'products'),
+                    product_name: pickString(bundleProduct?.name || bundleProduct?.display_name || product?.name || product?.title || '商品已删除'),
+                    source_product_name: pickString(product?.name || product?.title || ''),
+                    bundle_product_name: pickString(bundleProduct?.name || bundleProduct?.display_name || ''),
+                    bundle_category_name: pickString(bundleProduct?.category_name || ''),
+                    library_label: bundleProduct ? '组合商品库' : '普通商品',
                     product_image: resolveProductImage(product),
                     sku_name: pickString(sku?.name || ''),
                     sku_spec: buildSkuSpecText(sku),
@@ -317,7 +353,7 @@ function registerProductBundleRoutes(app, deps) {
     }
 
     app.get('/admin/api/product-bundles', auth, requirePermission('products'), async (req, res) => {
-        await ensureFreshCollections(['product_bundles', 'products', 'skus']);
+        await ensureFreshCollections(['product_bundles', 'bundle_products', 'products', 'skus']);
         const keyword = pickString(req.query.keyword).toLowerCase();
         const status = req.query.status !== undefined && req.query.status !== '' ? Number(req.query.status) : null;
         const publishStatus = pickString(req.query.publish_status).toLowerCase();
@@ -339,14 +375,14 @@ function registerProductBundleRoutes(app, deps) {
     });
 
     app.get('/admin/api/product-bundles/:id', auth, requirePermission('products'), async (req, res) => {
-        await ensureFreshCollections(['product_bundles', 'products', 'skus']);
+        await ensureFreshCollections(['product_bundles', 'bundle_products', 'products', 'skus']);
         const row = findByLookup(getCollection('product_bundles'), req.params.id);
         if (!row) return fail(res, '产品组合不存在', 404);
         ok(res, await decorateBundle(row));
     });
 
     app.post('/admin/api/product-bundles', auth, requirePermission('products'), async (req, res) => {
-        await ensureFreshCollections(['product_bundles', 'products', 'skus']);
+        await ensureFreshCollections(['product_bundles', 'bundle_products', 'products', 'skus']);
         const rows = getCollection('product_bundles');
         let row;
         try {
@@ -367,7 +403,7 @@ function registerProductBundleRoutes(app, deps) {
     });
 
     app.put('/admin/api/product-bundles/:id', auth, requirePermission('products'), async (req, res) => {
-        await ensureFreshCollections(['product_bundles', 'products', 'skus']);
+        await ensureFreshCollections(['product_bundles', 'bundle_products', 'products', 'skus']);
         const rows = getCollection('product_bundles');
         const index = rows.findIndex((item) => primaryId(item) === String(req.params.id) || String(item.id) === String(req.params.id));
         if (index === -1) return fail(res, '产品组合不存在', 404);

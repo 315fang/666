@@ -77,94 +77,6 @@
           </div>
         </el-card>
       </el-tab-pane>
-
-      <!-- ===== 数据库索引管理 ===== -->
-      <el-tab-pane label="数据库索引" name="db">
-        <el-card style="margin-top: 16px;">
-          <template #header>
-            <div class="card-header">
-              <span>数据库表 & 索引管理</span>
-              <el-button
-                type="primary"
-                @click="showAddIndexDialog"
-                :disabled="!selectedTable"
-              >
-                <el-icon><Plus /></el-icon>
-                新增索引
-              </el-button>
-            </div>
-          </template>
-
-          <el-row :gutter="16">
-            <!-- 左：表列表 -->
-            <el-col :span="7">
-              <div class="table-list-header">数据表列表</div>
-              <el-input
-                v-model="tableSearch"
-                placeholder="搜索表名"
-                clearable
-                size="small"
-                style="margin-bottom: 8px;"
-              />
-              <div class="table-list" v-loading="tablesLoading">
-                <div
-                  v-for="tbl in filteredTables"
-                  :key="tbl.name"
-                  class="table-item"
-                  :class="{ 'is-selected': selectedTable === tbl.name }"
-                  @click="selectTable(tbl.name)"
-                >
-                  <div class="table-name">{{ tbl.name }}</div>
-                  <div class="table-meta">{{ tbl.rows }} 行</div>
-                </div>
-              </div>
-            </el-col>
-
-            <!-- 右：索引列表 -->
-            <el-col :span="17">
-              <div v-if="!selectedTable" class="no-table-selected">
-                <el-icon :size="48" color="#ddd"><Grid /></el-icon>
-                <div>请在左侧选择一张数据表</div>
-              </div>
-              <div v-else v-loading="indexLoading">
-                <div class="index-header">
-                  <strong>{{ selectedTable }}</strong>
-                  <span class="index-count">{{ tableIndexes.length }} 个索引</span>
-                </div>
-                <el-table :data="tableIndexes" stripe size="small">
-                  <el-table-column prop="name" label="索引名" width="200" />
-                  <el-table-column label="列" min-width="150">
-                    <template #default="{ row }">
-                      <el-tag
-                        v-for="col in row.columns"
-                        :key="col"
-                        size="small"
-                        style="margin-right: 4px;"
-                      >{{ col }}</el-tag>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="类型" width="100">
-                    <template #default="{ row }">
-                      <el-tag :type="row.primary ? 'danger' : row.unique ? 'warning' : 'info'" size="small">
-                        {{ row.primary ? 'PRIMARY' : row.unique ? 'UNIQUE' : 'INDEX' }}
-                      </el-tag>
-                    </template>
-                  </el-table-column>
-                  <el-table-column label="操作" width="80">
-                    <template #default="{ row }">
-                      <el-button
-                        v-if="!row.primary"
-                        text type="danger" size="small"
-                        @click="handleDeleteIndex(row)"
-                      >删除</el-button>
-                    </template>
-                  </el-table-column>
-                </el-table>
-              </div>
-            </el-col>
-          </el-row>
-        </el-card>
-      </el-tab-pane>
     </el-tabs>
 
     <!-- 配置历史对话框 -->
@@ -196,29 +108,6 @@
       <el-empty v-else description="暂无修改记录" />
     </el-dialog>
 
-    <!-- 新增索引对话框 -->
-    <el-dialog v-model="addIndexDialogVisible" title="新增索引" width="460px">
-      <el-form :model="indexForm" label-width="90px">
-        <el-form-item label="数据表">
-          <el-input :value="selectedTable" disabled />
-        </el-form-item>
-        <el-form-item label="索引名">
-          <el-input v-model="indexForm.name" placeholder="可选，留空自动生成" />
-        </el-form-item>
-        <el-form-item label="索引字段">
-          <el-select v-model="indexForm.columns" multiple placeholder="选择字段" style="width:100%">
-            <el-option v-for="col in tableColumns" :key="col.name" :label="col.name" :value="col.name" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="唯一索引">
-          <el-switch v-model="indexForm.unique" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="addIndexDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleAddIndex" :loading="submitting">创建索引</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -230,12 +119,7 @@ import {
   batchUpdateSystemConfigs,
   refreshSystemConfigCache,
   getSystemConfigHistory,
-  rollbackSystemConfig,
-  getDbIndexTables,
-  getDbIndexes,
-  getDbIndexColumns,
-  createDbIndex,
-  deleteDbIndex
+  rollbackSystemConfig
 } from '@/api'
 import dayjs from 'dayjs'
 
@@ -364,91 +248,10 @@ const groupLabel = (g) => ({
   security: '安全配置', notification: '通知设置', ai: 'AI 配置'
 }[g] || g)
 
-// ===== 数据库索引 =====
-const tablesLoading = ref(false)
-const indexLoading = ref(false)
-const submitting = ref(false)
-const addIndexDialogVisible = ref(false)
-const selectedTable = ref('')
-const tableSearch = ref('')
-const dbTables = ref([])
-const tableIndexes = ref([])
-const tableColumns = ref([])
-const indexForm = reactive({ name: '', columns: [], unique: false })
-
-const filteredTables = computed(() =>
-  tableSearch.value
-    ? dbTables.value.filter(t => t.name.includes(tableSearch.value))
-    : dbTables.value
-)
-
-const fetchTables = async () => {
-  tablesLoading.value = true
-  try {
-    const res = await getDbIndexTables()
-    dbTables.value = res.list
-  } catch (e) {
-    console.error('获取表列表失败:', e)
-  } finally {
-    tablesLoading.value = false
-  }
-}
-
-
-const selectTable = async (tableName) => {
-  selectedTable.value = tableName
-  indexLoading.value = true
-  try {
-    const [idxRes, colRes] = await Promise.all([
-      getDbIndexes(tableName),
-      getDbIndexColumns(tableName)
-    ])
-    tableIndexes.value = idxRes.list
-    tableColumns.value = colRes.list
-  } catch (e) {
-    console.error('获取索引/列信息失败:', e)
-  } finally {
-    indexLoading.value = false
-  }
-}
-
-
-const showAddIndexDialog = () => {
-  Object.assign(indexForm, { name: '', columns: [], unique: false })
-  addIndexDialogVisible.value = true
-}
-
-const handleAddIndex = async () => {
-  if (!indexForm.columns.length) { ElMessage.warning('请选择至少一个字段'); return }
-  submitting.value = true
-  try {
-    await createDbIndex({ table: selectedTable.value, ...indexForm })
-    ElMessage.success('索引创建成功')
-    addIndexDialogVisible.value = false
-    selectTable(selectedTable.value)
-  } catch (e) {
-    console.error('创建索引失败:', e)
-  } finally {
-    submitting.value = false
-  }
-}
-
-const handleDeleteIndex = async (row) => {
-  try {
-    await ElMessageBox.confirm(`确认删除索引 "${row.name}"？删除后不可撤销。`, '删除索引', { type: 'warning' })
-    await deleteDbIndex(selectedTable.value, row.name)
-    ElMessage.success('索引已删除')
-    selectTable(selectedTable.value)
-  } catch (e) {
-    if (e !== 'cancel') console.error('删除索引失败:', e)
-  }
-}
-
 const formatDate = (d) => d ? dayjs(d).format('YYYY-MM-DD HH:mm') : '-'
 
 onMounted(() => {
   fetchConfigs()
-  fetchTables()
 })
 </script>
 
@@ -460,14 +263,4 @@ onMounted(() => {
 .group-title { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #303133; padding: 10px 0 8px; border-bottom: 1px solid #ebeef5; margin-bottom: 10px; }
 .config-table { border-radius: 4px; }
 .config-key { font-family: monospace; font-size: 12px; background: #f5f7fa; padding: 2px 6px; border-radius: 3px; color: #476582; }
-.table-list-header { font-size: 13px; font-weight: 600; color: #303133; margin-bottom: 8px; }
-.table-list { max-height: 480px; overflow-y: auto; border: 1px solid #ebeef5; border-radius: 6px; }
-.table-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f5f7fa; display: flex; justify-content: space-between; align-items: center; transition: background 0.15s; }
-.table-item:hover { background: #f0f7ff; }
-.table-item.is-selected { background: #ecf5ff; border-left: 3px solid #409eff; }
-.table-name { font-size: 13px; font-family: monospace; }
-.table-meta { font-size: 11px; color: #909399; }
-.no-table-selected { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 300px; gap: 12px; color: #c0c4cc; font-size: 14px; }
-.index-header { display: flex; align-items: center; gap: 10px; padding: 8px 0 12px; }
-.index-count { font-size: 12px; color: #909399; background: #f5f7fa; padding: 2px 8px; border-radius: 10px; }
 </style>

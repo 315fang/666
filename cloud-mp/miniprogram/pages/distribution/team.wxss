@@ -234,7 +234,9 @@
 
 .member-scroll {
   flex: 1;
-  overflow: hidden;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .member-list {

@@ -125,6 +125,100 @@ test('POST /admin/api/products persists simplified SKU rows into skus collection
     }
 });
 
+test('POST /admin/api/products copies total stock into a single empty SKU stock', async () => {
+    const productName = `single-sku-stock-sync-${Date.now()}`;
+    let productId = null;
+
+    try {
+        const response = await invoke('/admin/api/products', {
+            method: 'POST',
+            body: {
+                name: productName,
+                retail_price: 293,
+                market_price: 498,
+                cost_price: 100,
+                stock: 100,
+                status: 1,
+                images: [],
+                detail_images: [],
+                skus: [
+                    { spec_value: '20g', retail_price: 293, stock: 0 }
+                ]
+            }
+        });
+
+        assert.equal(response.statusCode, 200, response.body?.message || JSON.stringify(response.body));
+        assert.equal(response.body.code, 0);
+        productId = response.body.data.id;
+
+        const productSkus = app.locals.dataStore.getCollection('skus')
+            .filter((row) => String(row.product_id) === String(productId));
+        assert.equal(productSkus.length, 1);
+        assert.equal(productSkus[0].spec_value, '20g');
+        assert.equal(productSkus[0].stock, 100);
+
+        const product = app.locals.dataStore.getCollection('products')
+            .find((row) => String(row.id || row._legacy_id || row._id) === String(productId));
+        assert.equal(product.stock, 100);
+    } finally {
+        cleanupProduct(productId, productName);
+    }
+});
+
+test('PUT /admin/api/products/:id copies total stock into a single empty SKU stock', async () => {
+    await ensureReady();
+    const store = app.locals.dataStore;
+    const productId = `single-sku-stock-update-${Date.now()}`;
+    const productName = `${productId}-name`;
+    store.saveCollection?.('products', store.getCollection('products').concat({
+        id: productId,
+        name: productName,
+        retail_price: 293,
+        market_price: 498,
+        cost_price: 100,
+        stock: 0,
+        status: 1,
+        images: [],
+        detail_images: [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+    }));
+
+    try {
+        const response = await invoke(`/admin/api/products/${productId}`, {
+            method: 'PUT',
+            body: {
+                name: productName,
+                retail_price: 293,
+                market_price: 498,
+                cost_price: 100,
+                stock: 100,
+                status: 1,
+                images: [],
+                detail_images: [],
+                skus: [
+                    { spec_value: '20g', retail_price: 293, stock: 0 }
+                ]
+            }
+        });
+
+        assert.equal(response.statusCode, 200, response.body?.message || JSON.stringify(response.body));
+        assert.equal(response.body.code, 0);
+
+        const productSkus = store.getCollection('skus')
+            .filter((row) => String(row.product_id) === String(productId));
+        assert.equal(productSkus.length, 1);
+        assert.equal(productSkus[0].spec_value, '20g');
+        assert.equal(productSkus[0].stock, 100);
+
+        const product = store.getCollection('products')
+            .find((row) => String(row.id || row._legacy_id || row._id) === String(productId));
+        assert.equal(product.stock, 100);
+    } finally {
+        cleanupProduct(productId, productName);
+    }
+});
+
 test('PUT /admin/api/products/:productId/skus supports string product ids and generated sku ids', async () => {
     await ensureReady();
     const store = app.locals.dataStore;

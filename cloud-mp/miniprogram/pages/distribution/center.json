@@ -1,7 +1,0 @@
-{
-    "navigationBarTitleText": "分销中心",
-    "usingComponents": {
-        "brand-animation": "/components/brand-animation/brand-animation",
-        "portal-password-dialog": "/components/portal-password-dialog/portal-password-dialog"
-    }
-}

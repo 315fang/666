@@ -204,12 +204,87 @@ body {
   border-top: 1px solid var(--border-default);
 }
 
+/* MessageBox 确认弹窗居中 */
+.el-overlay.is-message-box {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+}
+
+.el-message-box {
+  border-radius: var(--radius-xl) !important;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.15) !important;
+  margin: 0 !important;
+  left: auto !important;
+  top: auto !important;
+  transform: none !important;
+}
+
+.el-message-box__header {
+  padding: 20px 24px 16px !important;
+}
+
+.el-message-box__title {
+  font-size: 16px !important;
+  font-weight: 700 !important;
+}
+
+.el-message-box__content {
+  padding: 12px 24px !important;
+}
+
+.el-message-box__btns {
+  padding: 12px 24px 20px !important;
+}
+
 /* Tag */
 .el-tag {
   border-radius: 20px !important;
   font-size: 11px !important;
   font-weight: 600 !important;
   border: none !important;
+}
+
+.el-tag--warning {
+  background: #FFF7ED !important;
+  color: #C2410C !important;
+}
+
+.el-tag--warning.el-tag--plain {
+  background: #FFFBEB !important;
+  color: #D97706 !important;
+}
+
+/* Warning Button — 柔和橙色 */
+.el-button--warning {
+  background: #FB923C !important;
+  border-color: #FB923C !important;
+  color: #fff !important;
+}
+
+.el-button--warning:hover,
+.el-button--warning:focus {
+  background: #F97316 !important;
+  border-color: #F97316 !important;
+}
+
+/* Warning Alert — 浅暖色背景 */
+.el-alert--warning {
+  background: #FFFBEB !important;
+}
+
+.el-alert--warning .el-alert__title,
+.el-alert--warning .el-alert__content {
+  color: #9A3412 !important;
+}
+
+.el-alert--warning .el-alert__icon {
+  color: #F59E0B !important;
+}
+
+/* Warning Text — el-text type="warning" */
+.el-text--warning {
+  color: #EA580C !important;
 }
 
 /* Form */
@@ -357,6 +432,12 @@ body {
   .el-dialog__body {
     overflow-y: auto;
     max-height: calc(90vh - 120px);
+  }
+
+  /* MessageBox 手机端适配 */
+  .el-message-box {
+    width: 90vw !important;
+    max-width: 420px !important;
   }
 
   /* Drawer 宽度 100% */

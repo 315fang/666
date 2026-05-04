@@ -22,6 +22,7 @@ function registerRefundRoutes(app, deps) {
         toNumber,
         roundMoney,
         paginate,
+        filterRowsByDateRange,
         okStrongRead,
         okStrongWrite,
         reloadCollectionsWithMeta,
@@ -32,12 +33,14 @@ function registerRefundRoutes(app, deps) {
         dataStore,
         nowIso,
         fail,
+        primaryId,
         normalizePaymentMethodCode,
         resolveOrderPaymentMethod,
         isSupportedRefundPaymentMethod,
         getRefundRouteMeta,
         inferRefundResumeOrderStatus,
         getOrderRefundProgress,
+        toArray,
         appendWalletLogEntry,
         appendGoodsFundLogEntry,
         cancelCommissionsForOrder,
@@ -49,6 +52,12 @@ function registerRefundRoutes(app, deps) {
         getOrderAmount,
         pickupStockAdmin
     } = deps;
+
+    function normalizeBatchIds(value) {
+        return (typeof toArray === 'function' ? toArray(value) : (Array.isArray(value) ? value : []))
+            .map((item) => pickString(item).trim())
+            .filter(Boolean);
+    }
 
     function resolveCollectionName(name) {
         return typeof dataStore?.getCollectionName === 'function'
@@ -104,6 +113,9 @@ function registerRefundRoutes(app, deps) {
         let rows = sortByUpdatedDesc(getCollection('refunds')).map((item) => buildRefundRecord(item, users, orders, products, skus));
         const keyword = pickString(req.query.keyword).trim().toLowerCase();
         const status = pickString(req.query.status).trim();
+        rows = typeof filterRowsByDateRange === 'function'
+            ? filterRowsByDateRange(rows, req, ['created_at', 'applied_at', 'requested_at', 'updated_at'])
+            : rows;
         if (keyword) {
             rows = rows.filter((item) => [
                 item.order?.order_no,
@@ -174,6 +186,42 @@ function registerRefundRoutes(app, deps) {
         });
     });
 
+    app.post('/admin/api/refunds/batch-approve', auth, requirePermission('refunds'), async (req, res) => {
+        if (rejectUnknownBodyFields(res, req.body, ['ids', 'refund_ids', 'remark'], '批量退款审核参数不合法')) return;
+        const ids = normalizeBatchIds(req.body?.refund_ids || req.body?.ids);
+        if (!ids.length) return fail(res, '请选择要操作的售后记录', 400);
+        const remark = pickString(req.body?.remark).trim();
+
+        await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+        const blockedIds = [];
+        let affected = 0;
+        for (const id of ids) {
+            const refund = findByLookup(getCollection('refunds'), id);
+            if (!refund || pickString(refund.status) !== 'pending') {
+                blockedIds.push(refund ? (primaryId(refund) || id) : id);
+                continue;
+            }
+            const patch = {
+                status: 'approved',
+                approved_at: nowIso(),
+                remark: remark || pickString(refund.remark),
+                updated_at: nowIso()
+            };
+            const persisted = await persistPatchedRow('refunds', id, refund, patch);
+            if (!persisted.ok) return fail(res, '批量退款审核更新失败，请稍后重试', 500);
+            affected += 1;
+        }
+
+        createAuditLog(req.admin, 'refund.batch_approve', 'refunds', { affected, blocked_ids: blockedIds });
+        const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.refunds);
+        okStrongWrite(res, { success: true, affected, blocked_ids: blockedIds }, {
+            persisted: true,
+            reloaded_collections: reloadMeta.reloaded_collections,
+            read_at: reloadMeta.read_at,
+            fallbacks_used: blockedIds.length ? ['blocked_ids'] : []
+        });
+    });
+
     app.put('/admin/api/refunds/:id/reject', auth, requirePermission('refunds'), async (req, res) => {
         if (rejectUnknownBodyFields(res, req.body, ['reason'], '退款拒绝参数不合法')) return;
         const reasonField = requireNonEmptyStringField(req.body?.reason, 'reason', '拒绝原因', { maxLength: 200 });
@@ -217,6 +265,59 @@ function registerRefundRoutes(app, deps) {
             persisted: true,
             reloaded_collections: reloadMeta.reloaded_collections,
             read_at: reloadMeta.read_at
+        });
+    });
+
+    app.post('/admin/api/refunds/batch-reject', auth, requirePermission('refunds'), async (req, res) => {
+        if (rejectUnknownBodyFields(res, req.body, ['ids', 'refund_ids', 'reason'], '批量退款拒绝参数不合法')) return;
+        const ids = normalizeBatchIds(req.body?.refund_ids || req.body?.ids);
+        if (!ids.length) return fail(res, '请选择要操作的售后记录', 400);
+        const reasonField = requireNonEmptyStringField(req.body?.reason, 'reason', '拒绝原因', { maxLength: 200 });
+        if (!reasonField.ok) return failWithFieldErrors(res, [reasonField.error], '批量退款拒绝参数不合法');
+
+        await ensureFreshCollections(['refunds', 'orders', 'users', 'commissions']);
+        const blockedIds = [];
+        let affected = 0;
+        for (const id of ids) {
+            const refund = findByLookup(getCollection('refunds'), id);
+            if (!refund || !['pending', 'approved'].includes(pickString(refund.status))) {
+                blockedIds.push(refund ? (primaryId(refund) || id) : id);
+                continue;
+            }
+            const rejectData = {
+                status: 'rejected',
+                reject_reason: reasonField.value,
+                updated_at: nowIso()
+            };
+            const persisted = await persistPatchedRow('refunds', id, refund, rejectData);
+            if (!persisted.ok) return fail(res, '批量退款拒绝更新失败，请稍后重试', 500);
+
+            const orderId = refund?.order_id || refund?.order_no;
+            if (orderId) {
+                await deps.restoreFrozenCommissionsForOrder(orderId);
+                const currentOrder = findByLookup(getCollection('orders'), orderId, (row) => [row.order_no]);
+                if (currentOrder) {
+                    const revertPatch = {
+                        status: currentOrder.status === 'refunding'
+                            ? (currentOrder.prev_status || (currentOrder.confirmed_at || currentOrder.auto_confirmed_at ? 'completed' : (currentOrder.shipped_at ? 'shipped' : (currentOrder.paid_at ? 'paid' : 'pending_payment'))))
+                            : currentOrder.status,
+                        updated_at: nowIso()
+                    };
+                    const orderPersisted = await persistPatchedRow('orders', orderId, currentOrder, revertPatch);
+                    if (!orderPersisted.ok) return fail(res, '关联订单状态恢复失败，请稍后重试', 500);
+                }
+            }
+            affected += 1;
+        }
+
+        createAuditLog(req.admin, 'refund.batch_reject', 'refunds', { affected, blocked_ids: blockedIds, reason: reasonField.value });
+        await Promise.resolve(dataStore.flush?.());
+        const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.refunds);
+        okStrongWrite(res, { success: true, affected, blocked_ids: blockedIds }, {
+            persisted: true,
+            reloaded_collections: reloadMeta.reloaded_collections,
+            read_at: reloadMeta.read_at,
+            fallbacks_used: blockedIds.length ? ['blocked_ids'] : []
         });
     });
 

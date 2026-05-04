@@ -1,9 +1,90 @@
 // pages/cart/cart.js
 const { get, post, put, del } = require('../../utils/request');
-const { parseImages, getFirstImage, formatMoney, processProducts } = require('../../utils/dataFormatter');
-const { ErrorHandler, showError, showSuccess } = require('../../utils/errorHandler');
+const { getFirstImage, formatMoney, processProducts } = require('../../utils/dataFormatter');
+const { ErrorHandler } = require('../../utils/errorHandler');
 const { markCartChanged, markCartStateSeen } = require('../../utils/cartState');
 const app = getApp();
+const PRODUCT_PLACEHOLDER = '/assets/images/placeholder.svg';
+
+function pickText(...values) {
+    for (const value of values) {
+        if (value === null || value === undefined) continue;
+        const text = String(value).trim();
+        if (text && text !== '[object Object]') return text;
+    }
+    return '';
+}
+
+function formatSpecValue(value) {
+    if (!value) return '';
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => {
+                if (!item || typeof item !== 'object') return pickText(item);
+                return pickText(item.value, item.name);
+            })
+            .filter(Boolean)
+            .join(' / ');
+    }
+    if (typeof value === 'object') {
+        return Object.keys(value)
+            .map((key) => pickText(value[key]))
+            .filter(Boolean)
+            .join(' / ');
+    }
+    return pickText(value);
+}
+
+function resolveSpecText(item = {}) {
+    const sku = item.sku || {};
+    return pickText(
+        item.snapshot_spec,
+        formatSpecValue(sku.specs),
+        formatSpecValue(sku.spec),
+        sku.spec_value,
+        sku.specValue,
+        sku.name
+    );
+}
+
+function resolveCartPrice(item = {}, processed = {}) {
+    const candidates = [
+        item.effective_price,
+        item.snapshot_price,
+        item.snapshotPrice,
+        item.price,
+        processed && processed.displayPrice
+    ];
+    for (const value of candidates) {
+        if (value === null || value === undefined || value === '') continue;
+        const price = Number(value);
+        if (Number.isFinite(price) && price >= 0) return price;
+    }
+    return 0;
+}
+
+function resolveCartImage(item = {}, processed = {}) {
+    return pickText(
+        item.sku && (item.sku.image || getFirstImage(item.sku.images, '')),
+        item.snapshot_image,
+        processed && processed.firstImage,
+        getFirstImage(item.product && (item.product.images || item.product.image), ''),
+        PRODUCT_PLACEHOLDER
+    );
+}
+
+function decorateCartItemState(item) {
+    const quantity = Math.max(1, Number(item.quantity || item.qty || 1) || 1);
+    const stock = Number(item.stock ?? item.sku?.stock ?? item.product?.stock ?? 0);
+    const stockLimited = Number.isFinite(stock) && stock > 0;
+    return {
+        ...item,
+        quantity,
+        stock,
+        disableMinus: quantity <= 1,
+        disablePlus: stockLimited && quantity >= stock
+    };
+}
 
 Page({
     data: {
@@ -15,6 +96,7 @@ Page({
         showEmpty: false,
         priceAnim: false,
         countAnim: false,
+        checkoutLoading: false,
         recommendedProducts: [], // 新增：推荐商品
         roleLevel: 0
     },
@@ -41,26 +123,29 @@ Page({
             const res = await get('/cart');
             // 后端返回 { list: [...], total: n } 或 { items: [...], summary: {...} }
             const items = res.data?.items || res.data?.list || (Array.isArray(res.data) ? res.data : []) || [];
-const cartItems = (Array.isArray(items) ? items : []).map((item, index) => {
+            const cartItems = (Array.isArray(items) ? items : []).map((item, index) => {
                 // 使用统一工具函数处理商品
                 const productData = item.product || {};
                 const processed = processProducts([productData], roleLevel)[0] || {};
                 const cartId = item.cart_id || item._id || item.id;
+                const price = resolveCartPrice(item, processed);
 
-                return {
+                return decorateCartItemState({
                     ...item,
                     id: cartId,
                     cart_id: cartId,
                     selected: item.selected !== false,
                     // 获取价格：优先用后端按用户等级计算的 effective_price，
-                    // 再 fallback 到工具函数计算出的等级价
-                    price: parseFloat(item.effective_price || processed.displayPrice || 0),
+                    // 再 fallback 到后端快照价和工具函数计算出的等级价
+                    price,
+                    priceText: formatMoney(price),
                     // 使用处理后的商品信息
                     productImages: processed.images,
-                    firstImage: item.sku?.image || processed.firstImage,
-                    productName: processed.name || '商品',
+                    firstImage: resolveCartImage(item, processed),
+                    productName: pickText(processed.name, item.snapshot_name, item.sku?.name, '商品'),
+                    specText: resolveSpecText(item),
                     animateIn: true
-                };
+                });
             });
 
             this.setData({
@@ -105,10 +190,11 @@ const cartItems = (Array.isArray(items) ? items : []).map((item, index) => {
     async loadRecommended() {
         try {
             const res = await get('/products', { limit: 6 });
-            if (res.code === 0 && res.data) {
-                const products = (res.data.list || res.data || []).map(p => ({
+            const raw = res.data?.list || res.list || (Array.isArray(res.data) ? res.data : []);
+            if (res.code === 0 && Array.isArray(raw)) {
+                const products = raw.map(p => ({
                     ...p,
-                    firstImage: getFirstImage(p.images)
+                    firstImage: getFirstImage(p.images || p.image)
                 }));
                 this.setData({ recommendedProducts: products });
             }
@@ -125,6 +211,18 @@ const cartItems = (Array.isArray(items) ? items : []).map((item, index) => {
     onRecommendedTap(e) {
         const { id } = e.currentTarget.dataset;
         if (id) wx.navigateTo({ url: `/pages/product/detail?id=${id}` });
+    },
+
+    onItemImageError(e) {
+        const index = Number(e.currentTarget.dataset.index);
+        if (!Number.isInteger(index) || !this.data.cartItems[index]) return;
+        this.setData({ [`cartItems[${index}].firstImage`]: PRODUCT_PLACEHOLDER });
+    },
+
+    onRecommendedImageError(e) {
+        const index = Number(e.currentTarget.dataset.index);
+        if (!Number.isInteger(index) || !this.data.recommendedProducts[index]) return;
+        this.setData({ [`recommendedProducts[${index}].firstImage`]: PRODUCT_PLACEHOLDER });
     },
 
 
@@ -152,7 +250,8 @@ const cartItems = (Array.isArray(items) ? items : []).map((item, index) => {
 
     // 切换单个商品选中状态
     onToggleSelect(e) {
-        const index = e.currentTarget.dataset.index;
+        const index = Number(e.currentTarget.dataset.index);
+        if (!Number.isInteger(index) || !this.data.cartItems[index]) return;
         const key = `cartItems[${index}].selected`;
 
         this.setData({
@@ -170,6 +269,7 @@ const cartItems = (Array.isArray(items) ? items : []).map((item, index) => {
 
     // 全选/取消全选（用路径更新替代全量 map，避免整个数组传输）
     onToggleSelectAll() {
+        if (!this.data.cartItems.length) return;
         const newSelectAll = !this.data.selectAll;
         const updates = {};
         this.data.cartItems.forEach((_, i) => {
@@ -185,8 +285,10 @@ const cartItems = (Array.isArray(items) ? items : []).map((item, index) => {
 
     // 修改数量
     async onQuantityChange(e) {
-        const { index, type } = e.currentTarget.dataset;
+        const index = Number(e.currentTarget.dataset.index);
+        const { type } = e.currentTarget.dataset;
         const item = this.data.cartItems[index];
+        if (!Number.isInteger(index) || !item) return;
         let newQuantity = item.quantity;
 
         if (type === 'minus') {
@@ -195,7 +297,7 @@ const cartItems = (Array.isArray(items) ? items : []).map((item, index) => {
             newQuantity += 1;
         }
 
-        const stockLimit = Number(item.sku?.stock ?? item.product?.stock ?? 0);
+        const stockLimit = Number(item.stock ?? item.sku?.stock ?? item.product?.stock ?? 0);
         if (type === 'plus' && stockLimit > 0 && newQuantity > stockLimit) {
             wx.showToast({ title: '库存不足', icon: 'none' });
             return;
@@ -205,7 +307,12 @@ const cartItems = (Array.isArray(items) ? items : []).map((item, index) => {
 
         // 乐观更新：先改 UI，请求失败再回滚
         const oldQuantity = item.quantity;
-        this.setData({ [`cartItems[${index}].quantity`]: newQuantity });
+        const nextState = decorateCartItemState({ ...item, quantity: newQuantity });
+        this.setData({
+            [`cartItems[${index}].quantity`]: nextState.quantity,
+            [`cartItems[${index}].disableMinus`]: nextState.disableMinus,
+            [`cartItems[${index}].disablePlus`]: nextState.disablePlus
+        });
         this.calculateTotal();
 
         try {
@@ -221,7 +328,12 @@ const cartItems = (Array.isArray(items) ? items : []).map((item, index) => {
             setTimeout(() => { this.setData({ priceAnim: false, countAnim: false }); }, 400);
         } catch (err) {
             // 请求失败：回滚数量和总价
-            this.setData({ [`cartItems[${index}].quantity`]: oldQuantity });
+            const oldState = decorateCartItemState({ ...item, quantity: oldQuantity });
+            this.setData({
+                [`cartItems[${index}].quantity`]: oldState.quantity,
+                [`cartItems[${index}].disableMinus`]: oldState.disableMinus,
+                [`cartItems[${index}].disablePlus`]: oldState.disablePlus
+            });
             this.calculateTotal();
             wx.showToast({ title: '更新数量失败，请重试', icon: 'none' });
             console.error('更新数量失败:', err);
@@ -230,8 +342,9 @@ const cartItems = (Array.isArray(items) ? items : []).map((item, index) => {
 
     // 删除商品
     async onDelete(e) {
-        const index = e.currentTarget.dataset.index;
+        const index = Number(e.currentTarget.dataset.index);
         const item = this.data.cartItems[index];
+        if (!Number.isInteger(index) || !item) return;
 
         wx.showModal({
             title: '确认删除',
@@ -266,7 +379,8 @@ const cartItems = (Array.isArray(items) ? items : []).map((item, index) => {
     },
 
     // 去结算
-    onCheckout() {
+    async onCheckout() {
+        if (this._checkingOut) return;
         const selectedItems = this.data.cartItems.filter(item => item.selected);
 
         if (selectedItems.length === 0) {
@@ -284,6 +398,25 @@ const cartItems = (Array.isArray(items) ? items : []).map((item, index) => {
             wx.showToast({ title: '购物袋商品已失效，请刷新后重试', icon: 'none' });
             return;
         }
-        wx.navigateTo({ url: `/pages/order/confirm?cart_ids=${encodeURIComponent(ids.join(','))}` });
+        this._checkingOut = true;
+        this.setData({ checkoutLoading: true });
+        wx.showLoading({ title: '检查中', mask: true });
+        try {
+            const res = await post('/cart/check', { cart_ids: ids }, { showError: false });
+            const check = res && (res.data || res);
+            const checkedItems = Array.isArray(check?.items) ? check.items : [];
+            if (check && (check.valid === false || (Array.isArray(check.items) && checkedItems.length < ids.length))) {
+                const firstError = Array.isArray(check.errors) && check.errors[0] ? check.errors[0] : null;
+                wx.showToast({ title: firstError?.msg || '部分商品暂不可结算', icon: 'none', duration: 2500 });
+                return;
+            }
+            wx.navigateTo({ url: `/pages/order/confirm?cart_ids=${encodeURIComponent(ids.join(','))}` });
+        } catch (err) {
+            wx.showToast({ title: err.message || '结算前检查失败，请重试', icon: 'none' });
+        } finally {
+            wx.hideLoading();
+            this._checkingOut = false;
+            this.setData({ checkoutLoading: false });
+        }
     }
 });

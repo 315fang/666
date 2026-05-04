@@ -572,6 +572,9 @@
     flex: 1;
     min-height: 240rpx;
     max-height: 58vh;
+    width: 100%;
+    box-sizing: border-box;
+    overflow-x: hidden;
 }
 
 .coupon-picker-title {

@@ -62,11 +62,14 @@ Page({
         description: '',
         amount: '',
         reasons: [
-            { value: 'quality', label: '商品质量问题' },
-            { value: 'wrong_item', label: '商品与描述不符' },
-            { value: 'not_needed', label: '不想要了/买多了' },
-            { value: 'damaged', label: '商品破损/缺件' },
-            { value: 'other', label: '其他原因' }
+            { value: '与商家协商一致退货', label: '与商家协商一致退货' },
+            { value: '要合并结账重新拍', label: '要合并结账重新拍' },
+            { value: '地址/提货方式选错了', label: '地址/提货方式选错了' },
+            { value: '不想要了/买重复了', label: '不想要了/买重复了' },
+            { value: '商家发错货了', label: '商家发错货了' },
+            { value: '货物与描述不符', label: '货物与描述不符' },
+            { value: '质量问题', label: '质量问题' },
+            { value: '其他原因', label: '其他原因' }
         ],
         reasonIndex: -1,
         submitting: false,

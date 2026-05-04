@@ -16,7 +16,7 @@
       :closable="false"
       show-icon
       class="form-alert"
-      title="普通配置只要选商品；规格、同款多件、停用候选等少见规则在每个候选的“高级”里设置。"
+      title="候选商品从“组合商品库”选择；规格、同款多件、停用候选等少见规则在每个候选的“高级”里设置。"
     />
 
     <div v-if="groups.length === 0" class="groups-empty">暂无选择步骤，请先新增至少一个步骤。</div>
@@ -70,13 +70,13 @@
       <div v-for="(option, optionIndex) in group.options" :key="option.local_key" class="option-editor">
         <div class="option-simple-row">
           <el-select
-            v-model="option.product_id"
+            v-model="option.bundle_product_select_id"
             filterable
             remote
             reserve-keyword
             clearable
             :remote-method="searchProductOptions"
-            placeholder="搜索并选择商品"
+            placeholder="搜索组合商品库"
             class="option-product-select"
             @change="(value) => onOptionProductChange(groupIndex, optionIndex, value)"
           >
@@ -85,10 +85,16 @@
               :key="item.value"
               :label="item.label"
               :value="item.value"
-            />
+            >
+              <div class="bundle-product-select-option">
+                <span>{{ item.label }}</span>
+                <el-tag v-if="item.bundleProductId" size="small" type="success" effect="plain">组合商品库</el-tag>
+              </div>
+            </el-option>
           </el-select>
           <div class="option-summary">
             <span>{{ option.product_name || '未选商品' }}</span>
+            <el-tag v-if="option.bundle_product_id" size="small" type="success" effect="plain" class="option-library-tag">组合商品库</el-tag>
             <span v-if="optionSkuDisplay(option)"> / {{ optionSkuDisplay(option) }}</span>
             <span class="option-rule-text">{{ optionRuleText(option) }}</span>
           </div>
@@ -163,7 +169,7 @@
 // onMounted 自治：空 groups 自动补 1 个 default group；现有 options 预加载 SKUs。
 import { ref, reactive, onMounted, watch } from 'vue'
 import { ElMessageBox } from 'element-plus'
-import { getProducts, getProductSkus } from '@/api'
+import { getBundleProducts, getProductSkus } from '@/api'
 
 const props = defineProps({
   groups: {
@@ -233,7 +239,10 @@ const normalizeOptionQtyRule = (option = {}) => {
 const createOption = (overrides = {}) => ({
   local_key: `option-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
   advancedOpen: false,
+  bundle_product_select_id: '',
   product_id: '',
+  bundle_product_id: '',
+  product_library_source: 'bundle_products',
   sku_id: '',
   default_qty: 1,
   repeatable: 0,
@@ -411,7 +420,16 @@ const loadSkuOptions = async (productId, preferredRows = []) => {
 }
 
 const mergedProductOptions = (option) => {
-  const current = option?.product_id ? [{ value: String(option.product_id), label: option.product_name || String(option.product_id) }] : []
+  const currentValue = String(option?.bundle_product_id || option?.bundle_product_select_id || option?.product_id || '')
+  const current = currentValue
+    ? [{
+        value: currentValue,
+        label: option.product_name || String(option.product_id),
+        productId: String(option.product_id || ''),
+        bundleProductId: String(option.bundle_product_id || ''),
+        categoryName: option.bundle_category_name || ''
+      }]
+    : []
   return dedupeSelectOptions([...current, ...productSelectOptions.value])
 }
 
@@ -450,11 +468,14 @@ const searchProductOptions = async (keyword) => {
   const query = String(keyword || '').trim()
   if (!query) return
   try {
-    const res = await getProducts({ keyword: query, status: 1, limit: 20 })
+    const res = await getBundleProducts({ keyword: query, status: 1, limit: 20 })
     const list = res?.list || res?.data?.list || []
     productSelectOptions.value = list.map((item) => ({
       value: String(item.id || item._id || ''),
-      label: item.name || String(item.id || item._id || '')
+      label: item.name || item.product_name || String(item.product_id || item.source_product_id || ''),
+      productId: String(item.product_id || item.source_product_id || ''),
+      bundleProductId: String(item.id || item._id || ''),
+      categoryName: item.category_name || ''
     }))
   } catch (_error) {}
 }
@@ -462,11 +483,17 @@ const searchProductOptions = async (keyword) => {
 const onOptionProductChange = async (groupIndex, optionIndex, value) => {
   const option = props.groups[groupIndex]?.options?.[optionIndex]
   if (!option) return
-  const productId = String(value || '').trim()
+  const selectedValue = String(value || '').trim()
+  const matched = productSelectOptions.value.find((item) => item.value === selectedValue)
+  const productId = matched?.productId || ''
+  option.bundle_product_select_id = selectedValue
   option.product_id = productId
+  option.bundle_product_id = ''
+  option.product_library_source = 'bundle_products'
   option.sku_id = ''
-  const matched = productSelectOptions.value.find((item) => item.value === productId)
   option.product_name = matched?.label || ''
+  option.bundle_product_id = matched?.bundleProductId || ''
+  option.bundle_category_name = matched?.categoryName || ''
   option.sku_name = ''
   option.sku_spec = ''
   if (productId) {
@@ -711,6 +738,17 @@ watch(() => props.groups, (next) => {
   white-space: nowrap;
   font-size: 12px;
   color: #6b7280;
+}
+
+.bundle-product-select-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.option-library-tag {
+  margin-left: 8px;
 }
 
 .option-rule-text {

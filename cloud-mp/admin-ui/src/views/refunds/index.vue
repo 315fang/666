@@ -7,6 +7,12 @@
           <div class="header-actions">
             <span class="sync-text">最后同步：{{ lastSyncedAt ? formatDateTime(lastSyncedAt) : '—' }}</span>
             <el-button size="small" @click="refreshRefunds" :loading="loading">刷新</el-button>
+            <el-button size="small" type="success" :disabled="selectedPendingIds.length === 0" @click="handleBatchApprove">
+              批量通过 ({{ selectedPendingIds.length }})
+            </el-button>
+            <el-button size="small" type="danger" :disabled="selectedIds.length === 0" @click="handleBatchReject">
+              批量拒绝
+            </el-button>
           </div>
         </div>
       </template>
@@ -30,6 +36,9 @@
             <el-option label="已退款" value="completed" />
           </el-select>
         </el-form-item>
+        <el-form-item label="申请时间">
+          <DateRangeQuickFilter v-model="dateFilter" @change="handleSearch" />
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
@@ -37,7 +46,8 @@
       </el-form>
 
       <!-- 表格 -->
-      <el-table :data="tableData" v-loading="loading">
+      <el-table :data="tableData" v-loading="loading" @selection-change="handleSelectionChange">
+        <el-table-column type="selection" width="46" :selectable="(row) => ['pending', 'approved'].includes(row.status)" />
         <el-table-column label="ID" width="90">
           <template #default="{ row }">
             <CompactIdCell :value="row.display_id || row.id" :full-value="row.id" />
@@ -220,15 +230,16 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getRefunds, approveRefund, rejectRefund, completeRefund, syncRefundStatus } from '@/api'
+import { getRefunds, approveRefund, rejectRefund, completeRefund, syncRefundStatus, batchApproveRefunds, batchRejectRefunds } from '@/api'
 import { extractReadAt, mergeStrongSuccessMessage } from '@/api/consistency'
 import CompactIdCell from '@/components/CompactIdCell.vue'
 import { formatDateTime } from '@/utils/format'
 import { usePagination } from '@/composables/usePagination'
 import { useUrlSyncedFilter } from '@/composables/useUrlSyncedFilter'
-import { PageHelpTip, RowActionsMenu } from '@/components/list-toolkit'
+import { useDateRangeFilter } from '@/composables/useDateRangeFilter'
+import { PageHelpTip, RowActionsMenu, DateRangeQuickFilter } from '@/components/list-toolkit'
 import { getUserNickname } from '@/utils/userDisplay'
 
 const loading = ref(false)
@@ -237,6 +248,7 @@ const rejectDialogVisible = ref(false)
 const detailDialogVisible = ref(false)
 const currentRow = ref(null)
 const lastSyncedAt = ref('')
+const selectedRows = ref([])
 
 /**
  * 售后搜索字段说明：
@@ -249,6 +261,7 @@ const searchForm = reactive({
 })
 
 const { pagination, resetPage, applyResponse } = usePagination({ defaultLimit: 10 })
+const dateFilter = useDateRangeFilter()
 
 // URL ↔ form 双向同步：刷新/分享链接都能还原筛选 + 翻页状态
 useUrlSyncedFilter({ searchForm, pagination, fetchFn: () => refreshRefunds(), defaults: { status: '', keyword: '' } })
@@ -256,6 +269,8 @@ useUrlSyncedFilter({ searchForm, pagination, fetchFn: () => refreshRefunds(), de
 onMounted(() => refreshRefunds())
 
 const tableData = ref([])
+const selectedIds = computed(() => selectedRows.value.map((row) => row.id).filter(Boolean))
+const selectedPendingIds = computed(() => selectedRows.value.filter((row) => row.status === 'pending').map((row) => row.id).filter(Boolean))
 
 const rejectForm = reactive({
   id: null,
@@ -316,6 +331,7 @@ const fetchRefunds = async () => {
   try {
     const params = {
       ...searchForm,
+      ...dateFilter.params.value,
       page: pagination.page,
       limit: pagination.limit
     }
@@ -335,6 +351,10 @@ const fetchRefunds = async () => {
 }
 
 const refreshRefunds = () => fetchRefunds()
+
+const handleSelectionChange = (rows) => {
+  selectedRows.value = rows
+}
 
 const patchRefundRow = (id, patch) => {
   const applyPatch = (row) => normalizeRefundDisplay({ ...row, ...patch })
@@ -389,6 +409,7 @@ const handleSizeChange = () => {
 const handleReset = () => {
   searchForm.status = ''
   searchForm.keyword = ''
+  dateFilter.clear()
   handleSearch()
 }
 
@@ -420,6 +441,61 @@ const handleApprove = async (row) => {
       }
       console.error('审核失败:', error)
     }
+  }
+}
+
+const runRefundBatchMutation = async (task, successMessage) => {
+  submitting.value = true
+  try {
+    const result = await task()
+    ElMessage.success(mergeStrongSuccessMessage(result, successMessage))
+    selectedRows.value = []
+    const readAt = extractReadAt(result)
+    if (readAt) lastSyncedAt.value = readAt
+    await refreshRefunds()
+  } catch (error) {
+    if (!error?.__handledByRequest) {
+      ElMessage.error(error?.message || '批量操作失败')
+    }
+    console.error('售后批量操作失败:', error)
+  } finally {
+    submitting.value = false
+  }
+}
+
+const handleBatchApprove = async () => {
+  if (selectedPendingIds.value.length === 0) return
+  try {
+    await ElMessageBox.confirm(`确认批量通过 ${selectedPendingIds.value.length} 条待审核售后？`, '批量审核', {
+      confirmButtonText: '确认通过',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+    await runRefundBatchMutation(
+      () => batchApproveRefunds({ ids: selectedPendingIds.value }),
+      `批量通过成功（${selectedPendingIds.value.length} 条）`
+    )
+  } catch (error) {
+    if (error !== 'cancel') console.error('批量通过售后失败:', error)
+  }
+}
+
+const handleBatchReject = async () => {
+  if (selectedIds.value.length === 0) return
+  try {
+    const { value } = await ElMessageBox.prompt(`确认批量拒绝 ${selectedIds.value.length} 条售后？`, '批量拒绝', {
+      confirmButtonText: '确认拒绝',
+      cancelButtonText: '取消',
+      type: 'warning',
+      inputPlaceholder: '请输入拒绝原因',
+      inputValidator: (input) => (String(input || '').trim().length >= 2 ? true : '请填写至少 2 个字符的拒绝原因')
+    })
+    await runRefundBatchMutation(
+      () => batchRejectRefunds({ ids: selectedIds.value, reason: value }),
+      `批量拒绝成功（${selectedIds.value.length} 条）`
+    )
+  } catch (error) {
+    if (error !== 'cancel') console.error('批量拒绝售后失败:', error)
   }
 }
 

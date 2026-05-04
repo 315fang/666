@@ -1,4 +1,5 @@
 'use strict';
+const crypto = require('crypto');
 const cloud = require('wx-server-sdk');
 const db = cloud.database();
 const _ = db.command;
@@ -14,12 +15,20 @@ function uniqueValues(values) {
     const list = [];
     values.forEach((value) => {
         if (!hasValue(value)) return;
-        const key = String(value);
+        const key = `${typeof value}:${String(value)}`;
         if (seen[key]) return;
         seen[key] = true;
         list.push(value);
     });
     return list;
+}
+
+function appendIdentityValue(values, value) {
+    if (!hasValue(value)) return;
+    values.push(value);
+    values.push(String(value));
+    const numericId = Number(value);
+    if (Number.isFinite(numericId)) values.push(numericId);
 }
 
 function couponExpireOffsetMs(validDays) {
@@ -30,11 +39,31 @@ function couponExpireOffsetMs(validDays) {
 function toCouponIdCandidates(couponId) {
     const raw = String(couponId || '').trim();
     if (!raw) return [];
-    const numericId = Number(raw);
-    return uniqueValues([
-        raw,
-        Number.isFinite(numericId) ? numericId : null
-    ]);
+    const values = [];
+    appendIdentityValue(values, raw);
+    return uniqueValues(values);
+}
+
+function getCouponIdentityCandidates(coupon = {}, fallbackCouponId = '') {
+    const values = [];
+    appendIdentityValue(values, coupon.id);
+    appendIdentityValue(values, coupon._legacy_id);
+    appendIdentityValue(values, coupon._id);
+    appendIdentityValue(values, coupon.coupon_id);
+    appendIdentityValue(values, fallbackCouponId);
+    return uniqueValues(values);
+}
+
+function buildSingleUserCouponDocId(identity = {}, coupon = {}, fallbackCouponId = '') {
+    const owner = identity.user && (identity.user.id || identity.user._id || identity.user._legacy_id)
+        ? (identity.user.id || identity.user._id || identity.user._legacy_id)
+        : identity.openids && identity.openids[0];
+    const couponKey = coupon.id != null ? coupon.id : (coupon._legacy_id || coupon._id || coupon.coupon_id || fallbackCouponId);
+    const digest = crypto
+        .createHash('sha1')
+        .update(`${String(owner || '')}:${String(couponKey || '')}`)
+        .digest('hex');
+    return `uc_${digest.slice(0, 24)}`;
 }
 
 async function getCouponIdentity(openid) {
@@ -63,6 +92,22 @@ async function getCouponIdentity(openid) {
 
 function couponKey(coupon) {
     return String(coupon._id || coupon.id || `${coupon.user_id || coupon.openid || ''}:${coupon.coupon_id || ''}`);
+}
+
+function couponBelongsToIdentity(coupon = {}, identity = {}) {
+    const identityOpenids = (identity.openids || []).map(String);
+    const identityUserIds = (identity.userIds || []).map(String);
+    const couponOpenids = [coupon.openid, coupon._openid, coupon.user_openid]
+        .filter(hasValue)
+        .map(String);
+    if (couponOpenids.length > 0) {
+        return couponOpenids.some((value) => identityOpenids.includes(value));
+    }
+
+    const couponUserIds = [coupon.user_id, coupon.userId]
+        .filter(hasValue)
+        .map(String);
+    return couponUserIds.some((value) => identityUserIds.includes(value));
 }
 
 function parseDate(value) {
@@ -724,6 +769,33 @@ async function hasOwnedCoupon(identity, couponId) {
     return results.some((result) => Array.isArray(result.data) && result.data.length > 0);
 }
 
+async function fetchOwnedCouponsByTemplate(identity, couponIdCandidates = []) {
+    const candidates = uniqueValues(couponIdCandidates);
+    if (!identity || !identity.openids || !identity.openids.length || candidates.length === 0) return [];
+
+    const queries = [
+        getAllRecords(db, 'user_coupons', {
+            openid: _.in(identity.openids),
+            coupon_id: _.in(candidates)
+        }).catch(() => [])
+    ];
+
+    if (identity.userIds.length) {
+        queries.push(queryUserCouponsByUserIds(identity.userIds, { coupon_id: _.in(candidates) }).catch(() => []));
+    }
+
+    const map = {};
+    (await Promise.all(queries)).flat().forEach((coupon) => {
+        map[couponKey(coupon)] = coupon;
+    });
+    return Object.keys(map).map((key) => map[key]);
+}
+
+async function getOwnedCouponCount(identity, couponIdCandidates = []) {
+    const rows = await fetchOwnedCouponsByTemplate(identity, couponIdCandidates);
+    return rows.length;
+}
+
 function statusMatches(coupon, status) {
     if (!status) return true;
     const wanted = String(status).toLowerCase();
@@ -753,6 +825,40 @@ async function fetchCouponsByIdentity(openid) {
     return Object.keys(map).map((key) => map[key]);
 }
 
+async function getOwnedUserCoupon(openid, userCouponId) {
+    const rawId = String(userCouponId || '').trim();
+    if (!rawId) {
+        const err = new Error('缺少优惠券 ID');
+        err.code = 'BAD_REQUEST';
+        throw err;
+    }
+
+    const identity = await getCouponIdentity(openid);
+    const docRes = await db.collection('user_coupons')
+        .doc(rawId)
+        .get()
+        .catch(() => ({ data: null }));
+    if (docRes.data && couponBelongsToIdentity(docRes.data, identity)) {
+        return { ...docRes.data, _id: docRes.data._id || rawId };
+    }
+
+    const candidates = toCouponIdCandidates(rawId);
+    const fields = ['id', '_legacy_id', 'user_coupon_id'];
+    for (const field of fields) {
+        const res = await db.collection('user_coupons')
+            .where({ [field]: _.in(candidates) })
+            .limit(10)
+            .get()
+            .catch(() => ({ data: [] }));
+        const ownedCoupon = (res.data || []).find((coupon) => couponBelongsToIdentity(coupon, identity));
+        if (ownedCoupon) return ownedCoupon;
+    }
+
+    const err = new Error('优惠券不存在');
+    err.code = 'NOT_FOUND';
+    throw err;
+}
+
 /**
  * 获取用户优惠券列表
  */
@@ -772,6 +878,12 @@ async function listCoupons(openid, status = 'unused') {
         console.error('[user-coupons] listCoupons 失败:', err.message);
         return [];
     }
+}
+
+async function deleteCoupon(openid, userCouponId) {
+    const ownedCoupon = await getOwnedUserCoupon(openid, userCouponId);
+    await db.collection('user_coupons').doc(String(ownedCoupon._id || userCouponId)).remove();
+    return { success: true };
 }
 
 async function listCouponCenter(openid, options = {}) {
@@ -806,13 +918,13 @@ async function getCouponClaimInfo(openid, couponId) {
     const coupon = await findCouponTemplate(couponId);
     if (!coupon) return { found: false, coupon: null };
 
-    let alreadyOwned = false;
+    let ownedCount = 0;
     if (openid) {
         const identity = await getCouponIdentity(openid);
-        alreadyOwned = await hasOwnedCoupon(identity, couponId);
+        ownedCount = await getOwnedCouponCount(identity, getCouponIdentityCandidates(coupon, couponId));
     }
 
-    const availability = resolveTemplateClaimAvailability(coupon, { alreadyOwned });
+    const availability = resolveTemplateClaimAvailability(coupon, { ownedCount });
     return {
         found: true,
         coupon: buildCouponTemplateView(coupon, availability),
@@ -832,29 +944,37 @@ async function claimCoupon(openid, couponId) {
     if (!couponData) {
         return { success: false, message: '优惠券不存在' };
     }
-    const alreadyOwned = await hasOwnedCoupon(identity, cid);
-    const availability = resolveTemplateClaimAvailability(couponData, { alreadyOwned });
+    const couponIdCandidates = getCouponIdentityCandidates(couponData, cid);
+    const ownedCount = await getOwnedCouponCount(identity, couponIdCandidates);
+    const availability = resolveTemplateClaimAvailability(couponData, { ownedCount });
     if (!availability.canClaim) {
         return { success: false, message: availability.message || '当前不可领取' };
     }
 
-    const result = await db.collection('user_coupons').add({
-        data: {
-            openid,
-            user_id: identity.user && (identity.user.id || identity.user._id) ? (identity.user.id || identity.user._id) : openid,
-            coupon_id: couponData.id != null ? couponData.id : (couponData._id || cid),
-            coupon_name: couponData.name,
-            coupon_type: couponData.type === 'percent' ? 'percent' : (couponData.type || couponData.coupon_type || 'fixed'),
-            coupon_value: toNumber(couponData.value != null ? couponData.value : couponData.coupon_value, 0),
-            min_purchase: toNumber(couponData.min_purchase, 0),
-            scope: couponData.scope || 'all',
-            scope_ids: Array.isArray(couponData.scope_ids) ? couponData.scope_ids : [],
-            status: 'unused',
-            created_at: db.serverDate(),
-            claim_day_key: availability.dayKey,
-            expire_at: db.serverDate({ offset: (couponData.valid_days || 30) * 24 * 60 * 60 * 1000 })
-        }
-    });
+    const userCouponDoc = {
+        openid,
+        user_id: identity.user && (identity.user.id || identity.user._id) ? (identity.user.id || identity.user._id) : openid,
+        coupon_id: couponData.id != null ? couponData.id : (couponData._id || cid),
+        coupon_name: couponData.name,
+        coupon_type: couponData.type === 'percent' ? 'percent' : (couponData.type || couponData.coupon_type || 'fixed'),
+        coupon_value: toNumber(couponData.value != null ? couponData.value : couponData.coupon_value, 0),
+        min_purchase: toNumber(couponData.min_purchase, 0),
+        scope: couponData.scope || 'all',
+        scope_ids: Array.isArray(couponData.scope_ids) ? couponData.scope_ids : [],
+        status: 'unused',
+        created_at: db.serverDate(),
+        claim_day_key: availability.dayKey,
+        expire_at: db.serverDate({ offset: (couponData.valid_days || 30) * 24 * 60 * 60 * 1000 })
+    };
+    let result;
+    if (availability.perUserLimit <= 1) {
+        const docId = buildSingleUserCouponDocId(identity, couponData, cid);
+        // doc().set 的 data 内不能带 _id（与 doc 路径冲突会报 -501007 invalid parameters）
+        await db.collection('user_coupons').doc(docId).set({ data: userCouponDoc });
+        result = { _id: docId };
+    } else {
+        result = await db.collection('user_coupons').add({ data: userCouponDoc });
+    }
     if (couponData._id) {
         await db.collection('coupons').doc(String(couponData._id)).update({
             data: {
@@ -933,9 +1053,11 @@ async function claimWelcomeCoupons(openid) {
 module.exports = {
     listCoupons,
     listCouponCenter,
+    deleteCoupon,
     claimCoupon,
     findCouponTemplate,
     getCouponClaimInfo,
+    getCouponIdentityCandidates,
     resolveTemplateClaimAvailability,
     buildCouponTemplateView,
     claimWelcomeCoupons,

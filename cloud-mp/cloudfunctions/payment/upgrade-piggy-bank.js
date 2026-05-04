@@ -417,7 +417,10 @@ async function addPiggyRows(context, rows = []) {
 
 async function createUpgradePiggyBankForOrder(context, orderId, order = {}, runtimeConfig = {}) {
     const { db, command } = context;
-    const config = normalizePiggyBankConfig(runtimeConfig.piggyBank || runtimeConfig.piggyBankConfig || {});
+    const config = normalizePiggyBankConfig({
+        ...(runtimeConfig.piggyBank || runtimeConfig.piggyBankConfig || {}),
+        self_purchase_commission_enabled: runtimeConfig.commissionConfig?.self_purchase_commission_enabled
+    });
     if (!config.enabled) return { skipped: true, reason: 'disabled' };
     if (!orderId || order.piggy_bank_created_at) return { skipped: true, reason: 'already_created' };
     if (pickString(order.order_type || order.type) === 'exchange' || order.exchange_mode === true) {

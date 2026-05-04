@@ -269,7 +269,7 @@ const addTag = () => {
 
 .field-warn {
   font-size: 12px;
-  color: #e6a23c;
+  color: #f59e0b;
   margin-top: 4px;
 }
 

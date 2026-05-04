@@ -79,6 +79,18 @@ async function findProductById(rawId) {
     return doc.data || legacy.data?.[0] || legacyText.data?.[0] || null;
 }
 
+async function findBundleProductById(rawId) {
+    const id = pickString(rawId);
+    if (!id) return null;
+    const num = toNumber(id, NaN);
+    const [doc, legacy, legacyText] = await Promise.all([
+        db.collection('bundle_products').doc(id).get().catch(() => ({ data: null })),
+        Number.isFinite(num) ? db.collection('bundle_products').where({ id: num }).limit(1).get().catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
+        db.collection('bundle_products').where({ id }).limit(1).get().catch(() => ({ data: [] }))
+    ]);
+    return doc.data || legacy.data?.[0] || legacyText.data?.[0] || null;
+}
+
 async function findSkusForProduct(product = {}) {
     const productIds = [product._id, product.id, product._legacy_id]
         .filter((value) => hasValue(value))
@@ -125,6 +137,14 @@ function isSellableRecord(row = {}) {
     if (['true', 'yes', 'y', 'on', 'enabled', 'enable', 'active', 'show', 'visible', 'on_sale', 'published'].includes(normalized)) return true;
     if (['false', 'no', 'n', 'off', 'disabled', 'disable', 'inactive', 'hidden', 'off_sale', 'archived', 'draft'].includes(normalized)) return false;
     return true;
+}
+
+async function resolveOptionProductLookup(option = {}) {
+    const bundleProductId = pickString(option.bundle_product_id || option.bundleProductId);
+    if (!bundleProductId) return pickString(option.product_id || option.productId);
+    const bundleProduct = await findBundleProductById(bundleProductId);
+    if (!bundleProduct || !isSellableRecord(bundleProduct)) return '';
+    return pickString(bundleProduct.source_product_id || bundleProduct.product_id);
 }
 
 function resolveProductPrice(product = {}) {
@@ -238,11 +258,12 @@ async function resolveBundleContext(rawBundleContext = {}, submittedItems = []) 
             throw new Error('组合中的商品不存在或已下架');
         }
         const skus = (await findSkusForProduct(product)).filter(isSellableRecord);
-        const matchingOption = (() => {
+        const matchingOption = await (async () => {
             for (const option of options) {
-                if (pickString(option.product_id) !== lookupId(product)) continue;
+                const optionProductLookup = await resolveOptionProductLookup(option);
+                if (optionProductLookup !== lookupId(product)) continue;
                 const resolvedSku = pickResolvedSku(product, skus, option.sku_id);
-                if (optionMatchesSelection(option, selection, resolvedSku)) {
+                if (optionMatchesSelection({ ...option, product_id: optionProductLookup }, selection, resolvedSku)) {
                     return { option, resolvedSku };
                 }
             }

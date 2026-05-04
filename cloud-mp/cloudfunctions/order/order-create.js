@@ -512,6 +512,43 @@ function hasValue(value) {
     return value !== null && value !== undefined && value !== '';
 }
 
+function normalizeLookupTokens(values = []) {
+    const seen = new Set();
+    const list = [];
+    (Array.isArray(values) ? values : [values]).forEach((value) => {
+        if (Array.isArray(value)) {
+            normalizeLookupTokens(value).forEach((token) => {
+                if (seen.has(token)) return;
+                seen.add(token);
+                list.push(token);
+            });
+            return;
+        }
+        if (!hasValue(value)) return;
+        const raw = String(value).trim();
+        if (!raw) return;
+        const candidates = [raw];
+        const num = Number(raw);
+        if (Number.isFinite(num)) candidates.push(String(num));
+        candidates.forEach((candidate) => {
+            if (!candidate || seen.has(candidate)) return;
+            seen.add(candidate);
+            list.push(candidate);
+        });
+    });
+    return list;
+}
+
+function buildStationLookupValues(station = {}, extraValues = []) {
+    return normalizeLookupTokens([
+        station?._id,
+        station?.id,
+        station?._legacy_id,
+        station?.station_id,
+        extraValues
+    ]);
+}
+
 function normalizeScopeIds(value) {
     if (Array.isArray(value)) {
         return Array.from(new Set(value.map((item) => String(item).trim()).filter(Boolean)));
@@ -1162,6 +1199,80 @@ async function rollbackGoodsFundLedger(openid, amount, refId, remark) {
     return true;
 }
 
+async function rollbackOrderCreateSideEffects({
+    openid,
+    actualPoints = 0,
+    stockDeductions = [],
+    pickupReservation = null,
+    orderNo = '',
+    pickupStationStorageId = '',
+    normalizedOrderItems = [],
+    context = 'order_create_failed_before_persist',
+    error = null
+} = {}) {
+    const rollbackErrors = [];
+    const points = Math.max(0, Math.floor(toNumber(actualPoints, 0)));
+    if (points > 0 && openid) {
+        try {
+            await db.collection('users').where({ openid }).update({
+                data: {
+                    points: _.inc(points),
+                    growth_value: _.inc(points),
+                    updated_at: db.serverDate()
+                }
+            });
+        } catch (ptsErr) {
+            rollbackErrors.push({ step: 'points_rollback', error: ptsErr.message || String(ptsErr) });
+            console.error('[OrderCreate] ⚠️ 积分回滚失败 context=%s openid=%s points=%s error=%s', context, openid, points, ptsErr.message);
+        }
+    }
+
+    const stockRows = Array.isArray(stockDeductions) ? stockDeductions : [];
+    for (const { collection, docId, qty } of stockRows) {
+        if (!collection || !docId || !qty) continue;
+        try {
+            await db.collection(collection).doc(String(docId)).update({
+                data: { stock: _.inc(qty), updated_at: db.serverDate() }
+            });
+        } catch (stockErr) {
+            rollbackErrors.push({ step: 'stock_rollback', collection, docId, qty, error: stockErr.message || String(stockErr) });
+            console.error('[OrderCreate] ⚠️ 库存回滚失败 context=%s collection=%s docId=%s qty=%s error=%s', context, collection, docId, qty, stockErr.message);
+        }
+    }
+
+    if (pickupReservation && pickupStationStorageId && Array.isArray(normalizedOrderItems) && normalizedOrderItems.length) {
+        const rollbackOrderId = `rollback-${orderNo || Date.now()}`;
+        try {
+            await releasePickupStationInventoryForOrder(db, {
+                _id: rollbackOrderId,
+                id: rollbackOrderId,
+                order_no: orderNo,
+                pickup_station_id: pickupStationStorageId,
+                items: normalizedOrderItems,
+                pickup_stock_reservation_status: 'reserved'
+            }, `${context}，释放自提门店预占库存`);
+        } catch (pickupErr) {
+            rollbackErrors.push({ step: 'pickup_rollback', error: pickupErr.message || String(pickupErr) });
+            console.error('[OrderCreate] ⚠️ 自提库存回滚失败 context=%s error=%s', context, pickupErr.message);
+        }
+    }
+
+    if (rollbackErrors.length > 0) {
+        try {
+            await db.collection('rollback_error_logs').add({
+                data: {
+                    context,
+                    openid,
+                    order_no: orderNo,
+                    rollback_errors: rollbackErrors,
+                    original_error: error && (error.message || String(error)) || '',
+                    created_at: db.serverDate()
+                }
+            });
+        } catch (_) { /* 日志写入失败不影响主流程 */ }
+    }
+}
+
 /**
  * 创建订单（含金额计算、库存校验、优惠券核销）
  */
@@ -1324,6 +1435,7 @@ async function createOrder(openid, orderData) {
     });
     const isFlexBundleOrder = !!(bundleContext && pickString(bundleContext.bundle?.scene_type) === 'flex_bundle');
 
+    try {
     for (const item of normalizedInputItems) {
         const product = await findProductCached(item.product_id);
         if (!product) {
@@ -1532,6 +1644,15 @@ async function createOrder(openid, orderData) {
         });
         lockedAgentCostCandidates.push(lockedAgentUnitCost);
     }
+    } catch (err) {
+        await rollbackOrderCreateSideEffects({
+            openid,
+            stockDeductions,
+            context: 'order_item_prepare_failed',
+            error: err
+        });
+        throw err;
+    }
 
     totalAmount = Math.round(totalAmount * 100) / 100;
     originalTotalAmount = Math.round(originalTotalAmount * 100) / 100;
@@ -1675,34 +1796,93 @@ async function createOrder(openid, orderData) {
 
     if (deliveryType === 'express') {
         if (!addressInfo) {
-            throw new Error('收货地址不存在或不可用');
+            const err = new Error('收货地址不存在或不可用');
+            await rollbackOrderCreateSideEffects({
+                openid,
+                actualPoints,
+                stockDeductions,
+                context: 'address_unavailable_after_deductions',
+                error: err
+            });
+            throw err;
         }
         if (!resolveAddressReceiverName(addressInfo).trim()) {
-            throw new Error('收货地址缺少收货人姓名，请重新填写后再下单');
+            const err = new Error('收货地址缺少收货人姓名，请重新填写后再下单');
+            await rollbackOrderCreateSideEffects({
+                openid,
+                actualPoints,
+                stockDeductions,
+                context: 'address_receiver_invalid_after_deductions',
+                error: err
+            });
+            throw err;
         }
     } else {
         if (!pickupStationInfo) {
-            throw new Error('自提门店不存在');
+            const err = new Error('自提门店不存在');
+            await rollbackOrderCreateSideEffects({
+                openid,
+                actualPoints,
+                stockDeductions,
+                context: 'pickup_station_missing_after_deductions',
+                error: err
+            });
+            throw err;
         }
         const stationStatus = String(pickupStationInfo.status || 'active').toLowerCase();
         const isPickupPoint = pickupStationInfo.is_pickup_point ?? pickupStationInfo.pickup_enabled ?? 1;
         if (stationStatus !== 'active') {
-            throw new Error('自提门店未启用');
+            const err = new Error('自提门店未启用');
+            await rollbackOrderCreateSideEffects({
+                openid,
+                actualPoints,
+                stockDeductions,
+                context: 'pickup_station_inactive_after_deductions',
+                error: err
+            });
+            throw err;
         }
         if (!toBoolean(isPickupPoint)) {
-            throw new Error('当前门店不支持自提');
+            const err = new Error('当前门店不支持自提');
+            await rollbackOrderCreateSideEffects({
+                openid,
+                actualPoints,
+                stockDeductions,
+                context: 'pickup_station_disabled_after_deductions',
+                error: err
+            });
+            throw err;
         }
     }
+    const pickupStationLookupIds = deliveryType === 'pickup'
+        ? buildStationLookupValues(pickupStationInfo, [pickup_station_id])
+        : [];
+    const pickupStationStorageId = deliveryType === 'pickup'
+        ? pickString(pickupStationLookupIds[0] || pickupStationInfo?._id || pickupStationInfo?.id || pickupStationInfo?._legacy_id || pickup_station_id)
+        : '';
 
     // 6. 生成订单号
     const orderNo = 'ORD' + Date.now() + Math.floor(Math.random() * 1000);
     let pickupReservation = null;
     if (deliveryType === 'pickup') {
-        pickupReservation = await reservePickupStationInventory(db, {
-            stationId: pickup_station_id,
-            orderNo,
-            items: orderItems
-        });
+        try {
+            pickupReservation = await reservePickupStationInventory(db, {
+                stationId: pickupStationStorageId,
+                stationLookupIds: pickupStationLookupIds,
+                orderNo,
+                items: orderItems
+            });
+        } catch (err) {
+            await rollbackOrderCreateSideEffects({
+                openid,
+                actualPoints,
+                stockDeductions,
+                orderNo,
+                context: 'pickup_reservation_failed_after_deductions',
+                error: err
+            });
+            throw err;
+        }
     }
     const totalQuantity = orderItems.reduce((sum, item) => sum + Math.max(1, toNumber(item.qty || item.quantity, 1)), 0);
     const primaryItem = orderItems[0] || {};
@@ -1832,7 +2012,7 @@ async function createOrder(openid, orderData) {
         address: addressSnapshot,
         address_snapshot: addressSnapshot,
         delivery_type: deliveryType,
-        pickup_station_id: pickup_station_id || '',
+        pickup_station_id: pickupStationStorageId,
         pickupStation: pickupStationSummary,
         pickup_station_claimant_id: pickupStationInfo?.pickup_claimant_id || pickupStationInfo?.claimant_id || null,
         pickup_station_claimant_openid: String(pickupStationInfo?.pickup_claimant_openid || pickupStationInfo?.claimant_openid || ''),
@@ -1941,7 +2121,7 @@ const freshBalance = toNumber(u.agent_wallet_balance, 0);
                         _id: `precheck-${orderNo}`,
                         id: `precheck-${orderNo}`,
                         order_no: orderNo,
-                        pickup_station_id: pickup_station_id,
+                        pickup_station_id: pickupStationStorageId,
                         items: normalizedOrderItems,
                         pickup_stock_reservation_status: 'reserved'
                     }, '货款余额不足，释放自提门店预占库存').catch((pickupErr) => {
@@ -1991,7 +2171,7 @@ const freshBalance = toNumber(u.agent_wallet_balance, 0);
                     _id: `failed-create-${orderNumber}`,
                     id: `failed-create-${orderNumber}`,
                     order_no: orderNumber,
-                    pickup_station_id: pickup_station_id,
+                    pickup_station_id: pickupStationStorageId,
                     items: normalizedOrderItems,
                     pickup_stock_reservation_status: 'reserved'
                 }, '订单创建失败，释放自提门店预占库存');
@@ -2124,7 +2304,7 @@ const freshBalance = toNumber(u.agent_wallet_balance, 0);
                         _id: orderId,
                         id: orderId,
                         order_no: orderNo,
-                        pickup_station_id: pickup_station_id,
+                        pickup_station_id: pickupStationStorageId,
                         items: normalizedOrderItems,
                         pickup_stock_reservation_status: 'reserved'
                     }, '货款支付并发失败，释放自提门店预占库存').catch((pickupErr) => {
@@ -2210,7 +2390,7 @@ const freshBalance = toNumber(u.agent_wallet_balance, 0);
                         _id: orderId,
                         id: orderId,
                         order_no: orderNo,
-                        pickup_station_id: pickup_station_id,
+                        pickup_station_id: pickupStationStorageId,
                         items: normalizedOrderItems,
                         pickup_stock_reservation_status: 'reserved'
                     }, '货款支付失败，释放自提门店预占库存').catch((pickupErr) => {
@@ -2304,6 +2484,7 @@ module.exports = {
     ensureWalletAccountForUser,
     buildAddressSnapshot,
     _test: {
-        markUserCouponUsedForOrder
+        markUserCouponUsedForOrder,
+        rollbackOrderCreateSideEffects
     }
 };

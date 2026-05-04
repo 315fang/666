@@ -110,6 +110,18 @@ async function findProductById(rawId) {
     return legacy.data?.[0] || legacyText.data?.[0] || doc.data || null;
 }
 
+async function findBundleProductById(rawId) {
+    const id = pickString(rawId);
+    if (!id) return null;
+    const num = toNumber(id, NaN);
+    const [doc, legacy, legacyText] = await Promise.all([
+        db.collection('bundle_products').doc(id).get().catch(() => ({ data: null })),
+        Number.isFinite(num) ? db.collection('bundle_products').where({ id: num }).limit(1).get().catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
+        db.collection('bundle_products').where({ id }).limit(1).get().catch(() => ({ data: [] }))
+    ]);
+    return doc.data || legacy.data?.[0] || legacyText.data?.[0] || null;
+}
+
 async function findBundleById(rawId) {
     const id = pickString(rawId);
     if (!id) return null;
@@ -188,7 +200,10 @@ function buildProductSnapshot(product = {}, sku = null) {
 }
 
 async function buildBundleOption(option = {}) {
-    const product = await findProductById(option.product_id);
+    const bundleProduct = option.bundle_product_id ? await findBundleProductById(option.bundle_product_id) : null;
+    if (option.bundle_product_id && (!bundleProduct || !isSellableRecord(bundleProduct))) return null;
+    const productLookup = bundleProduct ? (bundleProduct.source_product_id || bundleProduct.product_id) : option.product_id;
+    const product = await findProductById(productLookup);
     if (!product || !isSellableRecord(product)) return null;
     const skus = (await findSkusForProduct(product)).filter(isSellableRecord);
     const resolvedSku = pickDefaultSku(product, skus, option.sku_id);
@@ -204,6 +219,8 @@ async function buildBundleOption(option = {}) {
     );
     return {
         option_key: pickString(option.option_key),
+        bundle_product_id: bundleProduct ? primaryId(bundleProduct) : pickString(option.bundle_product_id || ''),
+        product_library_source: bundleProduct ? 'bundle_products' : pickString(option.product_library_source || 'products', 'products'),
         product_id: lookupId(product),
         sku_id: resolvedSku ? lookupId(resolvedSku) : '',
         default_qty: defaultQty,
@@ -212,6 +229,13 @@ async function buildBundleOption(option = {}) {
         sort_order: toNumber(option.sort_order, 0),
         enabled: isEnabled(option.enabled ?? option.status, true),
         product: productSnapshot,
+        bundle_product: bundleProduct ? {
+            id: primaryId(bundleProduct),
+            name: pickString(bundleProduct.name || bundleProduct.display_name || productSnapshot.name),
+            category_id: bundleProduct.category_id != null ? bundleProduct.category_id : productSnapshot.category_id,
+            category_name: pickString(bundleProduct.category_name || ''),
+            library_label: '组合商品库'
+        } : null,
         sku: resolvedSku ? {
             id: lookupId(resolvedSku),
             name: pickString(resolvedSku.name || ''),

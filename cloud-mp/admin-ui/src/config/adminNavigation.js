@@ -162,7 +162,8 @@ const ADMIN_NAV_OVERRIDES = {
 
   '/products': { group: '商品货架', section: '商品基础', sectionOrder: 1, order: 1 },
   '/categories': { group: '商品货架', section: '商品基础', sectionOrder: 1, order: 2 },
-  '/product-bundles': { group: '商品货架', section: '自由选套餐', sectionOrder: 2, order: 1 },
+  '/bundle-products': { group: '商品货架', section: '自由选套餐', sectionOrder: 2, order: 1 },
+  '/product-bundles': { group: '商品货架', section: '自由选套餐', sectionOrder: 2, order: 2 },
   '/limited-sales': { group: '商品货架', section: '限时货架', sectionOrder: 3, order: 1 },
 
   '/coupons': { group: '营销活动', section: '优惠与券', sectionOrder: 1, order: 1 },

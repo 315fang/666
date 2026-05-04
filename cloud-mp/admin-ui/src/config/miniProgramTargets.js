@@ -62,6 +62,22 @@ export const MINI_PROGRAM_TARGETS = [
     note: '惊喜礼遇页'
   },
   {
+    key: 'page:flex-bundles',
+    title: '特惠随心选列表',
+    group: '营销入口',
+    link_type: 'page',
+    link_value: '/pages/activity/flex-bundles',
+    note: '自由组合列表页，适合首页大图和海报入口'
+  },
+  {
+    key: 'page:product-bundle-detail',
+    title: '组合商品详情',
+    group: '营销入口',
+    link_type: 'page',
+    link_value: '/pages/product-bundle/detail',
+    note: '组合商品详情页，链接可追加 id 参数'
+  },
+  {
     key: 'page:search',
     title: '搜索页',
     group: '商城功能',

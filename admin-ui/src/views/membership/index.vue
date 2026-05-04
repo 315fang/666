@@ -395,7 +395,7 @@ const memberLevels = ref([
   { level: 0, name: '普通用户', description: '注册用户', color: '#909399', price_tier: 'retail', commission_type: 'none', discount_rate: 1 },
   { level: 1, name: '初级代理', description: 'C1 购买299元产品升级，佣金80元/单，9折', color: '#409EFF', price_tier: 'member', commission_type: 'level1', discount_rate: 0.90 },
   { level: 2, name: '高级代理', description: 'C2 直推2个C2+销售满580，佣金120元/单，8.5折', color: '#67c23a', price_tier: 'leader', commission_type: 'level2', discount_rate: 0.85 },
-  { level: 3, name: '推广合伙人', description: 'B1 推荐10个C2或缴纳3000，佣金160元/单，6折', color: '#E6A23C', price_tier: 'agent', commission_type: 'level3', discount_rate: 0.60 },
+  { level: 3, name: '推广合伙人', description: 'B1 推荐10个C2或缴纳3000，佣金160元/单，6折', color: '#F59E0B', price_tier: 'agent', commission_type: 'level3', discount_rate: 0.60 },
   { level: 4, name: '运营合伙人', description: 'B2 推荐10个B1或缴纳3万，佣金160元/单，6折', color: '#F56C6C', price_tier: 'agent', commission_type: 'level3', discount_rate: 0.60 },
   { level: 5, name: '区域合伙人', description: 'B3 缴纳19.8万，区域管理，5.5折', color: '#9B59B6', price_tier: 'agent', commission_type: 'level3', discount_rate: 0.55 },
 ])

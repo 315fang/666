@@ -24,6 +24,15 @@ const CONFIG = {
 let privateKeyPem = null;
 let publicKeyPem = null;
 
+// 证书 cloud fileID（2026-05-03 审计 P0-1 改造）：
+// fileID 里既含 envId 也含 bucket name（`<bucketHash>-<envId>-<appId>`），
+// 简单替换 envId 不够。所以直接给整个 fileID 一个环境变量逃生口。
+// 生产环境不设变量就走原硬编码（对线上零影响）；fork / 换环境时设变量即可。
+const PRIVATE_KEY_FILE_ID = process.env.PAYMENT_PRIVATE_KEY_FILE_ID
+    || 'cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/payment-certs/apiclient_key.pem';
+const PUBLIC_KEY_FILE_ID = process.env.PAYMENT_PUBLIC_KEY_FILE_ID
+    || 'cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/payment-certs/wechatpay_pubkey.pem';
+
 function readDownloadedText(result = {}) {
     if (Buffer.isBuffer(result.fileContent)) return result.fileContent.toString('utf8');
     if (typeof result.fileContent === 'string') return result.fileContent;
@@ -43,7 +52,7 @@ async function loadPrivateKey(cloud) {
     // 方案1: 尝试从云存储读取
     try {
         const result = await cloud.downloadFile({
-            fileID: 'cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/payment-certs/apiclient_key.pem',
+            fileID: PRIVATE_KEY_FILE_ID,
         });
         const content = readDownloadedText(result);
         if (content.includes('PRIVATE KEY')) {
@@ -78,7 +87,7 @@ async function loadPublicKey(cloud) {
 
     try {
         const result = await cloud.downloadFile({
-            fileID: 'cloud://cloud1-9gywyqe49638e46f.636c-cloud1-9gywyqe49638e46f-1419893803/payment-certs/wechatpay_pubkey.pem',
+            fileID: PUBLIC_KEY_FILE_ID,
         });
         const content = readDownloadedText(result);
         if (content.includes('PUBLIC KEY')) {

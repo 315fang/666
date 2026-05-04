@@ -133,6 +133,9 @@
 
 .scroll-area {
   padding-bottom: 60rpx;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .section-head {

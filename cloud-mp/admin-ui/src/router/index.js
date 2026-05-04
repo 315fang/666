@@ -46,6 +46,12 @@ const routes = [
         meta: { title: '商品分类', icon: 'Menu', group: '商品与营销', section: '商品基础', sectionOrder: 1, order: 2, permission: 'products' }
       },
       {
+        path: 'bundle-products',
+        name: 'BundleProducts',
+        component: () => import('@/views/bundle-products/index.vue'),
+        meta: { title: '组合商品库', icon: 'Collection', group: '商品与营销', section: '自由组合', sectionOrder: 2, order: 1, permission: 'products' }
+      },
+      {
         path: 'orders',
         name: 'Orders',
         component: () => import('@/views/orders/index.vue'),
@@ -91,7 +97,7 @@ const routes = [
         path: 'product-bundles',
         name: 'ProductBundles',
         component: () => import('@/views/product-bundles/index.vue'),
-        meta: { title: '自由组合', icon: 'Box', group: '商品与营销', section: '活动投放', sectionOrder: 2, order: 3, permission: 'products' }
+        meta: { title: '自由组合', icon: 'Box', group: '商品与营销', section: '自由组合', sectionOrder: 2, order: 2, permission: 'products' }
       },
       {
         path: 'activities',

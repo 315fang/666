@@ -718,7 +718,10 @@ async function completeGoodsFundRefundSettlement(orderId, order = {}, refund = {
         refund_quantity_effective: refundQuantity
     };
 
-    const { isFullRefund } = await applyRefundProgress(canonicalOrderId, order, refundRecord);
+    const refundProgress = await applyRefundProgress(canonicalOrderId, order, refundRecord);
+    const { isFullRefund, rewardPointsClawback, growthClawback } = refundProgress;
+    refundRecord.reward_points_clawback_amount = rewardPointsClawback;
+    refundRecord.growth_clawback_amount = growthClawback;
     refundRecord.order_progress_applied_at = refundRecord.order_progress_applied_at || '1';
     await reverseBuyerRefundAssetsWithMarker(buyerOpenid, canonicalOrderId, order, refundRecord, isFullRefund);
     refundRecord.buyer_assets_reversed_at = refundRecord.buyer_assets_reversed_at || '1';

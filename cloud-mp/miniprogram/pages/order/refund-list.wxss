@@ -7,6 +7,9 @@
 .refund-list {
   height: 100vh;
   padding: 24rpx;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .refund-card {

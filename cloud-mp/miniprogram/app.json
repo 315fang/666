@@ -94,7 +94,6 @@
             "root": "pages/distribution",
             "name": "packageDistribution",
             "pages": [
-                "center",
                 "directed-invites",
                 "directed-invite",
                 "team",

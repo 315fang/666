@@ -284,7 +284,7 @@
               <el-tag :type="costSplitSumPct === 100 ? 'success' : 'warning'">
                 {{ costSplitSumPct }}%
               </el-tag>
-              <span v-if="costSplitSumPct !== 100" class="form-tip" style="color:#E6A23C">建议调整至合计 100%</span>
+              <span v-if="costSplitSumPct !== 100" class="form-tip" style="color:#F59E0B">建议调整至合计 100%</span>
             </el-form-item>
           </el-form>
         </el-card>
@@ -341,7 +341,7 @@
             <el-table-column prop="roleLevel" label="等级" width="110"><template #default="{row}">{{ ROLE_NAMES[row.roleLevel] }}</template></el-table-column>
             <el-table-column prop="teamSales" label="团队业绩" width="130"><template #default="{row}">¥{{ Number(row.teamSales).toFixed(2) }}</template></el-table-column>
             <el-table-column prop="sharePercent" label="比例" width="80"><template #default="{row}">{{ row.sharePercent }}%</template></el-table-column>
-            <el-table-column prop="dividendAmount" label="分红" width="130"><template #default="{row}"><b style="color:#E6A23C">¥{{ Number(row.dividendAmount).toFixed(2) }}</b></template></el-table-column>
+            <el-table-column prop="dividendAmount" label="分红" width="130"><template #default="{row}"><b style="color:#F59E0B">¥{{ Number(row.dividendAmount).toFixed(2) }}</b></template></el-table-column>
           </el-table>
         </el-card>
       </el-tab-pane>
@@ -587,7 +587,7 @@ const middlePreview = computed(() => {
 const previewBarSegments = computed(() => {
   const { rows, paid, rest } = middlePreview.value
   if (paid <= 0) return []
-  const colors = { d: '#409eff', g: '#67c23a', t: '#e6a23c' }
+  const colors = { d: '#409eff', g: '#67c23a', t: '#f59e0b' }
   const segs = rows.map((r) => ({
     key: r.key,
     flex: r.amount / paid,
@@ -830,5 +830,5 @@ onMounted(loadAll)
   border-radius: 3px;
   vertical-align: middle;
 }
-.warn-text { color: #e6a23c; }
+.warn-text { color: #f59e0b; }
 </style>

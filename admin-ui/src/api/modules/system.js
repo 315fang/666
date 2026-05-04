@@ -59,9 +59,3 @@ export const refreshSystemConfigCache = () => request({ url: '/system-configs/re
 export const getSystemConfigs = () => request({ url: '/system-configs', method: 'get' }).then(normalizeListResult)
 export const getSystemConfigHistory = (configKey) => request({ url: `/system-configs/${configKey}/history`, method: 'get' }).then(normalizeListResult)
 export const rollbackSystemConfig = (configKey, data) => request({ url: `/system-configs/${configKey}/rollback`, method: 'post', data })
-
-export const getDbIndexTables = () => request({ url: '/db-indexes/tables', method: 'get' }).then(normalizeListResult)
-export const getDbIndexes = (tableName) => request({ url: `/db-indexes/${tableName}`, method: 'get' }).then(normalizeListResult)
-export const getDbIndexColumns = (tableName) => request({ url: `/db-indexes/${tableName}/columns`, method: 'get' }).then(normalizeListResult)
-export const createDbIndex = (data) => request({ url: '/db-indexes', method: 'post', data })
-export const deleteDbIndex = (tableName, indexName) => request({ url: `/db-indexes/${tableName}/${indexName}`, method: 'delete' })

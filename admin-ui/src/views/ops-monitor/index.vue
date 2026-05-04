@@ -448,7 +448,7 @@ onUnmounted(() => clearInterval(timer))
 
 .stat-card:hover { box-shadow: 0 2px 12px rgba(0,0,0,.08); }
 .stat-card.ok    { border-left: 3px solid #67c23a; }
-.stat-card.warn  { border-left: 3px solid #e6a23c; }
+.stat-card.warn  { border-left: 3px solid #f59e0b; }
 .stat-card.err   { border-left: 3px solid #f56c6c; }
 
 .stat-icon {
@@ -504,7 +504,7 @@ onUnmounted(() => clearInterval(timer))
   padding: 6px 0;
   border-bottom: 1px dashed #eee;
   font-size: 13px;
-  color: #e6a23c;
+  color: #f59e0b;
 }
 
 /* ── 日志面板 ── */

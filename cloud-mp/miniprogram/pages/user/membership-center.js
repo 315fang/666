@@ -73,6 +73,8 @@ Page({
         loading: true,
         loadError: false,
         growthValue: 0,
+        pointsBalance: 0,
+        couponCount: 0,
         currentTierName: '',
         currentTierMin: 0,
         nextTierMin: null,
@@ -94,7 +96,7 @@ Page({
 
     onLoad() {
         const mc = getConfigSection('membership_config') || {};
-        wx.setNavigationBarTitle({ title: mc.membership_center_page_title || '会员权益中心' });
+        wx.setNavigationBarTitle({ title: mc.membership_center_page_title || '权益中心' });
     },
 
     onShow() {
@@ -110,9 +112,11 @@ Page({
     async loadData() {
         this.setData({ loading: true, loadError: false, cardReady: false });
         try {
-            const [profileRes, metaRes] = await Promise.all([
+            const [profileRes, metaRes, pointsRes, couponsRes] = await Promise.all([
                 get('/user/profile'),
-                get('/user/member-tier-meta')
+                get('/user/member-tier-meta'),
+                get('/points/account').catch(() => ({ code: -1, data: {} })),
+                get('/coupons/mine?status=unused&limit=1').catch(() => ({ code: -1, data: { total: 0 } }))
             ]);
             if (profileRes.code !== 0 || !profileRes.data) {
                 throw new Error(profileRes.message || '加载失败');
@@ -121,6 +125,10 @@ Page({
             const roleLevel = Number(profileRes.data.role_level) || 0;
             const meta = (metaRes && metaRes.code === 0 && metaRes.data) ? metaRes.data : {};
             const currentMeta = meta.current || {};
+            
+            // 积分和券数据
+            const pointsBalance = (pointsRes.code === 0 && pointsRes.data) ? (pointsRes.data.available_points || pointsRes.data.balance || 0) : 0;
+            const couponCount = (couponsRes.code === 0 && couponsRes.data) ? (couponsRes.data.total || 0) : 0;
 
             const rawTiers = applyGrowthTierDisplayNames(
                 (meta.growth_tiers || []).slice().sort((a, b) => (a.min || 0) - (b.min || 0))
@@ -202,6 +210,8 @@ Page({
             this.setData({
                 loading: false,
                 growthValue: Math.floor(g),
+                pointsBalance: Math.floor(pointsBalance),
+                couponCount: couponCount,
                 currentTierName: currentTier.name || '普通会员',
                 currentTierMin: currentMin,
                 nextTierMin: nextMin,
@@ -260,6 +270,14 @@ Page({
 
     goTeamCenter() {
         wx.navigateTo({ url: '/pages/distribution/business-center' });
+    },
+
+    goPoints() {
+        wx.navigateTo({ url: '/pages/points/index' });
+    },
+
+    goCouponList() {
+        wx.navigateTo({ url: '/pages/coupon/list' });
     },
 
     onRetry() {

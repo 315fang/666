@@ -102,7 +102,13 @@ export function useUrlSyncedFilter(opts) {
     const router = useRouter()
 
     let suppressUrlWrite = false
-    let suppressFormWrite = false
+    const pendingInternalQueryKeys = new Set()
+    const initialPagination = pagination ? {
+        page: Number.isFinite(Number(pagination.page)) && Number(pagination.page) > 0 ? Number(pagination.page) : 1,
+        limit: Number.isFinite(Number(pagination.limit)) && Number(pagination.limit) > 0 ? Number(pagination.limit) : 20
+    } : null
+
+    const getQueryKey = (query) => JSON.stringify(query || {})
 
     const getKeys = () => {
         if (Array.isArray(fields) && fields.length) return fields
@@ -118,9 +124,9 @@ export function useUrlSyncedFilter(opts) {
             if (serialized !== undefined && serialized !== '') q[k] = serialized
         })
         if (pagination) {
-            if (pagination.page > 1) q.page = String(pagination.page)
-            // 仅当 limit 不是默认值时写入
-            if (pagination.limit && pagination.limit !== 20) q.limit = String(pagination.limit)
+            if (pagination.page !== initialPagination.page) q.page = String(pagination.page)
+            // 仅当 limit 不是页面默认值时写入
+            if (pagination.limit && pagination.limit !== initialPagination.limit) q.limit = String(pagination.limit)
         }
         return q
     }
@@ -136,9 +142,9 @@ export function useUrlSyncedFilter(opts) {
         })
         if (pagination) {
             const p = Number(query.page)
-            if (Number.isFinite(p) && p > 0) pagination.page = p
+            pagination.page = Number.isFinite(p) && p > 0 ? p : initialPagination.page
             const l = Number(query.limit)
-            if (Number.isFinite(l) && l > 0) pagination.limit = l
+            pagination.limit = Number.isFinite(l) && l > 0 ? l : initialPagination.limit
         }
     }
 
@@ -158,20 +164,24 @@ export function useUrlSyncedFilter(opts) {
     watch(writeWatchSources(), () => {
         if (suppressUrlWrite) return
         const q = buildQuery()
-        const same = JSON.stringify(q) === JSON.stringify(route.query)
+        const queryKey = getQueryKey(q)
+        const same = queryKey === getQueryKey(route.query)
         if (same) return
-        router.replace({ path: route.path, query: q }).catch(() => { /* nav cancelled */ })
+        pendingInternalQueryKeys.add(queryKey)
+        router.replace({ path: route.path, query: q }).catch(() => {
+            pendingInternalQueryKeys.delete(queryKey)
+        })
     }, { deep: true })
 
     // URL 变化 → form（浏览器前进/后退）
     watch(() => route.query, (newQuery, oldQuery) => {
         if (suppressUrlWrite) return
         // 仅当 path 没变（同一 route）才同步回；切路由不处理
-        if (JSON.stringify(newQuery) === JSON.stringify(oldQuery)) return
-        suppressFormWrite = true
+        const newQueryKey = getQueryKey(newQuery)
+        if (newQueryKey === getQueryKey(oldQuery)) return
+        if (pendingInternalQueryKeys.delete(newQueryKey)) return
         applyQuery(newQuery)
         nextTick(() => {
-            suppressFormWrite = false
             if (typeof fetchFn === 'function') fetchFn()
         })
     })

@@ -66,6 +66,9 @@
 
 .list-scroll {
   height: calc(100vh - 300rpx);
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .invite-list {

@@ -19,7 +19,7 @@
   box-shadow: 0 4rpx 12rpx rgba(37,99,235,0.2);
 }
 .panel { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.panel .list-scroll { height: calc(100vh - 260rpx); padding: 0 24rpx 32rpx; box-sizing: border-box; }
+  .panel .list-scroll { height: calc(100vh - 260rpx); padding: 0 24rpx 32rpx; box-sizing: border-box; width: 100%; overflow-x: hidden; }
 .panel .head-row { flex-shrink: 0; }
 .head-row { display: flex; justify-content: flex-end; align-items: center; padding: 12rpx 24rpx 12rpx; }
 .clear-all { font-size: 24rpx; color: #dc2626; padding: 8rpx 16rpx; border-radius: 999rpx; background: #fef2f2; }

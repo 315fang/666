@@ -48,6 +48,9 @@
 /* 主滚动区 */
 .main-scroll {
   flex: 1;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 /* 资产卡 */

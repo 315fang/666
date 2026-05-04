@@ -1693,6 +1693,13 @@ const handleAction = {
         return success({ list: coupons });
     }),
 
+    'deleteCoupon': asyncHandler(async (openid, params) => {
+        const id = params.user_coupon_id || params.id;
+        if (!id) throw badRequest('缺少优惠券 ID');
+        await userCoupons.deleteCoupon(openid, id);
+        return success(null);
+    }),
+
     'couponCenter': asyncHandler(async (openid, params = {}) => {
         const sharePosterOnly = ['1', 'true', 'yes', 'on'].includes(String(params.share_poster || params.poster || '').trim().toLowerCase());
         const [templates, mine] = await Promise.all([
@@ -2001,10 +2008,18 @@ const handleAction = {
         );
         const list = sortedStations
             .map((station) => {
-                const availability = summarizeStationStockForItems(stockRows || [], station.id, requestedItems);
+                const stationLookupValues = buildStationLookupValues(station);
+                const stationDocId = pickString(station._id);
+                const stationLegacyId = pickString(station.id) && pickString(station.id) !== stationDocId
+                    ? pickString(station.id)
+                    : pickString(station._legacy_id);
+                const availability = summarizeStationStockForItems(stockRows || [], stationLookupValues, requestedItems);
                 const selectable = requestedItems.length ? availability.selectable : true;
                 return {
                     ...station,
+                    id: stationDocId || station.id,
+                    legacy_id: stationLegacyId,
+                    lookup_ids: stationLookupValues,
                     stock_status: availability.stock_status,
                     stock_status_text: availability.stock_status_text,
                     pickup_stock_text: selectable ? '有货' : '无货',

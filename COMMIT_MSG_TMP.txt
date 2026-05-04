@@ -1,0 +1,22 @@
+refactor(admin-ui): replace operation columns in refunds/withdrawals with RowActionsMenu (#6)
+
+之前两页操作列样式：
+  - refunds: 240px 宽塞最多 6 个 text 按钮（通过/拒绝/确认/同步/重试/详情）
+  - withdrawals: 220px 宽塞最多 5 个（通过/拒绝/打款/同步/详情）
+  各页样式不一致；窄屏下按钮换行重叠；危险操作（拒绝、重试退款）和普通操作
+  并排没有视觉区分。
+
+改用 RowActionsMenu：每行返回完整的 actions 数组（含 visible / type / danger），
+组件按 primary-count=2 把前 2 个外露、其它收进"更多"下拉。
+
+actions 顺序按"当前 status 下最常用 → 详情兜底"：
+  - refunds pending: [通过, 拒绝, 详情]      → 外露 通过/拒绝
+  - refunds approved: [确认退款, 详情]        → 外露 确认退款/详情
+  - withdrawals pending: [通过, 拒绝, 详情]  → 外露 通过/拒绝
+  - withdrawals approved: [打款, 同步, 详情] → 外露 打款/同步
+
+宽度：240/220 → 180px（约 -25%）。
+危险操作（拒绝、重试退款）通过 danger:true 在下拉里显示红字。
+
+验证：admin-ui build 20.16s。
+对应 2026-05-03 实用性体检 #6。

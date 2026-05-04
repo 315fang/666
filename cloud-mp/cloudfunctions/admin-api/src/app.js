@@ -31,6 +31,7 @@ const { registerDepositRoutes } = require('./admin-deposits');
 const { registerPickupStockRoutes } = require('./admin-pickup-stock');
 const { registerGoodsFundTransferRoutes } = require('./admin-goods-fund-transfers');
 const { registerDirectedInviteRoutes } = require('./admin-directed-invites');
+const { registerBundleProductRoutes } = require('./admin-bundle-products');
 const { registerProductBundleRoutes } = require('./admin-product-bundles');
 const { registerSystemRoutes } = require('./admin-system');
 const { registerFinanceRoutes } = require('./admin-finance');
@@ -486,6 +487,34 @@ function getDateKey(value, fallback = '') {
     const month = parts.find((part) => part.type === 'month')?.value;
     const day = parts.find((part) => part.type === 'day')?.value;
     return year && month && day ? `${year}-${month}-${day}` : fallback;
+}
+
+function normalizeDateFilterKey(value) {
+    const raw = pickString(value).trim();
+    if (!raw) return '';
+    return getDateKey(raw, raw.slice(0, 10));
+}
+
+function getRowDateFilterKey(row = {}, fields = []) {
+    for (const field of fields) {
+        const key = getDateKey(row?.[field], '');
+        if (key) return key;
+    }
+    return '';
+}
+
+function filterRowsByDateRange(rows = [], req = {}, fields = ['created_at', 'updated_at']) {
+    const startDate = normalizeDateFilterKey(req.query?.start_date);
+    const endDate = normalizeDateFilterKey(req.query?.end_date);
+    if (!startDate && !endDate) return rows;
+    if (startDate && endDate && startDate > endDate) return [];
+    return rows.filter((row) => {
+        const key = getRowDateFilterKey(row, fields);
+        if (!key) return false;
+        if (startDate && key < startDate) return false;
+        if (endDate && key > endDate) return false;
+        return true;
+    });
 }
 
 function normalizePaymentMethodCode(rawValue) {
@@ -2071,7 +2100,7 @@ function normalizeSkuRecord(sku, product, productId, index, nextSkuId) {
     return row;
 }
 
-function replaceProductSkus(product, incomingSkus, productLookup = null) {
+function replaceProductSkus(product, incomingSkus, productLookup = null, options = {}) {
     const skus = getCollection('skus');
     const productId = primaryId(product) ?? productLookup;
     const remainingSkus = skus.filter((item) => !skuBelongsToProduct(item, product, [productLookup]));
@@ -2089,8 +2118,21 @@ function replaceProductSkus(product, incomingSkus, productLookup = null) {
         return id;
     };
 
-    const normalizedSkus = toArray(incomingSkus).map((sku, index) => (
-        normalizeSkuRecord(sku || {}, product, productId, index, nextSkuId)
+    const incomingRows = toArray(incomingSkus);
+    const productStock = toNumber(product?.stock, 0);
+    const shouldSyncSingleSkuStock = options.syncSingleSkuStockFromProduct === true
+        && incomingRows.length === 1
+        && productStock > 0
+        && toNumber(incomingRows[0]?.stock, 0) <= 0;
+
+    const normalizedSkus = incomingRows.map((sku, index) => (
+        normalizeSkuRecord(
+            shouldSyncSingleSkuStock ? { ...(sku || {}), stock: productStock } : (sku || {}),
+            product,
+            productId,
+            index,
+            nextSkuId
+        )
     ));
 
     saveCollection('skus', [...remainingSkus, ...normalizedSkus]);
@@ -6078,7 +6120,7 @@ app.post('/admin/api/products', auth, requirePermission('products'), async (req,
     delete row.default_sku_index;
     if (!pickString(row.name).trim()) return fail(res, '商品名称不能为空');
     if (shouldReplaceSkus) {
-        const skuSync = replaceProductSkus(row, req.body.skus, row.id);
+        const skuSync = replaceProductSkus(row, req.body.skus, row.id, { syncSingleSkuStockFromProduct: true });
         Object.assign(row, skuSync.productPatch);
     }
     rows.push(row);
@@ -6086,7 +6128,8 @@ app.post('/admin/api/products', auth, requirePermission('products'), async (req,
     // 直写 CloudBase，确保新商品即时持久化（用数字 id 作为文档 _id 方便后续定点更新）
     const db = dataStore._internals?.db;
     if (db) {
-        await db.collection('products').doc(String(row.id)).set({ data: { ...row } }).catch((e) => {
+        const { _id: _omitProductCloudId, ...productCloudPayload } = { ...row };
+        await db.collection('products').doc(String(row.id)).set({ data: productCloudPayload }).catch((e) => {
             console.error('[product.create] CloudBase write failed:', e.message);
         });
     }
@@ -6129,7 +6172,7 @@ app.put('/admin/api/products/:id', auth, requirePermission('products'), async (r
     delete rows[index].skus;
     delete rows[index].default_sku_index;
     if (shouldReplaceSkus) {
-        const skuSync = replaceProductSkus(rows[index], req.body.skus, req.params.id);
+        const skuSync = replaceProductSkus(rows[index], req.body.skus, req.params.id, { syncSingleSkuStockFromProduct: true });
         Object.assign(rows[index], skuSync.productPatch);
     }
     const updatedRow = rows[index];
@@ -6310,6 +6353,26 @@ registerProductBundleRoutes(app, {
     toBoolean,
     createAuditLog,
     resolveManagedFileUrl,
+    flush: flushDataStoreOrThrow,
+    ok,
+    fail
+});
+
+registerBundleProductRoutes(app, {
+    auth,
+    requirePermission,
+    ensureFreshCollections,
+    getCollection,
+    saveCollection,
+    nextId,
+    nowIso,
+    findByLookup,
+    paginate,
+    sortByUpdatedDesc,
+    pickString,
+    toNumber,
+    toBoolean,
+    createAuditLog,
     flush: flushDataStoreOrThrow,
     ok,
     fail
@@ -8461,6 +8524,7 @@ app.get('/admin/api/withdrawals', auth, requirePermission('withdrawals'), (req, 
     let rows = sortByUpdatedDesc(ensureWithdrawalNumericIds()).map((item) => buildWithdrawalRecord(item, users));
     const keyword = pickString(req.query.keyword).trim().toLowerCase();
     const status = pickString(req.query.status).trim();
+    rows = filterRowsByDateRange(rows, req, ['created_at', 'applied_at', 'requested_at', 'updated_at']);
     if (keyword) {
         rows = rows.filter((item) => [
             item.user?.nickname,
@@ -8500,6 +8564,41 @@ app.put('/admin/api/withdrawals/:id/approve', auth, requirePermission('withdrawa
         persisted: true,
         reloaded_collections: reloadMeta.reloaded_collections,
         read_at: reloadMeta.read_at
+    });
+});
+
+app.post('/admin/api/withdrawals/batch-approve', auth, requirePermission('withdrawals'), async (req, res) => {
+    await ensureFreshCollections(['withdrawals']);
+    const ids = toArray(req.body?.withdrawal_ids || req.body?.ids).map((id) => pickString(id)).filter(Boolean);
+    if (!ids.length) return fail(res, '请选择要操作的提现记录', 400);
+    const remark = pickString(req.body?.remark).trim();
+    let affected = 0;
+    const blockedIds = [];
+
+    for (const id of ids) {
+        const current = findByLookup(ensureWithdrawalNumericIds(), id);
+        if (!current || pickString(current.status) !== 'pending') {
+            blockedIds.push(current ? (primaryId(current) || id) : id);
+            continue;
+        }
+        const patch = {
+            status: 'approved',
+            approved_at: nowIso(),
+            remark: remark || pickString(current.remark),
+            updated_at: nowIso()
+        };
+        const persisted = await persistPatchedRow('withdrawals', id, current, patch);
+        if (!persisted.ok) return fail(res, '批量提现审核更新失败，请稍后重试', 500);
+        affected += 1;
+    }
+
+    createAuditLog(req.admin, 'withdrawal.batch_approve', 'withdrawals', { affected, blocked_ids: blockedIds });
+    const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.withdrawals);
+    okStrongWrite(res, { success: true, affected, blocked_ids: blockedIds }, {
+        persisted: true,
+        reloaded_collections: reloadMeta.reloaded_collections,
+        read_at: reloadMeta.read_at,
+        fallbacks_used: blockedIds.length ? ['blocked_ids'] : []
     });
 });
 
@@ -8600,6 +8699,114 @@ app.put('/admin/api/withdrawals/:id/reject', auth, requirePermission('withdrawal
         persisted: true,
         reloaded_collections: reloadMeta.reloaded_collections,
         read_at: reloadMeta.read_at
+    });
+});
+
+app.post('/admin/api/withdrawals/batch-reject', auth, requirePermission('withdrawals'), async (req, res) => {
+    await ensureFreshCollections(['withdrawals', 'users']);
+    const ids = toArray(req.body?.withdrawal_ids || req.body?.ids).map((id) => pickString(id)).filter(Boolean);
+    if (!ids.length) return fail(res, '请选择要操作的提现记录', 400);
+    const reasonCheck = requireManualAdjustmentReason(req.body?.reason, '拒绝原因');
+    if (!reasonCheck.ok) return fail(res, reasonCheck.message);
+    let affected = 0;
+    const blockedIds = [];
+
+    for (const id of ids) {
+        const current = findByLookup(ensureWithdrawalNumericIds(), id);
+        const currentStatus = pickString(current?.status);
+        if (!current || !['pending', 'approved'].includes(currentStatus) || (currentStatus === 'approved' && hasWechatWithdrawalTransferStarted(current))) {
+            blockedIds.push(current ? (primaryId(current) || id) : id);
+            continue;
+        }
+        const withdrawalPatch = {
+            status: 'rejected',
+            reject_reason: reasonCheck.reason,
+            remark: reasonCheck.reason,
+            refunded_at: nowIso(),
+            updated_at: nowIso()
+        };
+        const persisted = await patchWithdrawalStatusIf(
+            current,
+            [currentStatus],
+            withdrawalPatch,
+            (row) => pickString(row.status) === currentStatus && !hasWechatWithdrawalTransferStarted(row)
+        );
+        if (!persisted.ok) {
+            blockedIds.push(primaryId(current) || id);
+            continue;
+        }
+
+        const refundAmount = toNumber(current.amount, 0);
+        const refundOpenid = current.openid || '';
+        const isDepositCommission = isDepositCommissionApplication(current);
+        if (refundAmount > 0 && !isDepositCommission) {
+            const user = findUserByAnyId(getCollection('users'), current.user_id || current.openid);
+            if (!user) return fail(res, `提现用户不存在，无法回退余额：${primaryId(current) || id}`, 400);
+            const userDocId = pickString(user._id || user.id);
+            const currentBalance = toNumber(user.commission_balance ?? user.balance, 0);
+            const currentWithdrawn = toNumber(user.total_withdrawn, 0);
+            const isDepositApplication = isDepositWithdrawalApplication(current);
+            const currentPiggyBankUnlocked = toNumber(user.piggy_bank_unlocked_amount, 0);
+            const userPatch = {
+                balance: roundMoney(currentBalance + refundAmount),
+                commission_balance: roundMoney(currentBalance + refundAmount),
+                total_withdrawn: Math.max(0, roundMoney(currentWithdrawn - refundAmount)),
+                updated_at: nowIso()
+            };
+            if (isDepositApplication) {
+                userPatch.piggy_bank_unlocked_amount = roundMoney(currentPiggyBankUnlocked + refundAmount);
+            }
+            if (dataStore._internals?.db) {
+                if (!userDocId) return fail(res, '提现用户文档不存在，无法回退余额', 500);
+                const userWriteOk = await directPatchDocument('users', userDocId, userPatch);
+                if (!userWriteOk) return fail(res, '提现余额回退失败，请稍后重试', 500);
+            } else {
+                patchCollectionRow('users', current.user_id || current.openid, (row) => ({ ...row, ...userPatch }));
+            }
+            if (refundOpenid) {
+                try {
+                    await appendWalletLogEntry({
+                        openid: refundOpenid,
+                        type: isDepositApplication ? 'deposit_application_reject_refund' : 'withdraw_reject_refund',
+                        amount: refundAmount,
+                        withdraw_id: primaryId(current),
+                        source_type: current.source_type,
+                        description: isDepositApplication ? `存款申请驳回退回 ${refundAmount} 元` : `提现驳回退回 ${refundAmount} 元`,
+                        remark: reasonCheck.reason
+                    });
+                } catch (error) {
+                    const rollbackPatch = {
+                        balance: currentBalance,
+                        commission_balance: currentBalance,
+                        total_withdrawn: currentWithdrawn,
+                        updated_at: nowIso()
+                    };
+                    if (isDepositApplication) {
+                        rollbackPatch.piggy_bank_unlocked_amount = currentPiggyBankUnlocked;
+                    }
+                    if (dataStore._internals?.db && userDocId) {
+                        await directPatchDocument('users', userDocId, rollbackPatch);
+                    } else {
+                        patchCollectionRow('users', current.user_id || current.openid, (row) => ({ ...row, ...rollbackPatch }));
+                    }
+                    return fail(res, `提现驳回回款流水写入失败：${error.message || '未知错误'}`, 500);
+                }
+            }
+        }
+        affected += 1;
+    }
+
+    createAuditLog(req.admin, 'withdrawal.batch_reject', 'withdrawals', {
+        affected,
+        blocked_ids: blockedIds,
+        reason: reasonCheck.reason
+    });
+    const reloadMeta = await reloadCollectionsWithMeta(STRONG_CONSISTENCY_COLLECTIONS.withdrawals);
+    okStrongWrite(res, { success: true, affected, blocked_ids: blockedIds }, {
+        persisted: true,
+        reloaded_collections: reloadMeta.reloaded_collections,
+        read_at: reloadMeta.read_at,
+        fallbacks_used: blockedIds.length ? ['blocked_ids'] : []
     });
 });
 
@@ -8793,6 +9000,7 @@ registerRefundRoutes(app, {
     toNumber,
     roundMoney,
     paginate,
+    filterRowsByDateRange,
     okStrongRead,
     okStrongWrite,
     reloadCollectionsWithMeta,
@@ -8809,6 +9017,7 @@ registerRefundRoutes(app, {
     getRefundRouteMeta,
     inferRefundResumeOrderStatus,
     getOrderRefundProgress,
+    toArray,
     appendWalletLogEntry,
     appendGoodsFundLogEntry,
     cancelCommissionsForOrder,
@@ -8896,6 +9105,7 @@ app.get('/admin/api/commissions', auth, requirePermission('commissions'), async 
     const type = pickString(req.query.type).trim().toLowerCase();
     const keyword = pickString(req.query.keyword).trim().toLowerCase();
     const userId = pickString(req.query.user_id).trim();
+    rows = filterRowsByDateRange(rows, req, ['created_at', 'settled_at', 'unfrozen_at', 'updated_at']);
     if (status) rows = rows.filter((item) => item.status === status);
     if (type) rows = rows.filter((item) => pickString(item.type).trim().toLowerCase() === type);
     if (keyword) {
@@ -9566,13 +9776,14 @@ app.get('/admin/api/operations/dashboard', auth, requirePermission('dashboard'),
         ok(res, cached);
         return;
     }
-    await ensureFreshCollections(['orders', 'products', 'users', 'refunds', 'withdrawals', 'commissions']);
+    await ensureFreshCollections(['orders', 'products', 'users', 'refunds', 'withdrawals', 'commissions', 'goods_fund_transfer_applications']);
     const orders = getCollection('orders');
     const products = getCollection('products');
     const users = getCollection('users').filter(isVisibleAccount);
     const refunds = getCollection('refunds');
     const withdrawals = getCollection('withdrawals');
     const commissions = getCollection('commissions');
+    const goodsFundTransfers = getCollection('goods_fund_transfer_applications');
     const today = getDateKey(Date.now(), nowIso().slice(0, 10));
     const paidStatuses = ['paid', 'agent_confirmed', 'shipping_requested', 'shipped', 'completed'];
     const businessOrders = orders.filter(isBusinessOrder);
@@ -9586,6 +9797,7 @@ app.get('/admin/api/operations/dashboard', auth, requirePermission('dashboard'),
     const pendingRefundCount = refunds.filter((item) => pickString(item.status) === 'pending').length;
     const pendingWithdrawalCount = withdrawals.filter((item) => pickString(item.status) === 'pending').length;
     const pendingCommissionCount = commissions.filter((item) => pickString(item.status) === 'pending_approval').length;
+    const pendingGoodsFundTransferCount = goodsFundTransfers.filter((item) => pickString(item.status) === 'pending').length;
 
     const payload = {
         kpi: {
@@ -9598,7 +9810,9 @@ app.get('/admin/api/operations/dashboard', auth, requirePermission('dashboard'),
         pending: {
             withdrawals: pendingWithdrawalCount,
             refunds: pendingRefundCount,
-            commissions: pendingCommissionCount
+            commissions: pendingCommissionCount,
+            goods_fund_transfers: pendingGoodsFundTransferCount,
+            goodsFundTransfers: pendingGoodsFundTransferCount
         },
         recent_orders: sortByUpdatedDesc(businessOrders).slice(0, 8),
         low_stock: sortByUpdatedDesc(products)
@@ -9614,7 +9828,8 @@ app.get('/admin/api/operations/dashboard', auth, requirePermission('dashboard'),
             pending_receive: pendingReceiveCount,
             pending_refund: pendingRefundCount,
             pending_withdrawal: pendingWithdrawalCount,
-            pending_commission: pendingCommissionCount
+            pending_commission: pendingCommissionCount,
+            pending_goods_fund_transfer: pendingGoodsFundTransferCount
         }
     };
     res.set('x-runtime-cache-hit', '0');

@@ -89,14 +89,9 @@
             </view>
           </view>
           <view class="vip-card-promo">
-            <view class="promo-block" bindtap="onGrowthPrivilegesTap">
-              <text class="promo-title">会员中心</text>
-              <view class="promo-subtitle">查看说明 <text class="promo-arrow">›</text></view>
-            </view>
-            <view class="promo-divider"></view>
-            <view class="promo-block" bindtap="goPoints">
-              <text class="promo-title">积分中心</text>
-              <view class="promo-subtitle">每日签到 <text class="promo-arrow">›</text></view>
+            <view class="promo-block promo-block-single" bindtap="onGrowthPrivilegesTap">
+              <text class="promo-title">权益中心</text>
+              <view class="promo-subtitle">查看全部权益 <text class="promo-arrow">›</text></view>
             </view>
           </view>
         </view>

@@ -86,7 +86,9 @@
 /* 列表滚动区 */
 .log-scroll {
   flex: 1;
-  overflow: hidden;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .log-list {

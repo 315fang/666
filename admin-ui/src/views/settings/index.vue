@@ -75,11 +75,9 @@ import { useRoute } from 'vue-router'
 import { getSettings, updateSettings, getSystemStatus, getMiniProgramConfig, updateMiniProgramConfig, getPaymentHealth, getAlertConfig, saveAlertConfig, testAlertWebhook } from '@/api'
 import BasicInfoPanel from './components/BasicInfoPanel.vue'
 import OperationsConfigPanel from './components/OperationsConfigPanel.vue'
-import ProductDetailPledgesEditor from './components/ProductDetailPledgesEditor.vue'
 import PaymentHealthPanel from './components/PaymentHealthPanel.vue'
 import AccountSettingsPanel from './components/AccountSettingsPanel.vue'
 import AlertConfigPanel from './components/AlertConfigPanel.vue'
-import LightPromptModalsEditor from './components/LightPromptModalsEditor.vue'
 import MiniProgramSettingsPanel from './components/MiniProgramSettingsPanel.vue'
 
 const userStore = useUserStore()

@@ -9,6 +9,7 @@
 - 收口方案：[`plans/2026-04-06-repo-closure-program.md`](/C:/Users/21963/WeChatProjects/zz/docs/plans/2026-04-06-repo-closure-program.md)
 - 任务清单：[`plans/2026-04-06-repo-closure-tasklist.md`](/C:/Users/21963/WeChatProjects/zz/docs/plans/2026-04-06-repo-closure-tasklist.md)
 - 并行执行计划：[`plans/2026-04-08-three-track-execution-plan.md`](/C:/Users/21963/WeChatProjects/zz/docs/plans/2026-04-08-three-track-execution-plan.md)
+- 成长值会员与代理身份融合方案：[`plans/2026-05-02-growth-agent-fusion-plan.md`](/C:/Users/21963/WeChatProjects/zz/docs/plans/2026-05-02-growth-agent-fusion-plan.md)
 
 ## 真相源规则
 

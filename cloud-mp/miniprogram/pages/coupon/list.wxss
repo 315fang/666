@@ -1,16 +1,26 @@
 /* 我的优惠券 */
-.container { min-height: 100vh; background: #f8f7f4; }
+.container {
+  min-height: 100vh;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  background: #f8f7f4;
+}
 
 .nav-bar {
   display: flex; align-items: center; justify-content: space-between; padding: 12rpx 24rpx;
   background: #1e3a5f;
+  width: 100%; box-sizing: border-box; overflow-x: hidden;
 }
 .nav-back { width: 56rpx; height: 56rpx; display: flex; align-items: center; justify-content: center; border-radius: 50%; }
 .nav-icon { width: 32rpx; height: 32rpx; filter: invert(1); }
 .nav-title { font-size: 32rpx; font-weight: 700; color: #fff; }
 .nav-placeholder { width: 56rpx; }
 
-.tab-row { display: flex; background: #fff; border-bottom: 1rpx solid #f3f4f6; padding: 0 20rpx; position: relative; }
+.tab-row {
+  display: flex; background: #fff; border-bottom: 1rpx solid #f3f4f6; padding: 0 24rpx; position: relative;
+  width: 100%; box-sizing: border-box; overflow-x: hidden;
+}
 .tab-item {
   flex: 1; text-align: center; padding: 24rpx 0; font-size: 28rpx; color: #6b7280;
   position: relative; display: flex; align-items: center; justify-content: center; gap: 6rpx;
@@ -22,17 +32,22 @@
   min-width: 28rpx; height: 28rpx; border-radius: 14rpx;
   display: flex; align-items: center; justify-content: center; padding: 0 6rpx; margin-left: 4rpx;
 }
+.tab-indicator-track {
+  position: absolute; left: 24rpx; right: 24rpx; bottom: 0; height: 6rpx;
+  pointer-events: none; overflow: hidden;
+}
 .tab-indicator {
-  position: absolute; bottom: 0; left: 0; width: 33.33%; height: 6rpx;
+  width: 33.3333%; height: 100%;
   background: #dc2626; border-radius: 3rpx;
   transition: transform 0.35s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
-.coupon-scroll { height: calc(100vh - 200rpx); }
+.coupon-scroll { height: calc(100vh - 200rpx); width: 100%; box-sizing: border-box; overflow-x: hidden; }
 
 .empty-wrap {
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   padding: 100rpx 40rpx; gap: 14rpx;
+  width: 100%; box-sizing: border-box; overflow-x: hidden;
 }
 .empty-emoji { font-size: 80rpx; margin-bottom: 8rpx; }
 .empty-text { font-size: 28rpx; color: #1f2937; text-align: center; font-weight: 600; }
@@ -43,7 +58,10 @@
   box-shadow: 0 4rpx 12rpx rgba(220,38,38,0.2);
 }
 
-.skeleton-list { padding: 20rpx 24rpx; display: flex; flex-direction: column; gap: 20rpx; }
+.skeleton-list {
+  padding: 20rpx 24rpx; display: flex; flex-direction: column; gap: 20rpx;
+  width: 100%; box-sizing: border-box; overflow-x: hidden;
+}
 .skeleton-coupon { display: flex; background: #fff; border-radius: 16rpx; overflow: hidden; height: 140rpx; }
 .sk-left {
   width: 160rpx;
@@ -61,10 +79,37 @@
 .sk-tiny { width: 45%; }
 @keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
 
-.coupon-list { padding: 24rpx; display: flex; flex-direction: column; gap: 24rpx; }
+.coupon-list {
+  padding: 24rpx; display: flex; flex-direction: column; gap: 24rpx;
+  width: 100%; box-sizing: border-box; overflow-x: hidden;
+}
+.coupon-swipe-row {
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 16rpx;
+}
+.coupon-delete-action {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 128rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #dc2626;
+  color: #fff;
+  font-size: 26rpx;
+  font-weight: 700;
+  border-radius: 0 16rpx 16rpx 0;
+}
 .coupon-card {
   display: flex; background: #fff; border-radius: 16rpx; overflow: hidden;
   position: relative; border: 1rpx solid rgba(220,38,38,0.1);
+  width: 100%; box-sizing: border-box; z-index: 1;
+  transition: transform 0.18s ease;
 }
 .coupon-card.used, .coupon-card.expired, .coupon-card.coupon-expired { opacity: 0.6; filter: grayscale(0.5); }
 .coupon-card.unused.coupon-expired { border-color: #e5e7eb; background: #f9fafb; }
@@ -90,10 +135,20 @@
 .coupon-right {
   flex: 1; padding: 30rpx 160rpx 30rpx 20rpx;
   display: flex; flex-direction: column; justify-content: center; position: relative;
+  min-width: 0; box-sizing: border-box; overflow: hidden;
 }
-.coupon-name { font-size: 30rpx; font-weight: 700; color: #1f2937; margin-bottom: 12rpx; }
-.coupon-expire { font-size: 22rpx; color: #dc2626; margin-bottom: 6rpx; }
-.coupon-scope { font-size: 22rpx; color: #6b7280; }
+.coupon-name {
+  font-size: 30rpx; font-weight: 700; color: #1f2937; margin-bottom: 12rpx;
+  width: 100%; box-sizing: border-box; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.coupon-expire {
+  font-size: 22rpx; color: #dc2626; margin-bottom: 6rpx;
+  width: 100%; box-sizing: border-box; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.coupon-scope {
+  font-size: 22rpx; color: #6b7280;
+  width: 100%; box-sizing: border-box; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .coupon-scope.scope-limit { color: #991b1b; }
 
 .coupon-action {

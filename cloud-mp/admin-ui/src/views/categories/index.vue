@@ -23,9 +23,17 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
             <el-button size="small" @click="openEdit(row)">编辑</el-button>
+            <el-button
+              size="small"
+              :type="Number(row.status) === 1 ? 'warning' : 'success'"
+              plain
+              @click="handleToggleStatus(row)"
+            >
+              {{ Number(row.status) === 1 ? '停用' : '启用' }}
+            </el-button>
             <el-popconfirm title="确认删除该分类？" @confirm="onDelete(row)">
               <template #reference>
                 <el-button size="small" type="danger" plain>删除</el-button>
@@ -135,6 +143,18 @@ const onDelete = async (row) => {
   await deleteCategory(row.id)
   ElMessage.success('删除成功')
   fetchList()
+}
+
+const handleToggleStatus = async (row) => {
+  const newStatus = Number(row.status) === 1 ? 0 : 1
+  const actionText = newStatus === 1 ? '启用' : '停用'
+  try {
+    await updateCategory(row.id, { status: newStatus })
+    ElMessage.success(`已${actionText}`)
+    fetchList()
+  } catch (e) {
+    ElMessage.error(e?.message || `${actionText}失败`)
+  }
 }
 
 onMounted(fetchList)

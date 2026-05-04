@@ -56,7 +56,7 @@
         <el-col :span="6">
           <el-statistic title="派送中" :value="stats.delivering">
             <template #suffix>
-              <el-icon color="#e6a23c"><Location /></el-icon>
+              <el-icon color="#f59e0b"><Location /></el-icon>
             </template>
           </el-statistic>
         </el-col>

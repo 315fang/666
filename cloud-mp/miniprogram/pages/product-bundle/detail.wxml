@@ -88,6 +88,7 @@
             <view class="option-info">
               <view>
                 <text class="option-name">{{option.product.name}}</text>
+                <text class="option-library-tag" wx:if="{{option.bundle_product_id}}">组合商品库</text>
                 <text class="option-spec" wx:if="{{option.sku && option.sku.spec_value}}">{{option.sku.spec_value}}</text>
               </view>
               <view class="option-bottom">

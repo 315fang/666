@@ -70,7 +70,7 @@ function createCloudBaseStore(options) {
     const allKnownCollections = new Set([
         ...basePreloadCollections,
         'admin_audit_logs', 'addresses', 'banners',
-        'branch_agent_claims', 'branch_agent_stations', 'cart_items',
+        'branch_agent_claims', 'branch_agent_stations', 'bundle_products', 'cart_items',
         'categories', 'commissions', 'content_boards', 'content_board_products',
         'coupon_claim_tickets',
         'contents', 'coupon_auto_rules', 'coupons', 'directed_invites', 'dividend_executions',

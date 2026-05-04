@@ -228,7 +228,7 @@
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="总库存">
-              <el-input-number v-model="form.stock" :min="0" :precision="0" style="width:100%" />
+              <el-input-number v-model="form.stock" :min="0" :precision="0" style="width:100%" @change="syncSingleSkuStockFromTotal({ force: true })" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -263,7 +263,7 @@
               <div v-for="(row, index) in form.skus" :key="row.id || row._id || index" class="sku-row">
                 <span class="sku-row-index">{{ index + 1 }}</span>
                 <el-input v-model="row.spec_value" placeholder="规格，如：红色 / 500g / 大份" size="small" class="sku-name-input" />
-                <el-input-number v-model="row.stock" :min="0" :precision="0" size="small" :controls="false" placeholder="库存" class="sku-stock-input" />
+                <el-input-number v-model="row.stock" :min="0" :precision="0" size="small" :controls="false" placeholder="库存" class="sku-stock-input" @change="syncTotalStockFromSkus" />
                 <el-input-number
                   v-if="skuPriceOverride"
                   v-model="row.retail_price"
@@ -646,6 +646,20 @@ const buildSkuPayloads = () => form.skus.map((sku, index) => {
   }
 })
 
+const syncSingleSkuStockFromTotal = ({ force = false } = {}) => {
+  if (!skuEnabled.value || form.skus.length !== 1) return
+  const totalStock = Number(form.stock || 0)
+  const skuStock = Number(form.skus[0].stock || 0)
+  if ((force && totalStock >= 0) || (totalStock > 0 && skuStock <= 0)) {
+    form.skus[0].stock = totalStock
+  }
+}
+
+const syncTotalStockFromSkus = () => {
+  if (!skuEnabled.value || !form.skus.length) return
+  form.stock = form.skus.reduce((sum, sku) => sum + Number(sku.stock || 0), 0)
+}
+
 const normalizePersistentAssetList = (urls = []) => (Array.isArray(urls) ? urls : [])
   .map((url) => buildPersistentAssetRef({ url }))
   .filter(Boolean)
@@ -697,6 +711,7 @@ const openForm = (row) => {
     })
     skuEnabled.value = (row.skus?.length > 0)
     skuPriceOverride.value = hasCustomSkuPrice(nextSkus, row.retail_price)
+    syncSingleSkuStockFromTotal()
     // 编辑已有商品时，后端可能返回带签名的临时预览 URL；
     // 表单里改存稳定引用，预览仍沿用当前可显示地址。
     seedImagePreviewCache(normalizedImages, row.images || [])
@@ -785,6 +800,7 @@ const submitForm = async (status) => {
         ElMessage.warning('请填写规格价格')
         return
       }
+      syncSingleSkuStockFromTotal()
       data.skus = buildSkuPayloads()
       data.default_sku_index = 0
     }

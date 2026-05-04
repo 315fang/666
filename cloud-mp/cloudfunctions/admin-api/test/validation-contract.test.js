@@ -1418,6 +1418,135 @@ test('POST /admin/api/commissions/batch-reject cancels pending commissions', asy
     }
 });
 
+test('GET /admin/api/commissions respects start_date and end_date', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const commissions = app.locals.dataStore.getCollection('commissions');
+    const oldCommission = {
+        _id: 'test-commission-date-old',
+        id: 999309,
+        openid: 'test-openid-commission-date-old',
+        user_id: 999310,
+        order_id: 'ORDER-COMMISSION-DATE-OLD',
+        order_no: 'ORDER-COMMISSION-DATE-OLD',
+        amount: 8,
+        status: 'pending_approval',
+        type: 'direct',
+        created_at: '2026-04-01T00:00:00.000Z',
+        updated_at: '2026-04-01T00:00:00.000Z'
+    };
+    const newCommission = {
+        _id: 'test-commission-date-new',
+        id: 999311,
+        openid: 'test-openid-commission-date-new',
+        user_id: 999312,
+        order_id: 'ORDER-COMMISSION-DATE-NEW',
+        order_no: 'ORDER-COMMISSION-DATE-NEW',
+        amount: 9,
+        status: 'pending_approval',
+        type: 'direct',
+        created_at: '2026-05-02T00:00:00.000Z',
+        updated_at: '2026-05-02T00:00:00.000Z'
+    };
+    commissions.push(oldCommission, newCommission);
+    app.locals.dataStore.saveCollection?.('commissions', commissions);
+
+    try {
+        const response = await invoke('/admin/api/commissions?start_date=2026-05-01&end_date=2026-05-03&limit=100', {
+            method: 'GET',
+            admin
+        });
+
+        assert.equal(response.statusCode, 200);
+        const list = response.body.data?.list || response.body.data?.data?.list || [];
+        assert.equal(list.some((row) => String(row.id) === String(newCommission.id)), true);
+        assert.equal(list.some((row) => String(row.id) === String(oldCommission.id)), false);
+    } finally {
+        app.locals.dataStore.saveCollection?.(
+            'commissions',
+            app.locals.dataStore.getCollection('commissions')
+                .filter((row) => ![oldCommission.id, newCommission.id].some((id) => String(row.id) === String(id)))
+        );
+    }
+});
+
+test('POST /admin/api/refunds/batch-approve approves pending refunds', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const refunds = app.locals.dataStore.getCollection('refunds');
+    const tempRefund = {
+        _id: 'test-refund-batch-approve',
+        id: 999313,
+        order_id: 'ORDER-REFUND-BATCH-APPROVE',
+        order_no: 'ORDER-REFUND-BATCH-APPROVE',
+        amount: 18,
+        status: 'pending',
+        reason: 'test',
+        created_at: '2026-05-02T00:00:00.000Z',
+        updated_at: '2026-05-02T00:00:00.000Z'
+    };
+    refunds.push(tempRefund);
+    app.locals.dataStore.saveCollection?.('refunds', refunds);
+
+    try {
+        const response = await invoke('/admin/api/refunds/batch-approve', {
+            method: 'POST',
+            admin,
+            body: { ids: [tempRefund.id] }
+        });
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.success, true);
+        assert.equal(response.body.data?.data?.affected, 1);
+        const updatedRefund = app.locals.dataStore.getCollection('refunds').find((row) => String(row.id) === String(tempRefund.id));
+        assert.equal(updatedRefund.status, 'approved');
+    } finally {
+        app.locals.dataStore.saveCollection?.(
+            'refunds',
+            app.locals.dataStore.getCollection('refunds').filter((row) => String(row.id) !== String(tempRefund.id))
+        );
+    }
+});
+
+test('POST /admin/api/withdrawals/batch-approve approves pending withdrawals', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const withdrawals = app.locals.dataStore.getCollection('withdrawals');
+    const tempWithdrawal = {
+        _id: 'test-withdrawal-batch-approve',
+        id: 999314,
+        openid: 'test-openid-withdrawal-batch-approve',
+        user_id: 999315,
+        amount: 20,
+        actual_amount: 20,
+        status: 'pending',
+        method: 'wechat',
+        created_at: '2026-05-02T00:00:00.000Z',
+        updated_at: '2026-05-02T00:00:00.000Z'
+    };
+    withdrawals.push(tempWithdrawal);
+    app.locals.dataStore.saveCollection?.('withdrawals', withdrawals);
+
+    try {
+        const response = await invoke('/admin/api/withdrawals/batch-approve', {
+            method: 'POST',
+            admin,
+            body: { ids: [tempWithdrawal.id] }
+        });
+
+        assert.equal(response.statusCode, 200);
+        assert.equal(response.body.success, true);
+        assert.equal(response.body.data?.data?.affected, 1);
+        const updatedWithdrawal = app.locals.dataStore.getCollection('withdrawals').find((row) => String(row.id) === String(tempWithdrawal.id));
+        assert.equal(updatedWithdrawal.status, 'approved');
+    } finally {
+        app.locals.dataStore.saveCollection?.(
+            'withdrawals',
+            app.locals.dataStore.getCollection('withdrawals').filter((row) => String(row.id) !== String(tempWithdrawal.id))
+        );
+    }
+});
+
 test('settings-protected endpoints still reject low-permission admins', async () => {
     await ensureReady();
     const admins = app.locals.dataStore.getCollection('admins');

@@ -1,16 +1,17 @@
-/* 限时专享 — 2026 青春版 */
+/* 限时专享 */
 .page {
   min-height: 100vh;
-  background: linear-gradient(180deg, #E8E0F0 0%, #F0EBF8 30%, #F7F5FF 100%);
+  background: linear-gradient(180deg, #EDE8F5 0%, #F4F1FA 40%, #F8F6FF 100%);
   display: flex;
   flex-direction: column;
 }
 
+/* 导航栏 — 只在这里保留毛玻璃 */
 .nav-bar {
   flex-shrink: 0;
-  background: rgba(15, 15, 35, 0.85);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  background: rgba(15, 15, 35, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 
 .nav-inner {
@@ -47,7 +48,10 @@
 .scroll {
   flex: 1;
   height: 0;
+  width: 100%;
+  box-sizing: border-box;
   padding: 0 24rpx 24rpx;
+  overflow-x: hidden;
 }
 
 /* 档期选择 */
@@ -63,23 +67,20 @@
 }
 
 .slot-chip {
-  min-width: 180rpx;
-  padding: 18rpx 20rpx;
-  border-radius: 24rpx;
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1rpx solid rgba(255, 255, 255, 0.5);
+  min-width: 160rpx;
+  padding: 16rpx 20rpx;
+  border-radius: 12rpx;
+  background: #fff;
+  border: 1rpx solid #E8E4F0;
   display: flex;
   flex-direction: column;
-  gap: 6rpx;
-  transition: all 0.3s;
+  gap: 4rpx;
 }
 
 .slot-chip.active {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border-color: transparent;
-  box-shadow: 0 8rpx 24rpx rgba(102, 126, 234, 0.3);
+  box-shadow: 0 6rpx 18rpx rgba(102, 126, 234, 0.28);
 }
 
 .slot-chip-title {
@@ -98,27 +99,14 @@
   color: #fff;
 }
 
-/* Hero 区域 */
+/* Hero 区域 — 去掉 glow 装饰，渐变收敛为两色 */
 .hero {
   margin-top: 24rpx;
-  padding: 32rpx;
-  border-radius: 28rpx;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #a78bfa 100%);
+  padding: 28rpx 28rpx 32rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #fff;
-  box-shadow: 0 16rpx 40rpx rgba(102, 126, 234, 0.25);
-  position: relative;
-  overflow: hidden;
-}
-
-.hero-glow {
-  position: absolute;
-  top: -60rpx;
-  right: -60rpx;
-  width: 200rpx;
-  height: 200rpx;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
-  filter: blur(2rpx);
+  box-shadow: 0 12rpx 32rpx rgba(102, 126, 234, 0.22);
 }
 
 .hero-top {
@@ -126,56 +114,54 @@
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
-  position: relative;
-  z-index: 1;
+}
+
+/* 防止倒计时把 kicker 文字挤出 */
+.hero-kicker {
+  flex-shrink: 1;
+  min-width: 0;
+  font-size: 22rpx;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.75);
+  letter-spacing: 1rpx;
 }
 
 .hero-countdown {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 12rpx;
+  gap: 10rpx;
 }
 
 .hero-countdown-label {
-  font-size: 26rpx;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.72);
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.65);
 }
 
 .hero-countdown-value {
-  padding: 12rpx 20rpx;
-  border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.18);
-  backdrop-filter: blur(8px);
-  font-size: 36rpx;
+  padding: 8rpx 16rpx;
+  border-radius: 8rpx;
+  background: rgba(255, 255, 255, 0.15);
+  font-size: 28rpx;
   font-weight: 700;
   line-height: 1;
   letter-spacing: 2rpx;
   color: #fff;
 }
 
-.hero-kicker {
-  font-size: 22rpx;
-  color: rgba(255, 255, 255, 0.85);
-  letter-spacing: 2rpx;
-}
-
 .hero-title {
   display: block;
-  margin-top: 16rpx;
-  font-size: 40rpx;
+  margin-top: 20rpx;
+  font-size: 38rpx;
   font-weight: 700;
-  position: relative;
-  z-index: 1;
+  line-height: 1.3;
 }
 
 .hero-sub {
   display: block;
-  margin-top: 10rpx;
+  margin-top: 8rpx;
   font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.86);
-  position: relative;
-  z-index: 1;
+  color: rgba(255, 255, 255, 0.78);
 }
 
 /* 列表头 */
@@ -187,32 +173,27 @@
 }
 
 .list-title {
-  font-size: 30rpx;
+  font-size: 28rpx;
   font-weight: 700;
   color: #1c1917;
 }
 
 .list-count {
-  font-size: 24rpx;
+  font-size: 22rpx;
   color: #667eea;
   font-weight: 600;
-  padding: 6rpx 16rpx;
+  padding: 4rpx 14rpx;
   background: rgba(102, 126, 234, 0.08);
-  border-radius: 999rpx;
+  border-radius: 6rpx;
 }
 
 /* 空状态 */
 .empty {
   text-align: center;
-  padding: 80rpx 40rpx;
+  padding: 64rpx 40rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
-}
-
-.empty-emoji {
-  font-size: 80rpx;
-  margin-bottom: 20rpx;
 }
 
 .empty-text {
@@ -227,18 +208,15 @@
   color: #a8a29e;
 }
 
-/* 商品卡片 */
+/* 商品卡片 — 纯白背景，去毛玻璃 */
 .goods-card {
-  background: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border-radius: 26rpx;
-  padding: 24rpx;
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 20rpx;
   display: flex;
-  gap: 20rpx;
-  margin-bottom: 20rpx;
-  box-shadow: 0 8rpx 24rpx rgba(102, 126, 234, 0.06);
-  border: 1rpx solid rgba(255, 255, 255, 0.5);
+  gap: 18rpx;
+  margin-bottom: 16rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
 }
 
 .goods-img-wrap {
@@ -247,9 +225,9 @@
 }
 
 .goods-img {
-  width: 208rpx;
-  height: 208rpx;
-  border-radius: 18rpx;
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: 12rpx;
 }
 
 .goods-sold-out {
@@ -258,11 +236,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 18rpx;
+  background: rgba(0, 0, 0, 0.48);
+  border-radius: 12rpx;
   color: #fff;
-  font-size: 28rpx;
-  font-weight: 700;
+  font-size: 26rpx;
+  font-weight: 600;
 }
 
 .goods-body {
@@ -270,34 +248,37 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10rpx;
+  gap: 8rpx;
 }
 
 .goods-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12rpx;
+  gap: 10rpx;
 }
 
 .goods-name {
   flex: 1;
+  min-width: 0;
   font-size: 28rpx;
   font-weight: 600;
   color: #1c1917;
   line-height: 1.4;
 }
 
+/* 标签 — 直角圆角，去胶囊感 */
 .mode-tags {
+  flex-shrink: 0;
   display: flex;
-  gap: 8rpx;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  flex-direction: column;
+  gap: 6rpx;
+  align-items: flex-end;
 }
 
 .mode-tag {
-  padding: 6rpx 12rpx;
-  border-radius: 999rpx;
+  padding: 4rpx 10rpx;
+  border-radius: 4rpx;
   font-size: 18rpx;
   font-weight: 600;
   white-space: nowrap;
@@ -309,7 +290,7 @@
 }
 
 .mode-tag-points {
-  background: rgba(245, 158, 11, 0.1);
+  background: rgba(217, 119, 6, 0.1);
   color: #d97706;
 }
 
@@ -325,12 +306,12 @@
 
 /* 库存进度条 */
 .goods-meta {
-  margin-top: 4rpx;
+  margin-top: 2rpx;
 }
 
 .goods-remain-bar {
-  height: 8rpx;
-  background: rgba(102, 126, 234, 0.1);
+  height: 6rpx;
+  background: rgba(102, 126, 234, 0.08);
   border-radius: 999rpx;
   overflow: hidden;
   margin-bottom: 6rpx;
@@ -348,80 +329,90 @@
   color: #a8a29e;
 }
 
-/* 价格行 */
+/* 价格行 — 去 flex-wrap，层级清晰 */
 .price-row {
   display: flex;
-  flex-wrap: wrap;
   align-items: baseline;
   gap: 8rpx;
+  flex-wrap: nowrap;
+  overflow: hidden;
 }
 
 .p-money {
-  color: #667eea;
-  font-size: 34rpx;
+  color: #5a6fd6;
+  font-size: 36rpx;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .p-points {
   color: #d97706;
-  font-size: 28rpx;
+  font-size: 26rpx;
   font-weight: 700;
+  white-space: nowrap;
 }
 
 .p-sep {
   color: #d6d3d1;
-  font-size: 24rpx;
+  font-size: 22rpx;
+  flex-shrink: 0;
 }
 
 .p-origin {
-  margin-left: 6rpx;
   color: #a8a29e;
-  font-size: 22rpx;
+  font-size: 20rpx;
   text-decoration: line-through;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-/* 按钮行 */
+/* 按钮行 — 固定策略，不换行 */
 .btn-row {
   display: flex;
-  gap: 12rpx;
-  margin-top: 8rpx;
-  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-top: 10rpx;
 }
 
 .btn {
-  flex: 1;
-  min-width: 140rpx;
   text-align: center;
-  padding: 18rpx 12rpx;
-  border-radius: 999rpx;
+  padding: 16rpx 0;
+  border-radius: 10rpx;
   font-size: 24rpx;
   font-weight: 600;
   transition: transform 0.15s;
+  white-space: nowrap;
 }
 
 .btn:active {
-  transform: scale(0.95);
+  transform: scale(0.96);
 }
 
+/* 查看详情：固定宽度，不抢空间 */
 .btn-detail {
-  background: rgba(102, 126, 234, 0.08);
+  width: 180rpx;
+  flex-shrink: 0;
+  background: #F5F3FF;
   color: #667eea;
 }
 
+/* 积分兑换 和 立即秒杀 各占剩余一半 */
 .btn-points {
+  flex: 1;
   background: linear-gradient(135deg, #f59e0b, #d97706);
   color: #fff;
-  box-shadow: 0 6rpx 16rpx rgba(245, 158, 11, 0.25);
+  box-shadow: 0 4rpx 12rpx rgba(245, 158, 11, 0.2);
 }
 
 .btn-money {
+  flex: 1;
   background: linear-gradient(135deg, #667eea, #764ba2);
   color: #fff;
-  box-shadow: 0 6rpx 16rpx rgba(102, 126, 234, 0.25);
+  box-shadow: 0 4rpx 12rpx rgba(102, 126, 234, 0.22);
 }
 
 .btn.disabled {
-  opacity: 0.38;
+  opacity: 0.35;
   pointer-events: none;
 }
 
@@ -446,7 +437,7 @@
 .loading-spinner {
   width: 48rpx;
   height: 48rpx;
-  border: 4rpx solid rgba(102, 126, 234, 0.15);
+  border: 4rpx solid rgba(102, 126, 234, 0.12);
   border-top: 4rpx solid #667eea;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
@@ -457,7 +448,7 @@
 }
 
 .loading-text {
-  font-size: 28rpx;
+  font-size: 26rpx;
   color: #a8a29e;
 }
 
@@ -472,13 +463,8 @@
   text-align: center;
 }
 
-.empty-state .empty-emoji {
-  font-size: 96rpx;
-  margin-bottom: 24rpx;
-}
-
 .empty-state-title {
-  font-size: 32rpx;
+  font-size: 30rpx;
   font-weight: 600;
   color: #1c1917;
   margin-bottom: 12rpx;

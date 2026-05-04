@@ -122,6 +122,14 @@ async function loadCommissionCostSplit() {
     };
 }
 
+async function loadCommissionConfig() {
+    const configRow = await getConfigByKeys(['agent_system_commission-config', 'agent_system_commission_config']);
+    return {
+        self_purchase_commission_enabled: DEFAULT_SELF_PURCHASE_COMMISSION_ENABLED,
+        ...toPlainObject(parseConfigRowValue(configRow, {}), {})
+    };
+}
+
 async function loadAgentUpgradeRules() {
     const configRow = await getConfigByKeys([
         'member_upgrade_rule_config',

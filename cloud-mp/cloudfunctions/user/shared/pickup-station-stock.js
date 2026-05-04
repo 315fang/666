@@ -27,7 +27,7 @@ function roundQuantity(value) {
 function normalizeLookupTokens(values = []) {
     const seen = new Set();
     const list = [];
-    values.forEach((value) => {
+    (Array.isArray(values) ? values : [values]).forEach((value) => {
         if (!hasValue(value)) return;
         const raw = String(value).trim();
         if (!raw) return;
@@ -44,9 +44,9 @@ function normalizeLookupTokens(values = []) {
 }
 
 function valuesMatch(left, right) {
-    const leftTokens = normalizeLookupTokens([left]);
+    const leftTokens = normalizeLookupTokens(left);
     if (!leftTokens.length) return false;
-    const rightTokens = new Set(normalizeLookupTokens([right]));
+    const rightTokens = new Set(normalizeLookupTokens(right));
     return leftTokens.some((token) => rightTokens.has(token));
 }
 
@@ -90,13 +90,16 @@ function normalizeStationStockRow(row = {}) {
 }
 
 function findStationStockRow(rows = [], stationId, productId, skuId = '') {
-    return rows
+    const requestedSkuId = pickString(skuId);
+    const candidates = rows
         .map((row) => normalizeStationStockRow(row))
-        .find((row) => {
-            if (!valuesMatch(row.station_id, stationId)) return false;
-            if (pickString(skuId)) return valuesMatch(row.sku_id, skuId);
-            return !pickString(row.sku_id) && valuesMatch(row.product_id, productId);
-        }) || null;
+        .filter((row) => valuesMatch(row.station_id, stationId) && valuesMatch(row.product_id, productId));
+    if (requestedSkuId) {
+        return candidates.find((row) => valuesMatch(row.sku_id, requestedSkuId))
+            || candidates.find((row) => !pickString(row.sku_id))
+            || null;
+    }
+    return candidates.find((row) => !pickString(row.sku_id)) || candidates[0] || null;
 }
 
 function normalizePickupSelectionItem(item = {}) {

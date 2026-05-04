@@ -475,6 +475,11 @@
   flex-direction: column;
 }
 
+.promo-block-single {
+  align-items: center;
+  text-align: center;
+}
+
 .promo-title {
   font-size: 24rpx;
   color: #fff;

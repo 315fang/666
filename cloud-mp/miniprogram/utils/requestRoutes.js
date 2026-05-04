@@ -97,6 +97,7 @@ const ROUTE_TABLE = {
 
     // ── 优惠券 ────────────────────────────────
     'GET /coupons/mine': { fn: 'user', action: 'listCoupons' },
+    'DELETE /coupons/mine/:id': { fn: 'user', action: 'deleteCoupon', idKey: 'user_coupon_id' },
     'GET /coupons/center': { fn: 'user', action: 'couponCenter' },
 
     // ── 配置 ──────────────────────────────────

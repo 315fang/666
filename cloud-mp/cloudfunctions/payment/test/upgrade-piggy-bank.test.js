@@ -333,3 +333,27 @@ test('reverseUpgradePiggyBankForRefund reverses locked rows and claws back unloc
     assert.equal(collections.users[0].piggy_bank_unlocked_amount, 0);
     assert.equal(collections.users[0].piggy_bank_reversed_amount, 30);
 });
+
+test('self purchase commission toggle enables piggy bank buckets', async () => {
+    const { context, collections } = createContext({
+        users: [
+            { _id: 'buyer', openid: 'buyer-openid', role_level: 2, piggy_bank_locked_amount: 0 }
+        ],
+        orders: [{ _id: 'order-4b' }]
+    });
+
+    const result = await createUpgradePiggyBankForOrder(context, 'order-4b', {
+        _id: 'order-4b',
+        openid: 'buyer-openid',
+        pay_amount: 100,
+        items: [{ subtotal: 100 }]
+    }, runtimeConfig({
+        piggyBank: { max_target_level: 4, include_self_purchase: true },
+        commissionConfig: { self_purchase_commission_enabled: true }
+    }));
+
+    assert.equal(result.created, 1);
+    assert.equal(result.amount, 40);
+    assert.deepEqual(collections.upgrade_piggy_bank_logs.map((row) => row.incremental_amount), [40]);
+    assert.equal(collections.users[0].piggy_bank_locked_amount, 40);
+});

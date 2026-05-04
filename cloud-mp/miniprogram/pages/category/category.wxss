@@ -73,6 +73,7 @@
   background: #f0efec;
   padding: 0 0 200rpx;
   flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .sidebar-item {
@@ -125,6 +126,9 @@
   background: #fff;
   border-radius: 0;
   padding: 0 0 0 0;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 /* 分类页顶部轮播（与后台 position=category 的 Banner 对应） */
@@ -629,6 +633,9 @@
 .cart-popup-list {
   max-height: 46vh;
   padding: 12rpx 24rpx 0;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .cart-popup-item {

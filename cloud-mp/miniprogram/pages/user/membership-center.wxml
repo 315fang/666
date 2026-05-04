@@ -1,4 +1,4 @@
-<!--pages/user/membership-center.wxml - 会员权益中心（整合版）-->
+<!--pages/user/membership-center.wxml - 权益中心（整合版）-->
 <view class="page">
   <view class="state-wrap" wx:if="{{loading}}">
     <view class="loading-spinner"></view>
@@ -11,6 +11,25 @@
   </view>
 
   <scroll-view scroll-y class="scroll" wx:else>
+    <!-- 资产摘要 -->
+    <view class="asset-summary card-enter">
+      <view class="asset-summary-title">我的资产</view>
+      <view class="asset-summary-grid">
+        <view class="asset-summary-item" bindtap="goPoints">
+          <text class="asset-summary-value">{{pointsBalance}}</text>
+          <text class="asset-summary-label">积分</text>
+        </view>
+        <view class="asset-summary-item" bindtap="goCouponList">
+          <text class="asset-summary-value">{{couponCount}}</text>
+          <text class="asset-summary-label">优惠券</text>
+        </view>
+        <view class="asset-summary-item">
+          <text class="asset-summary-value">{{growthValue}}</text>
+          <text class="asset-summary-label">成长值</text>
+        </view>
+      </view>
+    </view>
+
     <!-- 会员卡区域 -->
     <view class="cards-wrap card-enter" wx:if="{{cardReady}}">
       <view class="card-switch-tabs">

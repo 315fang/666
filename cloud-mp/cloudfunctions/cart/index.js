@@ -430,6 +430,15 @@ exports.main = cloudFunctionWrapper(async (event) => {
             const normalized = [];
             let total = 0;
 
+            if (cartIds.length) {
+                const selectedIdSet = new Set(selectedRows.map((item) => String(item._id || item.id || '')));
+                cartIds.forEach((cartId) => {
+                    if (!selectedIdSet.has(String(cartId))) {
+                        errors.push({ cart_id: cartId, msg: '购物袋商品已失效' });
+                    }
+                });
+            }
+
             for (const row of selectedRows) {
                 try {
                     const [product, sku] = await Promise.all([
@@ -454,8 +463,8 @@ exports.main = cloudFunctionWrapper(async (event) => {
                     }
 
                     const qty = toNumber(row.qty != null ? row.qty : row.quantity, 1);
-                    const availableStock = sku ? toNumber(sku.stock, 0) : toNumber(product.stock, 0);
-                    if (availableStock < qty) {
+                    const availableStock = sku ? toNumber(sku.stock, null) : toNumber(product.stock, null);
+                    if (availableStock !== null && availableStock !== -1 && availableStock < qty) {
                         errors.push({ cart_id: row._id, sku_id: row.sku_id, msg: `库存不足（剩余${availableStock}）` });
                         continue;
                     }

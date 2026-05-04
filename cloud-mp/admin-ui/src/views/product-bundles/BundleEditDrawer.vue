@@ -308,7 +308,10 @@ const hydrateBundleForm = async (bundle = {}) => {
     options: (group.options || []).map((option, optionIndex) => ({
       local_key: `option-${groupIndex}-${optionIndex}-${Date.now()}`,
       advancedOpen: !!(option.sku_id || Number(option.repeatable || 0) === 1 || Number(option.enabled || 0) === 0 || Number(option.default_qty || 1) > 1),
+      bundle_product_select_id: String(option.bundle_product_id || option.product_id || ''),
       product_id: String(option.product_id || ''),
+      bundle_product_id: String(option.bundle_product_id || ''),
+      product_library_source: option.product_library_source || (option.bundle_product_id ? 'bundle_products' : 'products'),
       sku_id: String(option.sku_id || ''),
       default_qty: Number(option.repeatable || 0) === 1 ? Number(option.default_qty || 1) : 1,
       repeatable: Number(option.repeatable || 0) === 1 ? 1 : 0,
@@ -429,6 +432,7 @@ const buildPayload = () => ({
         sort_order: Number(group.sort_order || groupIndex),
         options: group.options.map((option, optionIndex) => ({
           product_id: option.product_id,
+          bundle_product_id: option.bundle_product_id || '',
           sku_id: option.sku_id || '',
           default_qty: Number(option.repeatable || 0) === 1 ? Math.max(1, Number(option.default_qty || 1)) : 1,
           repeatable: Number(option.repeatable || 0) === 1 ? 1 : 0,

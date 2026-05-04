@@ -50,6 +50,52 @@ export const deleteProduct = (id) => {
   return request({ url: `/products/${id}`, method: 'delete' })
 }
 
+export const getBundleProducts = (params) => {
+  return request({
+    url: '/bundle-products',
+    method: 'get',
+    params
+  })
+}
+
+export const getBundleProductById = (id) => {
+  return request({
+    url: `/bundle-products/${id}`,
+    method: 'get'
+  })
+}
+
+export const createBundleProduct = (data) => {
+  return request({
+    url: '/bundle-products',
+    method: 'post',
+    data
+  })
+}
+
+export const updateBundleProduct = (id, data) => {
+  return request({
+    url: `/bundle-products/${id}`,
+    method: 'put',
+    data
+  })
+}
+
+export const updateBundleProductStatus = (id, data) => {
+  return request({
+    url: `/bundle-products/${id}/status`,
+    method: 'put',
+    data
+  })
+}
+
+export const deleteBundleProduct = (id) => {
+  return request({
+    url: `/bundle-products/${id}`,
+    method: 'delete'
+  })
+}
+
 export const getProductBundles = (params) => {
   return request({
     url: '/product-bundles',

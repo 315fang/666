@@ -68,6 +68,9 @@
         <el-form-item label="关键词">
           <el-input v-model="searchForm.keyword" placeholder="用户ID/昵称/订单号" clearable style="width:180px" />
         </el-form-item>
+        <el-form-item label="创建时间">
+          <DateRangeQuickFilter v-model="dateFilter" @change="handleSearch" />
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" @click="handleSearch">搜索</el-button>
           <el-button @click="handleReset">重置</el-button>
@@ -209,9 +212,11 @@ import CompactIdCell from '@/components/CompactIdCell.vue'
 import { formatDate } from '@/utils/format'
 import { COMMISSION_TYPE_OPTIONS, getCommissionTypeLabel } from '@/utils/commission'
 import { usePagination } from '@/composables/usePagination'
+import { useDateRangeFilter } from '@/composables/useDateRangeFilter'
 import { getUserNickname } from '@/utils/userDisplay'
 import { buildUserManagementQuery } from '@/utils/userRouting'
 import { extractReadAt, mergeStrongSuccessMessage } from '@/api/consistency'
+import { DateRangeQuickFilter } from '@/components/list-toolkit'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -235,6 +240,7 @@ const commissionTypeOptions = COMMISSION_TYPE_OPTIONS
 
 const searchForm = reactive({ status: '', type: '', keyword: '' })
 const { pagination, resetPage, applyResponse } = usePagination({ defaultLimit: 10 })
+const dateFilter = useDateRangeFilter()
 const tableData = ref([])
 const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 const commissionTypeText = (type) => getCommissionTypeLabel(type)
@@ -281,7 +287,7 @@ const goOrderManage = (row) => {
 const fetchData = async () => {
   loading.value = true
   try {
-    const res = await getCommissions({ ...searchForm, page: pagination.page, limit: pagination.limit })
+    const res = await getCommissions({ ...searchForm, ...dateFilter.params.value, page: pagination.page, limit: pagination.limit })
     tableData.value = res?.list || []
     applyResponse(res)
     const readAt = extractReadAt(res)
@@ -327,7 +333,7 @@ const handleRepairRegionAgent = async () => {
 }
 
 const handleSearch = () => { resetPage(); fetchData() }
-const handleReset = () => { searchForm.status = ''; searchForm.type = ''; searchForm.keyword = ''; handleSearch() }
+const handleReset = () => { searchForm.status = ''; searchForm.type = ''; searchForm.keyword = ''; dateFilter.clear(); handleSearch() }
 const handleSelectionChange = (rows) => { selectedIds.value = rows.filter(r => r.status === 'pending_approval').map(r => r.id) }
 
 const handleApprove = async (row) => {

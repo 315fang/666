@@ -153,7 +153,7 @@
         v-model:current-page="pagination.page"
         v-model:page-size="pagination.limit"
         :total="pagination.total"
-        :page-sizes="[20, 50, 100]"
+        :page-sizes="pagination.pageSizes"
         layout="total, sizes, prev, pager, next, jumper"
         @size-change="fetchData"
         @current-change="fetchData"
@@ -264,11 +264,21 @@
 
         <el-row :gutter="20">
           <el-col :span="12">
+            <el-form-item label="每人领取上限">
+              <el-input-number v-model="form.per_user_limit" :min="1" :precision="0" style="width:100%" />
+              <div class="form-tip" style="position:absolute; bottom:-25px; left:0; line-height:1">默认 1，同一用户重复扫码不会重复领券</div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
             <el-form-item label="每日领取上限">
               <el-input-number v-model="form.daily_claim_limit" :min="-1" :precision="0" style="width:100%" />
               <div class="form-tip" style="position:absolute; bottom:-25px; left:0; line-height:1">-1 为不限，0 表示当天不可领</div>
             </el-form-item>
           </el-col>
+        </el-row>
+        <div style="height: 15px"></div>
+
+        <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="定时领取">
               <el-switch v-model="form.claim_time_enabled" :active-value="1" :inactive-value="0" />
@@ -385,9 +395,12 @@
           券名称：<strong>{{ shareTarget?.name }}</strong>
         </p>
         <el-radio-group v-model="shareMode" style="margin-bottom: 16px;" @change="onShareModeChange">
-          <el-radio-button label="standard">通用分享码</el-radio-button>
           <el-radio-button label="one_time">一次性领取码</el-radio-button>
+          <el-radio-button label="standard">通用分享码</el-radio-button>
         </el-radio-group>
+        <div style="font-size:12px; color:#909399; margin:-8px 0 14px;">
+          一次性领取码被领取后即失效；通用分享码可多人领取，但每人领取上限仍会生效。
+        </div>
         <!-- 小程序码图片 -->
         <div v-if="shareLoading" style="height:200px; display:flex; align-items:center; justify-content:center;">
           <el-icon class="is-loading" style="font-size:36px; color:#409EFF"><Loading /></el-icon>
@@ -461,6 +474,7 @@ import {
 } from '@/api'
 import { searchUsersLite } from '@/api/modules/users'
 import { usePagination } from '@/composables/usePagination'
+import { confirmDanger } from '@/composables/useConfirm'
 import UserConfirmDialog from '@/components/UserConfirmDialog.vue'
 
 // ====== 列表逻辑 ======
@@ -554,11 +568,22 @@ const handleReset = () => {
 }
 
 const handleStatusChange = async (row, val) => {
+  const oldVal = val === 1 ? 0 : 1
+  try {
+    await confirmDanger({
+      title: val === 1 ? '启用优惠券' : '停用优惠券',
+      message: `确认${val === 1 ? '启用' : '停用'}「${row.name}」？停用后该券将不再发放与领取。`,
+      type: 'warning'
+    })
+  } catch (_) {
+    row.is_active = oldVal
+    return
+  }
   try {
     await updateCoupon(row.id, { is_active: val })
     ElMessage.success(val === 1 ? '已启用' : '已停用')
   } catch (e) {
-    row.is_active = val === 1 ? 0 : 1
+    row.is_active = oldVal
   }
 }
 
@@ -626,6 +651,7 @@ const defaultForm = () => ({
   scope_ids: [],
   valid_days: 30,
   stock: -1,
+  per_user_limit: 1,
   daily_claim_limit: -1,
   claim_time_enabled: 0,
   claim_start_time: '09:00',
@@ -647,6 +673,7 @@ const couponPayloadKeys = [
   'scope_ids',
   'valid_days',
   'stock',
+  'per_user_limit',
   'daily_claim_limit',
   'claim_time_enabled',
   'claim_start_time',
@@ -774,7 +801,7 @@ const shareTarget = ref(null)
 const shareLoading = ref(false)
 const shareWxacodeBase64 = ref('')
 const shareMpPath = ref('')
-const shareMode = ref('standard')
+const shareMode = ref('one_time')
 const shareTicketId = ref('')
 const wxacodeImgRef = ref(null)
 const COUPON_WXACODE_ENVS = ['release', 'trial', 'develop']
@@ -829,7 +856,7 @@ async function loadSharePayload(rowId) {
 
 const handleShare = async (row) => {
   shareTarget.value = row
-  shareMode.value = 'standard'
+  shareMode.value = 'one_time'
   shareTicketId.value = ''
   shareWxacodeBase64.value = ''
   shareMpPath.value = `/pages/coupon/claim?id=${row.id}`
@@ -855,7 +882,7 @@ const handleShare = async (row) => {
 const shareDialogClose = () => {
   shareWxacodeBase64.value = ''
   shareTicketId.value = ''
-  shareMode.value = 'standard'
+  shareMode.value = 'one_time'
 }
 
 const copyMpPath = async () => {

@@ -66,7 +66,9 @@
 /* 2. 内容区域 */
 .search-content {
   flex: 1;
-  overflow: hidden;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .section-box {

@@ -52,6 +52,13 @@
       ]
     },
     {
+      "name": "bundle_products",
+      "indexes": [
+        { "name": "status_sort_order", "fields": [{ "field": "status", "order": "asc" }, { "field": "sort_order", "order": "desc" }], "purpose": "自由组合候选商品库筛选" },
+        { "name": "category_status", "fields": [{ "field": "category_id", "order": "asc" }, { "field": "status", "order": "asc" }], "purpose": "组合商品库分类筛选" }
+      ]
+    },
+    {
       "name": "banners",
       "indexes": [
         { "name": "position_status_sort_order", "fields": [{ "field": "position", "order": "asc" }, { "field": "status", "order": "asc" }, { "field": "sort_order", "order": "asc" }], "purpose": "Banner 位读取" }

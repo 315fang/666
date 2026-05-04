@@ -1,6 +1,6 @@
 /* 优惠券中心 */
 .page { min-height: 100vh; background: #f8f7f4; }
-.scroll { min-height: 100vh; }
+.scroll { min-height: 100vh; width: 100%; box-sizing: border-box; overflow-x: hidden; }
 
 .hero { padding: 34rpx 28rpx 0; position: relative; overflow: hidden; }
 .hero-glow {

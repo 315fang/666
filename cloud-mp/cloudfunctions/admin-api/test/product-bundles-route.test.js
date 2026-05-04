@@ -11,6 +11,16 @@ const { registerProductBundleRoutes } = require('../src/admin-product-bundles');
 function createDeps(overrides = {}) {
     const collections = {
         product_bundles: [],
+        bundle_products: [
+            {
+                _id: 'bundle-product-1',
+                id: 101,
+                name: 'Combo Product',
+                source_product_id: 1,
+                product_id: 1,
+                status: 1
+            }
+        ],
         products: [
             {
                 _id: 'product-1',
@@ -214,4 +224,27 @@ test('creating product bundle accepts repeatable option capacity above option co
     const option = deps.getCollection('product_bundles')[0].groups[0].options[0];
     assert.equal(option.repeatable, 1);
     assert.equal(option.max_qty_per_order, 3);
+});
+
+test('creating product bundle stores bundle product library source', async () => {
+    const app = express();
+    const deps = createDeps();
+    const payload = createPayload();
+    payload.groups[0].options[0].bundle_product_id = 'bundle-product-1';
+    payload.groups[0].options[0].product_id = '';
+
+    registerProductBundleRoutes(app, deps);
+
+    const response = await invoke(app, {
+        method: 'POST',
+        path: '/admin/api/product-bundles',
+        body: payload
+    });
+
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.code, 0);
+    const option = deps.getCollection('product_bundles')[0].groups[0].options[0];
+    assert.equal(option.bundle_product_id, 'bundle-product-1');
+    assert.equal(option.product_library_source, 'bundle_products');
+    assert.equal(option.product_id, '1');
 });

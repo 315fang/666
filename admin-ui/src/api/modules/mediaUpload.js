@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import { normalizeItemResult, normalizeMultiUploadResult, normalizeUploadResult } from '@/api/normalize'
+import { normalizeItemResult, normalizeUploadResult } from '@/api/normalize'
 
 export const uploadFile = async (file, options = {}) => {
   const formData = new FormData()
@@ -23,14 +23,6 @@ export const getStorageConfig = () => {
   }).then(normalizeItemResult)
 }
 
-export const updateStorageConfig = (data) => {
-  return request({
-    url: '/storage/config',
-    method: 'put',
-    data
-  })
-}
-
 export const testStorageConfig = (provider) => {
   return request({
     url: '/storage/test',
@@ -40,18 +32,3 @@ export const testStorageConfig = (provider) => {
 }
 
 export const uploadSplashImage = (file) => uploadFile(file)
-
-export const uploadFiles = (files, options = {}) => {
-  const formData = new FormData()
-  files.forEach((file) => formData.append('files', file))
-  Object.entries(options.params || {}).forEach(([key, value]) => {
-    if (value !== undefined && value !== null) {
-      formData.append(key, String(value))
-    }
-  })
-  return request({
-    url: '/upload/multiple',
-    method: 'post',
-    data: formData
-  }).then(normalizeMultiUploadResult)
-}

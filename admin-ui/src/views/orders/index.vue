@@ -991,7 +991,7 @@ onMounted(() => {
   line-height: 1.7;
 }
 .order-remark {
-  color: #e6a23c;
+  color: #F59E0B;
   font-size: 13px;
   background: #fdf6ec;
   padding: 10px;

@@ -183,7 +183,7 @@ const isBatchReject = ref(false)
 
 const statsCards = ref([
   { label: '总佣金金额', value: '0.00', icon: 'Money', color: '#409eff' },
-  { label: '待审批金额', value: '0.00', icon: 'Clock', color: '#e6a23c' },
+  { label: '待审批金额', value: '0.00', icon: 'Clock', color: '#f59e0b' },
   { label: '已结算金额', value: '0.00', icon: 'SuccessFilled', color: '#67c23a' },
   { label: '已审批金额', value: '0.00', icon: 'TrendCharts', color: '#f56c6c' }
 ])

@@ -87,8 +87,6 @@ export const exportOrders = (params) => {
   })
 }
 
-export const batchShipOrders = (data) => request({ url: '/orders/batch-ship', method: 'post', data })
-
 export const getAdminOrderLogistics = (orderId, forceRefresh = false) =>
   request({ url: `/logistics/order/${orderId}${forceRefresh ? '?refresh=1' : ''}`, method: 'get' }).then(normalizeItemResult)
 

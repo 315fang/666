@@ -27,9 +27,8 @@
 
     <!-- Hero 区域 -->
     <view class="hero card-enter">
-      <view class="hero-glow"></view>
       <view class="hero-top">
-        <text class="hero-kicker">⚡ 限时商品</text>
+        <text class="hero-kicker">限时商品</text>
         <view class="hero-countdown" wx:if="{{countdownText}}">
           <text class="hero-countdown-label">{{countdownLabel}}</text>
           <text class="hero-countdown-value">{{countdownText}}</text>
@@ -45,9 +44,8 @@
       <text class="list-count" wx:if="{{products.length}}">{{products.length}} 件</text>
     </view>
     <view class="empty card-enter" wx:if="{{!products.length}}">
-      <text class="empty-emoji">⏰</text>
       <text class="empty-text">当前档期暂未配置商品</text>
-      <text class="empty-sub">稍后再来看看吧~</text>
+      <text class="empty-sub">稍后再来看看吧</text>
     </view>
 
     <view class="goods-card card-enter delay-{{index < 8 ? index : 7}}" wx:for="{{products}}" wx:key="offer_id">
@@ -66,8 +64,8 @@
         <view class="goods-head">
           <text class="goods-name">{{item.product.name}}</text>
           <view class="mode-tags">
-            <text class="mode-tag mode-tag-money" wx:if="{{item.enable_money}}">💰 现金秒杀</text>
-            <text class="mode-tag mode-tag-points" wx:if="{{item.enable_points}}">🎯 积分兑换</text>
+            <text class="mode-tag mode-tag-money" wx:if="{{item.enable_money}}">现金秒杀</text>
+            <text class="mode-tag mode-tag-points" wx:if="{{item.enable_points}}">积分兑换</text>
           </view>
         </view>
         <text class="goods-desc" wx:if="{{item.product.description}}">{{item.product.description}}</text>
@@ -101,8 +99,7 @@
   </view>
 
   <view class="empty-state card-enter" wx:if="{{!loading && !card}}">
-    <text class="empty-emoji">🎁</text>
     <text class="empty-state-title">当前限时商品暂不可用</text>
-    <text class="empty-state-desc">请稍后再试，或返回活动页查看其他入口。</text>
+    <text class="empty-state-desc">请稍后再试，或返回活动页查看其他入口</text>
   </view>
 </view>

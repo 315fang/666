@@ -41,6 +41,9 @@
 .main-scroll {
   flex: 1;
   height: 0;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 /* ═══════════════ 余额英雄区（升级版） ═══════════════ */
