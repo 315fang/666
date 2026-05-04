@@ -377,6 +377,124 @@ function parseSingletonValue(row, fallback = {}) {
     return value && typeof value === 'object' ? value : fallback;
 }
 
+function isEnabledFlag(value, fallback = true) {
+    if (value === undefined || value === null || value === '') return fallback;
+    if (value === true || value === 1 || value === '1') return true;
+    if (value === false || value === 0 || value === '0') return false;
+    const normalized = pickString(value).toLowerCase();
+    if (!normalized) return fallback;
+    if (['true', 'yes', 'y', 'on', 'enabled', 'enable', 'active', 'show', 'visible'].includes(normalized)) return true;
+    if (['false', 'no', 'n', 'off', 'disabled', 'disable', 'inactive', 'hidden'].includes(normalized)) return false;
+    return fallback;
+}
+
+function parseTimestamp(value) {
+    if (!value) return 0;
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value === 'string') {
+        const ts = new Date(value).getTime();
+        return Number.isFinite(ts) ? ts : 0;
+    }
+    if (typeof value === 'object') {
+        if (typeof value._seconds === 'number') return value._seconds * 1000;
+        if (typeof value.seconds === 'number') return value.seconds * 1000;
+        if (value.$date !== undefined) return parseTimestamp(value.$date);
+        if (typeof value.toDate === 'function') return parseTimestamp(value.toDate());
+    }
+    return 0;
+}
+
+function isConfigRowEnabled(row = {}) {
+    if (row.active !== undefined && row.active !== null && row.active !== '') {
+        return isEnabledFlag(row.active, true);
+    }
+    if (row.status !== undefined && row.status !== null && row.status !== '') {
+        return isEnabledFlag(row.status, true);
+    }
+    return true;
+}
+
+function pickPreferredConfigRow(rows = []) {
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    const enabledRows = rows.filter(isConfigRowEnabled);
+    const source = enabledRows.length ? enabledRows : rows.slice();
+    return source.sort((a, b) => {
+        const timeDiff = parseTimestamp(b.updated_at || b.created_at) - parseTimestamp(a.updated_at || a.created_at);
+        if (timeDiff !== 0) return timeDiff;
+        return String(b._id || b.id || '').localeCompare(String(a._id || a.id || ''));
+    })[0] || null;
+}
+
+function pickConfigPayload(row = {}) {
+    return parseSingletonValue(row, {});
+}
+
+function normalizeReturnAddress(source = {}) {
+    const raw = source && typeof source === 'object' ? source : {};
+    return {
+        receiver_name: pickString(raw.receiver_name || raw.receiverName || raw.name || raw.contact_name || raw.consignee),
+        receiver_phone: pickString(raw.receiver_phone || raw.receiverPhone || raw.phone || raw.mobile || raw.tel),
+        province: pickString(raw.province),
+        city: pickString(raw.city),
+        district: pickString(raw.district || raw.county || raw.area),
+        detail: pickString(raw.detail || raw.address_detail || raw.address),
+        postal_code: pickString(raw.postal_code || raw.postalCode || raw.zip_code || raw.zip),
+        note: pickString(raw.note || raw.remark)
+    };
+}
+
+function hasReturnAddress(address = {}) {
+    return !!pickString([
+        address.receiver_name,
+        address.receiver_phone,
+        address.province,
+        address.city,
+        address.district,
+        address.detail
+    ].join(' '));
+}
+
+function buildReturnAddressText(address = {}) {
+    if (!hasReturnAddress(address)) return '';
+    const receiverLine = [address.receiver_name, address.receiver_phone].map((item) => pickString(item)).filter(Boolean).join(' ');
+    const addressLine = [address.province, address.city, address.district, address.detail].map((item) => pickString(item)).filter(Boolean).join('');
+    const postalLine = address.postal_code ? `邮编：${address.postal_code}` : '';
+    const noteLine = address.note ? `备注：${address.note}` : '';
+    return [receiverLine, addressLine, postalLine, noteLine].filter(Boolean).join('\n');
+}
+
+async function loadMiniProgramConfig(cache = new Map()) {
+    const key = 'singleton:mini-program-config';
+    if (cache && cache.has(key)) return cache.get(key);
+    const loader = (async () => {
+        const singleton = await db.collection('admin_singletons')
+            .doc('mini-program-config')
+            .get()
+            .catch(() => ({ data: null }));
+        const singletonConfig = parseSingletonValue(singleton.data, null);
+        if (singletonConfig && typeof singletonConfig === 'object') return singletonConfig;
+
+        const query = _.or([
+            { config_key: 'mini_program_config' },
+            { key: 'mini_program_config' }
+        ]);
+        const [configRes, appConfigRes] = await Promise.all([
+            db.collection('configs').where(query).limit(20).get().catch(() => ({ data: [] })),
+            db.collection('app_configs').where(query).limit(20).get().catch(() => ({ data: [] }))
+        ]);
+        const row = pickPreferredConfigRow(configRes.data || []) || pickPreferredConfigRow(appConfigRes.data || []);
+        return pickConfigPayload(row);
+    })();
+    if (cache) cache.set(key, loader);
+    return loader;
+}
+
+async function loadReturnAddress(cache = new Map()) {
+    const config = await loadMiniProgramConfig(cache);
+    return normalizeReturnAddress(config?.logistics_config?.return_address || config?.return_address || {});
+}
+
 async function getDefaultOrderAutoCancelMinutes(cache) {
     const key = 'singleton:settings:auto_cancel_minutes';
     if (cache && cache.has(key)) return cache.get(key);
@@ -973,6 +1091,13 @@ async function formatRefundForClient(refund = {}, cache = new Map(), defaultAuto
         payment_channel: refund.payment_channel || canonicalOrder?.payment_channel || ''
     });
     const status = refund.status || 'pending';
+    const refundType = pickString(refund.type);
+    const refundReturnAddress = normalizeReturnAddress(refund.return_address || refund.returnAddress || {});
+    const configReturnAddress = refundType === 'return_refund' && !hasReturnAddress(refundReturnAddress)
+        ? await loadReturnAddress(cache)
+        : {};
+    const returnAddress = hasReturnAddress(refundReturnAddress) ? refundReturnAddress : configReturnAddress;
+    const returnAddressText = buildReturnAddressText(returnAddress);
     return {
         ...refund,
         id: refund._id || refund.id,
@@ -992,6 +1117,10 @@ async function formatRefundForClient(refund = {}, cache = new Map(), defaultAuto
         completed_at: toIsoString(refund.completed_at) || refund.completed_at || null,
         return_company: refund.return_company || refund.return_shipping?.company || '',
         return_tracking_no: refund.return_tracking_no || refund.return_shipping?.tracking_no || '',
+        return_address: refundType === 'return_refund' ? returnAddress : null,
+        return_address_text: refundType === 'return_refund' ? returnAddressText : '',
+        return_address_available: !!returnAddressText,
+        return_received_at: toIsoString(refund.return_received_at) || refund.return_received_at || null,
         order: formattedOrder,
         items: formattedOrder?.items || [],
         order_item: Array.isArray(formattedOrder?.items) ? (formattedOrder.items[0] || null) : null,

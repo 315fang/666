@@ -129,5 +129,17 @@ Page({
         } finally {
             this.setData({ submittingReturnShipping: false });
         }
+    },
+
+    onCopyReturnAddress() {
+        const text = this.data.refund && this.data.refund.return_address_text;
+        if (!text) {
+            wx.showToast({ title: '暂无可复制地址', icon: 'none' });
+            return;
+        }
+        wx.setClipboardData({
+            data: text,
+            success: () => wx.showToast({ title: '地址已复制', icon: 'success' })
+        });
     }
 });

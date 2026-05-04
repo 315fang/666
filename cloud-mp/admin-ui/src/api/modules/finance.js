@@ -70,10 +70,11 @@ export const rejectRefund = (id, data) => {
 export const batchApproveRefunds = (data) => request({ url: '/refunds/batch-approve', method: 'post', data }).then(normalizeStrongMutationPayload)
 export const batchRejectRefunds = (data) => request({ url: '/refunds/batch-reject', method: 'post', data }).then(normalizeStrongMutationPayload)
 
-export const completeRefund = (id) => {
+export const completeRefund = (id, data = {}) => {
   return request({
     url: `/refunds/${id}/complete`,
-    method: 'put'
+    method: 'put',
+    data
   }).then(normalizeStrongMutationPayload)
 }
 

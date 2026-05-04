@@ -31,6 +31,29 @@
   </view>
 
   <view class="card" wx:if="{{refund.type === 'return_refund' && (refund.status === 'approved' || refund.status === 'processing')}}">
+    <view class="card-title address-title-row">
+      <text>退货寄回地址</text>
+      <button class="copy-address-btn" wx:if="{{refund.return_address_text}}" bindtap="onCopyReturnAddress">复制</button>
+    </view>
+    <block wx:if="{{refund.return_address_text}}">
+      <view class="address-row" wx:if="{{refund.return_address.receiver_name || refund.return_address.receiver_phone}}">
+        <text class="address-label">收件人</text>
+        <text class="address-value">{{refund.return_address.receiver_name}}{{refund.return_address.receiver_name && refund.return_address.receiver_phone ? ' ' : ''}}{{refund.return_address.receiver_phone}}</text>
+      </view>
+      <view class="address-row">
+        <text class="address-label">地址</text>
+        <text class="address-value">{{refund.return_address.province}}{{refund.return_address.city}}{{refund.return_address.district}}{{refund.return_address.detail}}</text>
+      </view>
+      <view class="address-row" wx:if="{{refund.return_address.postal_code}}">
+        <text class="address-label">邮编</text>
+        <text class="address-value">{{refund.return_address.postal_code}}</text>
+      </view>
+      <view class="address-note" wx:if="{{refund.return_address.note}}">{{refund.return_address.note}}</view>
+    </block>
+    <view class="address-empty" wx:else>商家暂未配置寄回地址，请联系客服确认后再寄回。</view>
+  </view>
+
+  <view class="card" wx:if="{{refund.type === 'return_refund' && (refund.status === 'approved' || refund.status === 'processing')}}">
     <view class="card-title">退货物流</view>
     <view class="form-row">
       <text class="form-label">快递公司</text>

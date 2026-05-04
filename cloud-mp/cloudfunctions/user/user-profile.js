@@ -54,11 +54,11 @@ function buildProfileUpdateData(data = {}) {
 }
 
 function resolveGrowthValue(user = {}) {
-    return toNumber(user.growth_value, 0);
+    return Math.max(0, toNumber(user.growth_value, 0));
 }
 
 function resolvePointsValue(user = {}) {
-    return toNumber(user.points != null ? user.points : user.growth_value, 0);
+    return Math.max(0, toNumber(user.points != null ? user.points : user.growth_value, 0));
 }
 
 /**

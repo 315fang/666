@@ -41,6 +41,8 @@ function normalizeUserInfo(info = {}) {
             : (info.agent_wallet_balance != null ? info.agent_wallet_balance : info.wallet_balance),
         0
     );
+    const growthValue = Math.max(0, toNumber(info.growth_value, 0));
+    const points = Math.max(0, toNumber(info.points != null ? info.points : info.growth_value, 0));
     return {
         ...info,
         growth_progress: patchGrowthProgressForDisplay(info),
@@ -61,6 +63,8 @@ function normalizeUserInfo(info = {}) {
         goods_fund_balance: goodsFundBalance,
         agent_wallet_balance: goodsFundBalance,
         wallet_balance: goodsFundBalance,
+        growth_value: growthValue,
+        points,
         portal_password_enabled: !!info.portal_password_enabled,
         portal_password_change_required: !!info.portal_password_change_required,
         portal_password_locked_until: info.portal_password_locked_until || '',

@@ -509,8 +509,8 @@ async function ensureWelcomeCoupons(openid, userId, user = {}) {
 }
 
 async function formatUser(user, openid, tierConfig) {
-    const growthValue = toNumber(user.growth_value, 0);
-    const points = toNumber(user.points != null ? user.points : user.growth_value, 0);
+    const growthValue = Math.max(0, toNumber(user.growth_value, 0));
+    const points = Math.max(0, toNumber(user.points != null ? user.points : user.growth_value, 0));
     const roleLevel = toNumber(user.role_level, 0);
     const distLevel = toNumber(user.distributor_level != null ? user.distributor_level : user.agent_level, 0);
     const resolvedUser = await resolveUserAvatarFields({ ...user, openid });

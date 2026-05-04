@@ -77,6 +77,60 @@
   border-bottom: 1rpx solid #F1F5F9;
 }
 
+.address-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.copy-address-btn {
+  margin: 0;
+  padding: 0 22rpx;
+  min-width: 104rpx;
+  height: 52rpx;
+  line-height: 52rpx;
+  border-radius: 26rpx;
+  background: #EEF2FF;
+  color: #4F46E5;
+  font-size: 24rpx;
+}
+
+.copy-address-btn::after {
+  border: none;
+}
+
+.address-row {
+  display: flex;
+  align-items: flex-start;
+  padding: 12rpx 0;
+}
+
+.address-label {
+  width: 120rpx;
+  flex-shrink: 0;
+  font-size: 26rpx;
+  color: #94A3B8;
+}
+
+.address-value {
+  flex: 1;
+  font-size: 26rpx;
+  color: #334155;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.address-note,
+.address-empty {
+  margin-top: 12rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 12rpx;
+  background: #FFF7ED;
+  color: #9A3412;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
 .product-row {
   display: flex;
   align-items: center;

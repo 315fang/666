@@ -65,6 +65,42 @@ const PAID_POST_PROCESS_STATUSES = [
 ];
 const DEFAULT_SELF_PURCHASE_COMMISSION_ENABLED = false;
 
+function isTruthyFlag(value) {
+    if (value === true || value === 1 || value === '1') return true;
+    if (value === false || value === 0 || value === '0' || value === null || value === undefined || value === '') return false;
+    return ['true', 'yes', 'y', 'on'].includes(String(value).trim().toLowerCase());
+}
+
+function hasSettledRefundProgress(order = {}) {
+    return pickString(order.status).toLowerCase() === 'refunded'
+        || toNumber(order.refunded_cash_total, 0) > 0
+        || toNumber(order.refunded_quantity_total, 0) > 0
+        || isTruthyFlag(order.has_partial_refund)
+        || hasValue(order.refunded_at)
+        || hasValue(order.last_refunded_at)
+        || hasValue(order.partially_refunded_at);
+}
+
+function getPaidPostProcessSkipReason(order = {}) {
+    const status = pickString(order.status).toLowerCase();
+    if (status && !PAID_POST_PROCESS_STATUSES.includes(status)) {
+        return `status_${status || 'missing'}`;
+    }
+    if (hasSettledRefundProgress(order)) {
+        return 'refund_progress_exists';
+    }
+    return '';
+}
+
+function shouldMarkPostProcessSkipped(order = {}) {
+    const status = pickString(order.status).toLowerCase();
+    return status === 'refunded' || hasSettledRefundProgress(order);
+}
+
+function shouldRunPaidOrderPostProcess(order = {}) {
+    return !getPaidPostProcessSkipReason(order);
+}
+
 const DEFAULT_PEER_BONUS_CONFIG = {
     enabled: true,
     default_version: 'team',
@@ -1542,6 +1578,17 @@ async function ensurePeerBonusCreated(orderId, order, roleSyncResult) {
 
 async function ensurePointsAwarded(orderId, order) {
     if (order.points_awarded_at) return { skipped: true };
+    const skipReason = getPaidPostProcessSkipReason(order);
+    if (skipReason) {
+        if (shouldMarkPostProcessSkipped(order)) {
+            await completeOrderStep(orderId, 'points_awarded_at', 'points_awarding_at', {
+                points_earned: 0,
+                growth_earned: 0,
+                points_award_skipped_reason: skipReason
+            }, ['points_award_error', 'points_log_error']);
+        }
+        return { skipped: true, reason: skipReason, awarded: 0, growth: 0 };
+    }
 
     // 原子幂等锁：用 where 条件确保只有一个调用能通过
     const locked = await acquireOrderStepLock(orderId, 'points_awarded_at', 'points_awarding_at', 'points_award_error');
@@ -2354,6 +2401,23 @@ async function accrueDividendPoolContribution(orderId, order) {
 
 async function processPaidOrder(orderId, order) {
     const latest = await db.collection('orders').doc(orderId).get().then((res) => res.data || order).catch(() => order);
+    const skipReason = getPaidPostProcessSkipReason(latest);
+    if (skipReason) {
+        if (!latest.payment_post_processed_at && shouldMarkPostProcessSkipped(latest)) {
+            const skipPatch = {
+                payment_post_processed_at: db.serverDate(),
+                payment_post_process_skipped_at: db.serverDate(),
+                payment_post_process_skipped_reason: skipReason,
+                updated_at: db.serverDate()
+            };
+            if (!hasValue(latest.points_earned)) skipPatch.points_earned = 0;
+            if (!hasValue(latest.growth_earned)) skipPatch.growth_earned = 0;
+            await db.collection('orders').doc(orderId).update({ data: skipPatch }).catch((err) => {
+                console.error('[payment-callback] ⚠️ 支付后处理跳过标记失败 orderId=%s reason=%s error=%s', orderId, skipReason, err.message);
+            });
+        }
+        return { skipped: true, reason: skipReason };
+    }
     const needsGroupJoin = isGroupOrder(latest) && !latest.group_joined_at;
     const needsSlashPurchase = hasValue(latest.slash_no) && !latest.slash_purchased_at;
     const needsBranchRegionRetry = latest.branch_region_commission_retry_required === true;
@@ -3324,10 +3388,13 @@ module.exports = {
     handleCallback,
     handleRefundCallback,
     processPaidOrder,
+    shouldRunPaidOrderPostProcess,
     _test: {
         calculateOrderPayPoints,
         resolvePointBenefitRoleLevel,
         ensurePointsAwarded,
-        ensureCommissionsCreated
+        ensureCommissionsCreated,
+        getPaidPostProcessSkipReason,
+        shouldRunPaidOrderPostProcess
     }
 };

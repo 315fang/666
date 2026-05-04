@@ -59,7 +59,17 @@ const DEFAULT_MINI_PROGRAM_CONFIG = {
         manual_status_desc: '当前订单走手工发货模式，可查看单号和发货时间',
         manual_empty_traces_text: '当前为手工发货模式，暂不提供第三方物流轨迹',
         manual_refresh_toast: '手工发货模式无需刷新轨迹',
-        shipping_company_options: ['顺丰速运', '申通快递', '中通快递', '圆通速递', '韵达速递', '京东快递', '邮政EMS', '极兔速递', '德邦快递', '同城配送']
+        shipping_company_options: ['顺丰速运', '申通快递', '中通快递', '圆通速递', '韵达速递', '京东快递', '邮政EMS', '极兔速递', '德邦快递', '同城配送'],
+        return_address: {
+            receiver_name: '',
+            receiver_phone: '',
+            province: '',
+            city: '',
+            district: '',
+            detail: '',
+            postal_code: '',
+            note: ''
+        }
     },
     customer_service_channel: {
         channel_service_phone: '',
@@ -255,6 +265,9 @@ function normalizeMiniProgramConfig(rawConfig = {}) {
             .map((item) => pickString(item))
             .filter(Boolean)
     )];
+    merged.logistics_config.return_address = isPlainObject(merged.logistics_config.return_address)
+        ? mergeDeep(clone(DEFAULT_MINI_PROGRAM_CONFIG.logistics_config.return_address), merged.logistics_config.return_address)
+        : clone(DEFAULT_MINI_PROGRAM_CONFIG.logistics_config.return_address);
     if (!isPlainObject(merged.feature_toggles)) merged.feature_toggles = {};
     return merged;
 }

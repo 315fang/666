@@ -345,6 +345,17 @@ function registerRefundRoutes(app, deps) {
         const order = findByLookup(orders, orderId, (row) => [row.order_no]);
         if (!order) return fail(res, '关联订单不存在', 400);
 
+        const returnCompany = returnCompanyCheck.value || pickString(refund.return_company || refund.return_shipping?.company);
+        const returnTrackingNo = returnTrackingCheck.value || pickString(refund.return_tracking_no || refund.return_shipping?.tracking_no);
+        const isReturnRefund = pickString(refund.type).toLowerCase() === 'return_refund';
+        if (isReturnRefund && !returnTrackingNo) {
+            return fail(res, '退货退款需要先填写退货物流单号，确认收到退货后再退款', 400);
+        }
+        const returnReceivedPatch = isReturnRefund ? {
+            return_received_at: refund.return_received_at || nowIso(),
+            return_received_by: pickString(req.admin?.username || req.admin?.id || req.admin?._id)
+        } : {};
+
         const paymentMethod = resolveOrderPaymentMethod
             ? resolveOrderPaymentMethod(order)
             : normalizePaymentMethodCode(order.payment_method || order.pay_type || order.pay_channel || order.payment_channel || 'wechat');
@@ -368,8 +379,9 @@ function registerRefundRoutes(app, deps) {
             payment_method: paymentMethod,
             refund_channel: refundRoute.refund_channel,
             refund_target_text: refundRoute.refund_target_text,
-            return_company: returnCompanyCheck.value || pickString(refund.return_company),
-            return_tracking_no: returnTrackingCheck.value || pickString(refund.return_tracking_no),
+            return_company: returnCompany,
+            return_tracking_no: returnTrackingNo,
+            ...returnReceivedPatch,
             updated_at: nowIso()
         };
         const processingPersisted = await claimRefundExecution(refund, req.params.id, processingData);

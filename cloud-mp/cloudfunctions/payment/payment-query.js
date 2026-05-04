@@ -3,7 +3,9 @@ const cloud = require('wx-server-sdk');
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
 const db = cloud.database();
 const { queryOrderByOutTradeNo, loadPrivateKey } = require('./wechat-pay-v3');
-const { processPaidOrder } = require('./payment-callback');
+const paymentCallback = require('./payment-callback');
+const { processPaidOrder } = paymentCallback;
+const shouldRunPaidOrderPostProcess = paymentCallback.shouldRunPaidOrderPostProcess || (() => true);
 const { resolvePostPayStatus } = require('./shared/order-payment');
 
 const PAID_POST_PROCESS_STATUSES = new Set([
@@ -22,6 +24,7 @@ function normalizeStatus(status) {
 
 function needsPaidOrderPostProcess(order = {}) {
     return PAID_POST_PROCESS_STATUSES.has(normalizeStatus(order.status))
+        && shouldRunPaidOrderPostProcess(order)
         && (!order.payment_post_processed_at || order.branch_region_commission_retry_required === true);
 }
 

@@ -104,6 +104,17 @@ const DEFAULT_TAB_BAR = {
   ]
 }
 
+const DEFAULT_RETURN_ADDRESS = {
+  receiver_name: '',
+  receiver_phone: '',
+  province: '',
+  city: '',
+  district: '',
+  detail: '',
+  postal_code: '',
+  note: ''
+}
+
 /** 与后端 utils/miniprogramConfig.js PRODUCT_DETAIL_PLEDGE_ORDER 一致 */
 const productDetailPledgeKeys = [
   'seven_day',
@@ -234,7 +245,8 @@ const miniProgramForm = reactive({
     manual_status_text: '商家已手工发货',
     manual_status_desc: '当前订单走手工发货模式，可查看单号和发货时间',
     manual_empty_traces_text: '当前为手工发货模式，暂不提供第三方物流轨迹',
-    manual_refresh_toast: '手工发货模式无需刷新轨迹'
+    manual_refresh_toast: '手工发货模式无需刷新轨迹',
+    return_address: JSON.parse(JSON.stringify(DEFAULT_RETURN_ADDRESS))
   },
   customer_service_channel: {
     channel_service_phone: '',
@@ -411,6 +423,14 @@ function ensureBrandTabBarShape(bc) {
   if (tb.borderStyle !== 'black' && tb.borderStyle !== 'white') tb.borderStyle = DEFAULT_TAB_BAR.borderStyle
 }
 
+function ensureReturnAddressShape() {
+  const current = miniProgramForm.logistics_config.return_address
+  miniProgramForm.logistics_config.return_address = {
+    ...JSON.parse(JSON.stringify(DEFAULT_RETURN_ADDRESS)),
+    ...(current && typeof current === 'object' ? current : {})
+  }
+}
+
 const fetchMiniProgramConfig = async () => {
   await withLoading(miniProgramLoading, async () => {
     const data = await getMiniProgramConfig()
@@ -428,6 +448,7 @@ const fetchMiniProgramConfig = async () => {
     Object.assign(miniProgramForm.lottery_config, data.lottery_config || {})
     Object.assign(miniProgramForm.membership_config, data.membership_config || {})
     Object.assign(miniProgramForm.logistics_config, data.logistics_config || {})
+    ensureReturnAddressShape()
     if (data.customer_service_channel && typeof data.customer_service_channel === 'object') {
       Object.assign(miniProgramForm.customer_service_channel, data.customer_service_channel)
     }

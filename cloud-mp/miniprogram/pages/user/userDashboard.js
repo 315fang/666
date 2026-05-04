@@ -316,7 +316,7 @@ function applyGrowthDisplay(page, info) {
 
     const membershipConfig = getConfigSection('membership_config') || {};
     const growthProgress = info.growth_progress || {};
-    const growthValue = Number(info.growth_value) || 0;
+    const growthValue = Math.max(0, Number(info.growth_value) || 0);
     const fallbackCurrentTier = getDisplayTierForGrowth(growthValue);
     const fallbackNextTier = getDisplayNextTierForGrowth(growthValue);
     const currentTier = growthProgress.current || growthProgress.tier || fallbackCurrentTier || {};

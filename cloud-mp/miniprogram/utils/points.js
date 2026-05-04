@@ -12,9 +12,9 @@ function payloadOf(res) {
 
 function normalizePointAccount(account = {}, status = {}) {
     const pointValue = account.points != null ? account.points : account.growth_value;
-    const totalPoints = toNumber(account.total_points != null ? account.total_points : pointValue);
-    const balancePoints = toNumber(account.balance_points != null ? account.balance_points : pointValue);
-    const growthValue = toNumber(account.growth_value != null ? account.growth_value : totalPoints);
+    const totalPoints = Math.max(0, toNumber(account.total_points != null ? account.total_points : pointValue));
+    const balancePoints = Math.max(0, toNumber(account.balance_points != null ? account.balance_points : pointValue));
+    const growthValue = Math.max(0, toNumber(account.growth_value != null ? account.growth_value : totalPoints));
     const levelNum = toNumber(account.level, 1) || 1;
     const streakSource = status.streak != null
         ? status.streak

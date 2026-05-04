@@ -674,8 +674,8 @@ async function pointsAccount(openid) {
     if (!user.data || user.data.length === 0) throw new Error('用户不存在');
 
     const userData = user.data[0];
-    const points = toNumber(userData.points != null ? userData.points : userData.growth_value, 0);
-    const growthValue = toNumber(userData.growth_value, 0);
+    const points = Math.max(0, toNumber(userData.points != null ? userData.points : userData.growth_value, 0));
+    const growthValue = Math.max(0, toNumber(userData.growth_value, 0));
 
     return {
         points,

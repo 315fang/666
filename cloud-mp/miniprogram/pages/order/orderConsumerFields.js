@@ -44,6 +44,12 @@ function toMoney(value) {
     return toNumber(value).toFixed(2);
 }
 
+function pickText(value, fallback = '') {
+    if (value === null || value === undefined) return fallback;
+    const text = String(value).trim();
+    return text || fallback;
+}
+
 function roundMoney(value) {
     return Math.round(toNumber(value, 0) * 100) / 100;
 }
@@ -127,12 +133,48 @@ function buildRefundStatusDesc(refund = {}, statusDesc = '') {
         return `驳回原因：${refund.reject_reason}`;
     }
     if (refund.status === 'approved' && refund.type === 'return_refund') {
-        return '请寄回商品并填写退货单号';
+        return refund.return_address_text
+            ? '请按寄回地址寄回商品，并填写退货单号'
+            : '请联系客服确认寄回地址，并填写退货单号';
     }
     if (refund.status === 'failed') {
         return '退款未成功，请联系客服处理';
     }
     return '';
+}
+
+function normalizeReturnAddress(source = {}) {
+    const raw = source && typeof source === 'object' ? source : {};
+    return {
+        receiver_name: pickText(raw.receiver_name || raw.receiverName || raw.name || raw.contact_name || raw.consignee),
+        receiver_phone: pickText(raw.receiver_phone || raw.receiverPhone || raw.phone || raw.mobile || raw.tel),
+        province: pickText(raw.province),
+        city: pickText(raw.city),
+        district: pickText(raw.district || raw.county || raw.area),
+        detail: pickText(raw.detail || raw.address_detail || raw.address),
+        postal_code: pickText(raw.postal_code || raw.postalCode || raw.zip_code || raw.zip),
+        note: pickText(raw.note || raw.remark)
+    };
+}
+
+function hasReturnAddress(address = {}) {
+    return !!pickText([
+        address.receiver_name,
+        address.receiver_phone,
+        address.province,
+        address.city,
+        address.district,
+        address.detail
+    ].join(' '));
+}
+
+function buildReturnAddressText(address = {}) {
+    if (!hasReturnAddress(address)) return '';
+    const receiverLine = [address.receiver_name, address.receiver_phone].map((item) => pickText(item)).filter(Boolean).join(' ');
+    const addressLine = [address.province, address.city, address.district, address.detail].map((item) => pickText(item)).filter(Boolean).join('');
+    const postalLine = address.postal_code ? `邮编：${address.postal_code}` : '';
+    const noteLine = address.note ? `备注：${address.note}` : '';
+    return [receiverLine, addressLine, postalLine, noteLine].filter(Boolean).join('\n');
 }
 
 function normalizeOrderConsumer(order = {}) {
@@ -234,10 +276,13 @@ function normalizeRefundConsumer(refund = {}) {
     );
     const amount = toNumber(refund.amount);
     const statusText = refund.status_text || getRefundStatusText(refund.status);
-    const statusDesc = buildRefundStatusDesc(refund, refund.status_desc || '');
+    const explicitStatusDesc = refund.status === 'approved' && refund.type === 'return_refund' ? '' : (refund.status_desc || '');
+    const statusDesc = buildRefundStatusDesc(refund, explicitStatusDesc);
     const paymentMethodText = refund.payment_method_text || getPaymentMethodText(paymentMethod);
     const refundTargetText = getRefundTargetText(paymentMethod, refund.refund_target_text || '');
     const processedAt = refund.processing_at || refund.processed_at || refund.processedAt || '';
+    const returnAddress = normalizeReturnAddress(refund.return_address || refund.returnAddress || {});
+    const returnAddressText = pickText(refund.return_address_text || refund.returnAddressText) || buildReturnAddressText(returnAddress);
 
     return {
         ...refund,
@@ -249,6 +294,9 @@ function normalizeRefundConsumer(refund = {}) {
         payment_method_text: paymentMethodText,
         refund_target_text: refundTargetText,
         processed_at: processedAt,
+        return_address: returnAddress,
+        return_address_text: returnAddressText,
+        return_address_available: !!returnAddressText,
         display_status_text: statusText,
         display_status_desc: statusDesc,
         display_payment_method_text: paymentMethodText,

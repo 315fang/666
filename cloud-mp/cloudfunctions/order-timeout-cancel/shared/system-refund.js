@@ -528,12 +528,19 @@ async function creditInternalBalance(order = {}, method = 'wallet', amount = 0) 
     };
 }
 
-function buildBuyerRefundReversal(order = {}, refund = {}, isFullRefund = false) {
+function buildBuyerRefundReversal(order = {}, refund = {}, isFullRefund = false, currentUser = null) {
     const refundAmount = roundMoney(toNumber(refund.amount ?? refund.refund_amount, 0));
     const userReversal = { updated_at: db.serverDate() };
-    if (refundAmount > 0) userReversal.total_spent = _.inc(-refundAmount);
     const rewardPointsClawback = Math.max(0, toNumber(refund.reward_points_clawback_amount, 0));
     const growthClawback = Math.max(0, toNumber(refund.growth_clawback_amount, 0));
+    if (currentUser && typeof currentUser === 'object') {
+        if (refundAmount > 0) userReversal.total_spent = Math.max(0, roundMoney(toNumber(currentUser.total_spent, 0) - refundAmount));
+        if (isFullRefund) userReversal.order_count = Math.max(0, Math.floor(toNumber(currentUser.order_count, 0) - 1));
+        if (rewardPointsClawback > 0) userReversal.points = Math.max(0, Math.floor(toNumber(currentUser.points, 0) - rewardPointsClawback));
+        if (growthClawback > 0) userReversal.growth_value = Math.max(0, Math.floor(toNumber(currentUser.growth_value, 0) - growthClawback));
+        return userReversal;
+    }
+    if (refundAmount > 0) userReversal.total_spent = _.inc(-refundAmount);
     if (isFullRefund) userReversal.order_count = _.inc(-1);
     if (rewardPointsClawback > 0) userReversal.points = _.inc(-rewardPointsClawback);
     if (growthClawback > 0) userReversal.growth_value = _.inc(-growthClawback);
@@ -542,8 +549,14 @@ function buildBuyerRefundReversal(order = {}, refund = {}, isFullRefund = false)
 
 async function reverseBuyerRefundAssets(openid, order = {}, refund = {}, isFullRefund = false) {
     try {
+        const userRes = await db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] }));
+        const currentUser = userRes.data && userRes.data[0];
+        if (!currentUser) {
+            console.error('[system-refund] ⚠️ 买家资产冲回跳过，用户不存在 openid=%s', openid);
+            return;
+        }
         await db.collection('users').where({ openid }).update({
-            data: buildBuyerRefundReversal(order, refund, isFullRefund)
+            data: buildBuyerRefundReversal(order, refund, isFullRefund, currentUser)
         });
     } catch (e) {
         console.error('[system-refund] ⚠️ 买家资产冲回失败 openid=%s error=%s', openid, e.message);

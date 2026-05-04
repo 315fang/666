@@ -279,6 +279,37 @@
       <el-input v-model="miniProgramForm.logistics_config.manual_refresh_toast" />
     </el-form-item>
 
+    <el-divider content-position="left">退货寄回地址</el-divider>
+    <el-alert
+      type="info"
+      :closable="false"
+      show-icon
+      style="max-width: 880px; margin-bottom: 12px;"
+      title="退货退款审核通过后，小程序售后详情会展示该地址；后台仍需在收到退货后点击确认收货并退款。"
+    />
+    <el-form-item label="收件人">
+      <el-input v-model="miniProgramForm.logistics_config.return_address.receiver_name" style="width:min(280px, 100%);" />
+    </el-form-item>
+    <el-form-item label="联系电话">
+      <el-input v-model="miniProgramForm.logistics_config.return_address.receiver_phone" style="width:min(280px, 100%);" />
+    </el-form-item>
+    <el-form-item label="省 / 市 / 区">
+      <div class="return-address-grid">
+        <el-input v-model="miniProgramForm.logistics_config.return_address.province" placeholder="省" />
+        <el-input v-model="miniProgramForm.logistics_config.return_address.city" placeholder="市" />
+        <el-input v-model="miniProgramForm.logistics_config.return_address.district" placeholder="区/县" />
+      </div>
+    </el-form-item>
+    <el-form-item label="详细地址">
+      <el-input v-model="miniProgramForm.logistics_config.return_address.detail" type="textarea" :rows="2" />
+    </el-form-item>
+    <el-form-item label="邮政编码">
+      <el-input v-model="miniProgramForm.logistics_config.return_address.postal_code" style="width:min(220px, 100%);" />
+    </el-form-item>
+    <el-form-item label="退货备注">
+      <el-input v-model="miniProgramForm.logistics_config.return_address.note" type="textarea" :rows="2" placeholder="如：请勿到付，寄回前请保留快递底单" />
+    </el-form-item>
+
     <el-divider content-position="left">提现手续费（小程序）</el-divider>
     <el-alert
       type="info"
@@ -383,5 +414,9 @@ function triggerReplace() {
 .poster-upload-icon { font-size: 28px; color: #c0c4cc; }
 .poster-upload-text { font-size: 13px; color: #606266; }
 .poster-upload-sub { font-size: 11px; color: #909399; }
+.return-address-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: min(560px, 100%); }
+@media (max-width: 720px) {
+  .return-address-grid { grid-template-columns: 1fr; }
+}
 .field-hint { font-size: 12px; color: #909399; line-height: 1.5; }
 </style>

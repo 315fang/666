@@ -4200,6 +4200,47 @@ function ensureWithdrawalNumericIds() {
     return rows;
 }
 
+function normalizeReturnAddress(source = {}) {
+    const raw = source && typeof source === 'object' ? source : {};
+    return {
+        receiver_name: pickString(raw.receiver_name || raw.receiverName || raw.name || raw.contact_name || raw.consignee),
+        receiver_phone: pickString(raw.receiver_phone || raw.receiverPhone || raw.phone || raw.mobile || raw.tel),
+        province: pickString(raw.province),
+        city: pickString(raw.city),
+        district: pickString(raw.district || raw.county || raw.area),
+        detail: pickString(raw.detail || raw.address_detail || raw.address),
+        postal_code: pickString(raw.postal_code || raw.postalCode || raw.zip_code || raw.zip),
+        note: pickString(raw.note || raw.remark)
+    };
+}
+
+function hasReturnAddress(address = {}) {
+    return !!pickString([
+        address.receiver_name,
+        address.receiver_phone,
+        address.province,
+        address.city,
+        address.district,
+        address.detail
+    ].join(' '));
+}
+
+function buildReturnAddressText(address = {}) {
+    if (!hasReturnAddress(address)) return '';
+    const receiverLine = [address.receiver_name, address.receiver_phone].map((item) => pickString(item)).filter(Boolean).join(' ');
+    const addressLine = [address.province, address.city, address.district, address.detail].map((item) => pickString(item)).filter(Boolean).join('');
+    const postalLine = address.postal_code ? `邮编：${address.postal_code}` : '';
+    const noteLine = address.note ? `备注：${address.note}` : '';
+    return [receiverLine, addressLine, postalLine, noteLine].filter(Boolean).join('\n');
+}
+
+function resolveReturnAddressForRefund(refund = {}) {
+    const snapshot = normalizeReturnAddress(refund.return_address || refund.returnAddress || {});
+    if (hasReturnAddress(snapshot)) return snapshot;
+    const logisticsConfig = toPlainObject(getMiniProgramConfigSnapshot().logistics_config);
+    return normalizeReturnAddress(logisticsConfig.return_address || {});
+}
+
 function buildRefundRecord(refund, users, orders, products, skus) {
     const order = findByLookup(orders, refund.order_id || refund.order_no, (row) => [row.order_no]);
     const items = order ? toArray(order.items).map((item) => buildOrderItemSnapshot(item, products, skus)) : [];
@@ -4220,6 +4261,9 @@ function buildRefundRecord(refund, users, orders, products, skus) {
         refund.payment_method || refund.refund_channel || orderContract.resolveOrderPaymentMethod(order || {}) || 'wechat'
     );
     const refundRoute = getRefundRouteMeta(refund.refund_channel || refund.refund_method || paymentMethod);
+    const refundType = pickString(refund.type);
+    const returnAddress = refundType === 'return_refund' ? resolveReturnAddressForRefund(refund) : null;
+    const returnAddressText = returnAddress ? buildReturnAddressText(returnAddress) : '';
     return {
         ...refund,
         id: primaryId(refund),
@@ -4267,6 +4311,11 @@ function buildRefundRecord(refund, users, orders, products, skus) {
         reject_reason: pickString(refund.reject_reason),
         return_company: pickString(refund.return_company || refund.return_shipping?.company),
         return_tracking_no: pickString(refund.return_tracking_no || refund.return_shipping?.tracking_no),
+        return_address: returnAddress,
+        return_address_text: returnAddressText,
+        return_address_available: !!returnAddressText,
+        return_received_at: normalizeDateValue(refund.return_received_at),
+        return_received_by: pickString(refund.return_received_by),
         processing_at: normalizeDateValue(refund.processing_at),
         completed_at: normalizeDateValue(refund.completed_at)
     };
@@ -5632,30 +5681,36 @@ async function refundOrderExtras(orderId, refund = {}) {
 
     const users = getCollection('users');
     const userIndex = users.findIndex((u) => u.openid === openid);
+    let nextUserPatch = null;
+    let nextUserDocId = '';
 
     if (userIndex !== -1) {
         const u = users[userIndex];
-        users[userIndex] = {
-            ...u,
+        nextUserDocId = pickString(primaryId(u));
+        nextUserPatch = {
             points: Math.max(0, toNumber(u.points, 0) + pointsDelta),
             growth_value: Math.max(0, toNumber(u.growth_value, 0) + growthDelta),
             total_spent: Math.max(0, toNumber(u.total_spent, 0) + spentDelta),
             order_count: Math.max(0, toNumber(u.order_count, 0) + orderCountDelta),
             updated_at: nowIso(),
         };
+        users[userIndex] = {
+            ...u,
+            ...nextUserPatch,
+        };
         saveCollection('users', users);
     }
 
     if (db) {
-        const _ = db.command;
-        const dbUpdates = { updated_at: new Date().toISOString() };
-        if (pointsDelta !== 0) dbUpdates.points = _.inc(pointsDelta);
-        if (growthDelta !== 0) dbUpdates.growth_value = _.inc(growthDelta);
-        if (spentDelta !== 0) dbUpdates.total_spent = _.inc(spentDelta);
-        if (orderCountDelta !== 0) dbUpdates.order_count = _.inc(orderCountDelta);
-
-        await db.collection('users').where({ openid }).update({ data: dbUpdates })
-            .catch((err) => { console.error('[refundOrderExtras] 用户数据回退失败:', err.message); });
+        if (nextUserPatch) {
+            const userPatched = nextUserDocId
+                ? await directPatchDocument('users', nextUserDocId, nextUserPatch).catch(() => false)
+                : false;
+            if (!userPatched) {
+                await db.collection('users').where({ openid }).update({ data: nextUserPatch })
+                    .catch((err) => { console.error('[refundOrderExtras] 用户数据回退失败:', err.message); });
+            }
+        }
 
         if (rewardPointsClawback > 0) {
             await db.collection('point_logs').add({

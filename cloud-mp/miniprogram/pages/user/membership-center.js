@@ -121,7 +121,7 @@ Page({
             if (profileRes.code !== 0 || !profileRes.data) {
                 throw new Error(profileRes.message || '加载失败');
             }
-            const g = Number(profileRes.data.growth_value) || 0;
+            const g = Math.max(0, Number(profileRes.data.growth_value) || 0);
             const roleLevel = Number(profileRes.data.role_level) || 0;
             const meta = (metaRes && metaRes.code === 0 && metaRes.data) ? metaRes.data : {};
             const currentMeta = meta.current || {};

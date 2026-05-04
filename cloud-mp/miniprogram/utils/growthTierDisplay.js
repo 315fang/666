@@ -22,7 +22,7 @@ function toMin(row) {
  * 按成长值解析当前展示档位（与后端阶梯 min 一致）
  */
 function getDisplayTierForGrowth(growthValue) {
-    const g = Number(growthValue) || 0;
+    const g = Math.max(0, Number(growthValue) || 0);
     let cur = TIERS_BY_MIN[0];
     for (let i = 0; i < TIERS_BY_MIN.length; i++) {
         if (g >= TIERS_BY_MIN[i].min) cur = TIERS_BY_MIN[i];
@@ -105,7 +105,7 @@ function applyGrowthTierDisplayNames(tiers) {
  * 与 /user/profile 返回的 growth_progress 对齐，只改展示名
  */
 function patchGrowthProgressForDisplay(info = {}) {
-    const g = Number(info.growth_value) || 0;
+    const g = Math.max(0, Number(info.growth_value) || 0);
     const cur = getDisplayTierForGrowth(g);
     const next = getDisplayNextTierForGrowth(g);
     const gp = info.growth_progress;

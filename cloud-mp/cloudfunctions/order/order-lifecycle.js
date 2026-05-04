@@ -787,7 +787,10 @@ async function recoverPendingGoodsFundRefunds(limit = 20) {
         .get()
         .catch(() => ({ data: [] }));
 
-    const refunds = (res.data || []).filter((item) => resolveRefundChannel(resolveOrderPaymentMethod({ payment_method: item.payment_method })) === 'goods_fund');
+    const refunds = (res.data || []).filter((item) => {
+        return resolveRefundChannel(resolveOrderPaymentMethod({ payment_method: item.payment_method })) === 'goods_fund'
+            && pickString(item.type) !== 'return_refund';
+    });
     let completed = 0;
     const errors = [];
 
@@ -1021,15 +1024,22 @@ function deriveRefundRevertStatus(order = {}) {
                 : (order.paid_at ? 'paid' : 'pending_payment')));
 }
 
-function buildBuyerRefundReversal(order = {}, refund = {}, isFullRefund = false) {
+function buildBuyerRefundReversal(order = {}, refund = {}, isFullRefund = false, currentUser = null) {
     const refundAmount = roundMoney(toNumber(refund.amount ?? refund.refund_amount, 0));
     const userReversal = { updated_at: db.serverDate() };
-    if (refundAmount > 0) userReversal.total_spent = _.inc(-refundAmount);
     const rewardPointsClawback = Math.max(0, toNumber(refund.reward_points_clawback_amount, 0));
     const growthClawback = Math.max(0, toNumber(refund.growth_clawback_amount, 0));
-    if (isFullRefund) {
-        userReversal.order_count = _.inc(-1);
+
+    if (currentUser && typeof currentUser === 'object') {
+        if (refundAmount > 0) userReversal.total_spent = Math.max(0, roundMoney(toNumber(currentUser.total_spent, 0) - refundAmount));
+        if (isFullRefund) userReversal.order_count = Math.max(0, Math.floor(toNumber(currentUser.order_count, 0) - 1));
+        if (rewardPointsClawback > 0) userReversal.points = Math.max(0, Math.floor(toNumber(currentUser.points, 0) - rewardPointsClawback));
+        if (growthClawback > 0) userReversal.growth_value = Math.max(0, Math.floor(toNumber(currentUser.growth_value, 0) - growthClawback));
+        return userReversal;
     }
+
+    if (refundAmount > 0) userReversal.total_spent = _.inc(-refundAmount);
+    if (isFullRefund) userReversal.order_count = _.inc(-1);
     if (rewardPointsClawback > 0) userReversal.points = _.inc(-rewardPointsClawback);
     if (growthClawback > 0) userReversal.growth_value = _.inc(-growthClawback);
     return userReversal;
@@ -1037,8 +1047,14 @@ function buildBuyerRefundReversal(order = {}, refund = {}, isFullRefund = false)
 
 async function reverseBuyerRefundAssets(openid, order = {}, refund = {}, isFullRefund = false) {
     try {
+        const userRes = await db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] }));
+        const currentUser = userRes.data && userRes.data[0];
+        if (!currentUser) {
+            console.error('[order-lifecycle] ⚠️ 买家退款资产冲减跳过，用户不存在 openid=%s', openid);
+            return;
+        }
         await db.collection('users').where({ openid }).update({
-            data: buildBuyerRefundReversal(order, refund, isFullRefund)
+            data: buildBuyerRefundReversal(order, refund, isFullRefund, currentUser)
         });
     } catch (e) {
         console.error('[order-lifecycle] ⚠️ 买家退款资产冲减失败 openid=%s error=%s', openid, e.message);
@@ -1393,7 +1409,10 @@ async function applyRefund(openid, params) {
         throw new Error('该订单已有待处理的退款申请');
     }
 
-    const type = params.type || 'refund_only';
+    const type = pickString(params.type || 'refund_only').toLowerCase();
+    if (!['refund_only', 'return_refund'].includes(type)) {
+        throw new Error('退款类型不合法');
+    }
     const refundSnapshot = computeRefundSnapshot(order, params);
     const refundNo = 'REF' + Date.now() + Math.floor(Math.random() * 1000);
     const refundAmount = refundSnapshot.refundAmount;
@@ -1458,8 +1477,8 @@ async function applyRefund(openid, params) {
         console.error('[OrderLifecycle] 佣金冻结失败:', freezeErr.message);
     }
 
-    // 货款支付订单：自动退款（不需要后台审批，直接退回余额）
-    if (paymentMethod === 'goods_fund') {
+    // 货款支付的“仅退款”可以自动退回货款余额；“退货退款”必须先走审核/退货物流/后台确认。
+    if (paymentMethod === 'goods_fund' && type === 'refund_only') {
         try {
             await db.collection('refunds').doc(result._id).update({
                 data: {
@@ -1595,13 +1614,17 @@ async function returnShipping(openid, refundId, shippingData) {
         throw new Error('退款记录不存在');
     }
 
+    if (pickString(refundRes.data.type) !== 'return_refund') {
+        throw new Error('仅退货退款允许填写物流');
+    }
+
     if (!['approved', 'processing'].includes(refundRes.data.status)) {
         throw new Error(`退款状态不允许填写物流: ${refundRes.data.status}`);
     }
 
     await db.collection('refunds').doc(refundId).update({
         data: {
-            status: 'processing',
+            status: 'approved',
             return_company: shippingData.company || '',
             return_tracking_no: shippingData.tracking_no || '',
             return_shipping: {
@@ -1609,6 +1632,7 @@ async function returnShipping(openid, refundId, shippingData) {
                 tracking_no: shippingData.tracking_no || '',
                 sent_at: db.serverDate(),
             },
+            return_shipping_submitted_at: db.serverDate(),
             updated_at: db.serverDate(),
         },
     });

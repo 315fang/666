@@ -97,7 +97,17 @@ const DEFAULT_CONFIG = {
     manual_status_text: '商家已手工发货',
     manual_status_desc: '当前订单走手工发货模式，可查看单号和发货时间',
     manual_empty_traces_text: '当前为手工发货模式，暂不提供第三方物流轨迹',
-    manual_refresh_toast: '手工发货模式无需刷新轨迹'
+    manual_refresh_toast: '手工发货模式无需刷新轨迹',
+    return_address: {
+      receiver_name: '',
+      receiver_phone: '',
+      province: '',
+      city: '',
+      district: '',
+      detail: '',
+      postal_code: '',
+      note: ''
+    }
   },
   customer_service_channel: {
     channel_service_phone: '',

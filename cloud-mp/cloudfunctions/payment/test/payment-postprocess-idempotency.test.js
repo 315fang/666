@@ -6,6 +6,7 @@ const Module = require('node:module');
 
 function createDbMock(options = {}) {
     const calls = [];
+    const mutableOrder = options.order ? { ...options.order } : null;
     const command = {
         exists: (value) => ({ op: 'exists', value }),
         in: (values) => ({ op: 'in', values }),
@@ -24,8 +25,22 @@ function createDbMock(options = {}) {
                     }
                 }),
                 doc: (id) => ({
+                    get: async () => ({ data: mutableOrder ? { ...mutableOrder } : null }),
                     update: async ({ data }) => {
                         calls.push({ type: 'orders.doc.update', id, data });
+                        if (mutableOrder) {
+                            Object.entries(data || {}).forEach(([key, value]) => {
+                                if (value && value.op === 'remove') {
+                                    delete mutableOrder[key];
+                                    return;
+                                }
+                                if (value && value.op === 'inc') {
+                                    mutableOrder[key] = (Number(mutableOrder[key]) || 0) + value.value;
+                                    return;
+                                }
+                                mutableOrder[key] = value;
+                            });
+                        }
                         return { stats: { updated: 1 } };
                     }
                 })
@@ -195,6 +210,91 @@ test('ensurePointsAwarded clears processing lock without completion marker when 
     assert.ok(failurePatch);
     assert.equal(failurePatch.data.points_awarded_at, undefined);
     assert.deepEqual(failurePatch.data.points_awarding_at, { op: 'remove' });
+});
+
+test('ensurePointsAwarded skips rewards when refund progress already exists', async () => {
+    const { db, calls } = createDbMock();
+    const paymentCallback = loadPaymentCallback(db);
+
+    const result = await paymentCallback._test.ensurePointsAwarded('order-1', {
+        _id: 'order-1',
+        openid: 'buyer-openid',
+        status: 'paid',
+        pay_amount: 100,
+        total_amount: 100,
+        refunded_cash_total: 100,
+        refunded_at: '2026-05-01T00:00:00.000Z'
+    });
+
+    assert.equal(result.skipped, true);
+    assert.equal(result.reason, 'refund_progress_exists');
+    assert.equal(calls.some((call) => call.type === 'users.update'), false);
+    assert.equal(calls.some((call) => call.type === 'point_logs.add'), false);
+    const completePatch = calls.find((call) => call.type === 'orders.doc.update' && call.data.points_awarded_at);
+    assert.ok(completePatch);
+    assert.equal(completePatch.data.points_earned, 0);
+    assert.equal(completePatch.data.growth_earned, 0);
+});
+
+test('processPaidOrder skips all post-pay benefits after a settled refund', async () => {
+    const { db, calls } = createDbMock({
+        order: {
+            _id: 'order-1',
+            openid: 'buyer-openid',
+            status: 'paid',
+            pay_amount: 100,
+            total_amount: 100,
+            refunded_cash_total: 100,
+            refunded_quantity_total: 1,
+            refunded_at: '2026-05-01T00:00:00.000Z'
+        }
+    });
+    const paymentCallback = loadPaymentCallback(db);
+
+    const result = await paymentCallback.processPaidOrder('order-1', {
+        _id: 'order-1',
+        openid: 'buyer-openid',
+        status: 'paid',
+        pay_amount: 100,
+        total_amount: 100
+    });
+
+    assert.equal(result.skipped, true);
+    assert.equal(result.reason, 'refund_progress_exists');
+    assert.equal(calls.some((call) => call.type === 'users.update'), false);
+    assert.equal(calls.some((call) => call.type === 'point_logs.add'), false);
+    assert.equal(calls.some((call) => call.type === 'commissions.add'), false);
+    const skippedPatch = calls.find((call) => call.type === 'orders.doc.update' && call.data.payment_post_process_skipped_reason);
+    assert.ok(skippedPatch);
+    assert.equal(skippedPatch.data.payment_post_process_skipped_reason, 'refund_progress_exists');
+    assert.equal(skippedPatch.data.points_earned, 0);
+    assert.equal(skippedPatch.data.growth_earned, 0);
+});
+
+test('processPaidOrder does not finalize skip marker while refund is only pending', async () => {
+    const { db, calls } = createDbMock({
+        order: {
+            _id: 'order-1',
+            openid: 'buyer-openid',
+            status: 'refunding',
+            pay_amount: 100,
+            total_amount: 100
+        }
+    });
+    const paymentCallback = loadPaymentCallback(db);
+
+    const result = await paymentCallback.processPaidOrder('order-1', {
+        _id: 'order-1',
+        openid: 'buyer-openid',
+        status: 'paid',
+        pay_amount: 100,
+        total_amount: 100
+    });
+
+    assert.equal(result.skipped, true);
+    assert.equal(result.reason, 'status_refunding');
+    assert.equal(calls.some((call) => call.type === 'users.update'), false);
+    assert.equal(calls.some((call) => call.type === 'orders.doc.update' && call.data.payment_post_processed_at), false);
 });
 
 test('ensureCommissionsCreated marks completion after the commission path is resolved', async () => {

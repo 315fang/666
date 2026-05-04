@@ -199,11 +199,11 @@ function discountText(discount) {
 }
 
 function resolveGrowthValue(source = {}) {
-    return toNum(source.growth_value, 0);
+    return Math.max(0, toNum(source.growth_value, 0));
 }
 
 function resolvePointsValue(source = {}) {
-    return toNum(source.points != null ? source.points : source.growth_value, 0);
+    return Math.max(0, toNum(source.points != null ? source.points : source.growth_value, 0));
 }
 
 function normalizeGrowthTiers(rows = []) {
@@ -400,7 +400,7 @@ async function evaluateAgentUpgrade(openid) {
     ]);
     const memberLevels = normalizeMemberLevels(membershipConfig.member_levels);
     const currentRoleLevel = toNum(user.role_level, 0);
-    const growthValue = toNum(user.growth_value, 0);
+    const growthValue = Math.max(0, toNum(user.growth_value, 0));
     const nextRoleLevel = deriveEligibleRoleLevel(currentRoleLevel, effectiveSales, directMembers, rechargeTotal, upgradeRules, growthValue);
     const roleMeta = memberLevels.find((item) => Number(item.level) === nextRoleLevel);
     return {
@@ -1874,7 +1874,7 @@ const handleAction = {
     // ===== 升级 / 其他 =====
     'upgradeEligibility': asyncHandler(async (openid) => {
         const evaluation = await evaluateAgentUpgrade(openid);
-        const points = toNum(evaluation.user.points || evaluation.user.growth_value, 0);
+        const points = Math.max(0, toNum(evaluation.user.points || evaluation.user.growth_value, 0));
         const canUpgrade = evaluation.nextRoleLevel > evaluation.currentRoleLevel;
         const agentUpgradeProgress = buildAgentUpgradeProgress(evaluation);
         return success({

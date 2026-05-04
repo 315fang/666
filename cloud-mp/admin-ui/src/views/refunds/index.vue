@@ -19,7 +19,7 @@
 
       <PageHelpTip
         title="售后处理须知"
-        message="退款金额由系统按商品实付自动计算；仅退现金，优惠券和积分不返还。审核通过后会自动调用微信支付退款，到账时间一般在 1-3 个工作日内。"
+        message="退款金额由系统按商品实付自动计算；仅退现金，优惠券和积分不返还。退货退款审核通过后，用户先寄回商品并填写物流，后台确认收到退货后再发起退款。"
       />
 
       <!-- 搜索栏 -->
@@ -174,8 +174,12 @@
           {{ currentRow.wx_status || currentRow.wx_refund_status }}
         </el-descriptions-item>
         <el-descriptions-item label="拒绝原因" v-if="currentRow.reject_reason">{{ currentRow.reject_reason }}</el-descriptions-item>
+        <el-descriptions-item label="寄回地址" v-if="currentRow.return_address_text">
+          <span class="pre-line">{{ currentRow.return_address_text }}</span>
+        </el-descriptions-item>
         <el-descriptions-item label="退货快递公司" v-if="currentRow.return_company">{{ currentRow.return_company }}</el-descriptions-item>
         <el-descriptions-item label="退货物流单号" v-if="currentRow.return_tracking_no">{{ currentRow.return_tracking_no }}</el-descriptions-item>
+        <el-descriptions-item label="确认收回时间" v-if="currentRow.return_received_at">{{ formatDateTime(currentRow.return_received_at) }}</el-descriptions-item>
       </el-descriptions>
       <div v-if="currentRow?.refund_items?.length" style="margin-top:16px;">
         <div style="font-weight:600;margin-bottom:8px;">退款计算明细</div>
@@ -325,6 +329,8 @@ const refundTargetText = (row = {}) => (
   }[resolvePaymentMethod(row)] || '-')
 )
 const refundStatusText = (row = {}) => row.status_text || getStatusText(row.status)
+const isReturnRefund = (row = {}) => String(row.type || '').trim() === 'return_refund'
+const returnTrackingText = (row = {}) => [row.return_company, row.return_tracking_no].filter(Boolean).join(' ') || '-'
 
 const fetchRefunds = async () => {
   loading.value = true
@@ -518,18 +524,31 @@ const handleRejectSubmit = async () => {
 }
 
 const handleComplete = async (row) => {
+  const returnRefund = isReturnRefund(row)
+  if (returnRefund && !row.return_tracking_no) {
+    ElMessage.warning('该售后还没有退货物流单号，请先等待用户提交物流，收到退货后再退款')
+    return
+  }
+  const confirmTitle = returnRefund ? '确认收货并退款' : '确认发起退款'
+  const confirmButtonText = returnRefund ? '已收货，立即退款' : '立即退款'
+  const returnInfo = returnRefund
+    ? `\n退货物流：${returnTrackingText(row)}\n操作含义：已确认收回退货商品，并立即发起退款。`
+    : ''
   try {
     await ElMessageBox.confirm(
-      `该操作将立即对用户「${displayUserName(row.user, row.user_id)}」发起退款，金额 ¥${row.display_amount || Number.parseFloat(row.amount || 0).toFixed(2)}。\n订单实付：¥${orderPayAmount(row).toFixed(2)}\n剩余可退：¥${Number.parseFloat(row.order?.remaining_refundable_cash || 0).toFixed(2)}\n支付方式：${row.display_payment_method_text || refundPaymentMethodText(row)}\n退款去向：${row.display_refund_target_text || refundTargetText(row)}\n退款规则：仅退现金，优惠券和积分不返还。`,
-      '确认发起退款',
+      `该操作将立即对用户「${displayUserName(row.user, row.user_id)}」发起退款，金额 ¥${row.display_amount || Number.parseFloat(row.amount || 0).toFixed(2)}。\n订单实付：¥${orderPayAmount(row).toFixed(2)}\n剩余可退：¥${Number.parseFloat(row.order?.remaining_refundable_cash || 0).toFixed(2)}\n支付方式：${row.display_payment_method_text || refundPaymentMethodText(row)}\n退款去向：${row.display_refund_target_text || refundTargetText(row)}${returnInfo}\n退款规则：仅退现金，优惠券和积分不返还。`,
+      confirmTitle,
       {
-        confirmButtonText: '立即退款',
+        confirmButtonText,
         cancelButtonText: '取消',
         type: 'warning'
       }
     )
     await runRefundMutation(
-      () => completeRefund(row.id),
+      () => completeRefund(row.id, {
+        return_company: row.return_company || undefined,
+        return_tracking_no: row.return_tracking_no || undefined
+      }),
       (result) => {
         const method = resolvePaymentMethod(result || row)
         if (result?.status === 'completed') {
@@ -575,7 +594,7 @@ const getStatusType = (status) => {
 const getRefundRowActions = (row) => [
   { label: '通过', type: 'success', onClick: () => handleApprove(row), visible: row.status === 'pending' },
   { label: '拒绝', type: 'danger', onClick: () => handleReject(row), visible: row.status === 'pending', danger: true },
-  { label: '确认退款', type: 'primary', onClick: () => handleComplete(row), visible: row.status === 'approved' },
+  { label: isReturnRefund(row) ? '确认收货并退款' : '确认退款', type: 'primary', onClick: () => handleComplete(row), visible: row.status === 'approved' },
   { label: '同步状态', type: 'primary', onClick: () => handleSyncStatus(row), visible: row.status === 'processing' },
   { label: '重试退款', type: 'danger', onClick: () => handleComplete(row), visible: row.status === 'failed', danger: true },
   { label: '详情', onClick: () => handleDetail(row) }
@@ -618,5 +637,9 @@ const getStatusText = (status) => {
 
 .text-gray {
   color: #aaa;
+}
+
+.pre-line {
+  white-space: pre-line;
 }
 </style>
