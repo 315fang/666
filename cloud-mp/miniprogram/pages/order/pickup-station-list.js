@@ -1,10 +1,12 @@
 // pages/order/pickup-station-list.js - 自提门店选择
+const { resolvePickupStationId, pickupStationMatches } = require('./utils/pickupStation');
+
 function compactText(value) {
     return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
 function resolveStationId(station = {}) {
-    return String(station.id || station._id || '');
+    return resolvePickupStationId(station);
 }
 
 function buildSearchText(station = {}) {
@@ -41,11 +43,13 @@ Page({
                 const stationKey = resolveStationId(station);
                 return {
                     ...station,
-                    id: station.id || station._id || stationKey,
+                    id: stationKey,
                     station_key: stationKey
                 };
             });
-        const selectedId = String(payload.selectedId || '');
+        const payloadSelectedId = String(payload.selectedId || '');
+        const selectedStation = stations.find((station) => pickupStationMatches(station, payloadSelectedId));
+        const selectedId = selectedStation ? resolveStationId(selectedStation) : payloadSelectedId;
         this.setData({
             stations,
             filteredStations: stations,

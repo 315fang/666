@@ -6,8 +6,8 @@ const TIERS_BY_MIN = [
     { min: 0, name: '星悦', desc: '新客礼遇' },
     { min: 299, name: '月华', desc: '购物9折' },
     { min: 999, name: '鎏光', desc: '购物8.5折' },
-    { min: 3000, name: '云境', desc: '原价结算·成长会员权益升级' },
-    { min: 30000, name: '曜世', desc: '尊享成长会员权益' },
+    { min: 3000, name: '云境', desc: '成长值提升·权益进度升级' },
+    { min: 30000, name: '曜世', desc: '尊享成长值权益' },
     { min: 198000, name: '天冕', desc: '顶格成长礼遇' }
 ];
 

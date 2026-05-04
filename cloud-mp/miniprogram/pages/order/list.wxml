@@ -90,18 +90,20 @@
 
       <!-- 订单底部 -->
       <view class="order-footer">
-        <view class="order-total">
-          <text class="total-label">共{{item.quantity}}件 实付:</text>
-          <text class="total-amount">¥{{item.display_pay_amount}}</text>
-          <text
-            class="pay-method-tag {{(item.payment_method === 'goods_fund' || item.payment_method === 'wallet') ? 'pay-method-wallet' : 'pay-method-wechat'}}"
-            wx:if="{{item.display_payment_method_text && item.status !== 'pending' && item.status !== 'cancelled' && (item.pay_amount > 0 || item.payment_method === 'goods_fund' || item.payment_method === 'wallet')}}"
-          >{{item.display_payment_method_text}}</text>
-          <text class="fulfillment-tag" wx:if="{{item.fulfillment_type === 'Agent' || item.fulfillment_type === 'agent'}}">团队发货</text>
-        </view>
-        <view class="order-total" wx:if="{{item.refunded_cash_total > 0}}">
-          <text class="total-label">已退 ¥{{item.display_refunded_cash_total}}</text>
-          <text class="total-label">剩余可退 ¥{{item.display_remaining_refundable_cash}}</text>
+        <view class="order-summary">
+          <view class="order-total">
+            <text class="total-label">共{{item.quantity}}件 实付:</text>
+            <text class="total-amount">¥{{item.display_pay_amount}}</text>
+            <text
+              class="pay-method-tag {{(item.payment_method === 'goods_fund' || item.payment_method === 'wallet') ? 'pay-method-wallet' : 'pay-method-wechat'}}"
+              wx:if="{{item.display_payment_method_text && item.status !== 'pending' && item.status !== 'cancelled' && (item.pay_amount > 0 || item.payment_method === 'goods_fund' || item.payment_method === 'wallet')}}"
+            >{{item.display_payment_method_text}}</text>
+            <text class="fulfillment-tag" wx:if="{{item.fulfillment_type === 'Agent' || item.fulfillment_type === 'agent'}}">团队发货</text>
+          </view>
+          <view class="order-total refund-total" wx:if="{{item.refunded_cash_total > 0}}">
+            <text class="total-label">已退 ¥{{item.display_refunded_cash_total}}</text>
+            <text class="total-label">剩余可退 ¥{{item.display_remaining_refundable_cash}}</text>
+          </view>
         </view>
         <view class="order-actions">
           <!-- ★ 有活跃退款时：只显示"查看退款" -->
@@ -148,15 +150,23 @@
 
             <!-- 待收货：主次分层 -->
             <block wx:if="{{item.status === 'shipped'}}">
-              <view class="action-row single" wx:if="{{item.tracking_no}}">
-                <view class="btn btn-sm btn-soft"
+              <view class="action-row shipped-actions">
+                <view class="btn btn-sm btn-soft" wx:if="{{item.tracking_no}}"
                       catchtap="onViewLogistics" data-order="{{item}}">查看物流</view>
-              </view>
-              <view class="action-row">
                 <view class="btn btn-sm btn-ghost"
                       catchtap="onApplyRefund" data-order="{{item}}">申请退款</view>
                 <view class="btn btn-sm btn-primary"
                       catchtap="onConfirmReceive" data-order="{{item}}">确认收货</view>
+              </view>
+            </block>
+
+            <!-- 待核销：合并展示在待收货入口下 -->
+            <block wx:if="{{item.status === 'pickup_pending'}}">
+              <view class="action-row">
+                <view class="btn btn-sm btn-ghost"
+                      catchtap="onApplyRefund" data-order="{{item}}">申请退款</view>
+                <view class="btn btn-sm btn-primary"
+                      catchtap="onViewPickupCredential" data-order="{{item}}">查看核销码</view>
               </view>
             </block>
 

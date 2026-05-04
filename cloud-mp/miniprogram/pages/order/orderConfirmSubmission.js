@@ -5,6 +5,7 @@ const { ensurePrivacyAuthorization } = require('../../utils/privacy');
 const { normalizeLimitedSpotPayload } = require('../../utils/limitedSpot');
 const { promptPortalPassword } = require('../../utils/portalPassword');
 const { markCartChanged } = require('../../utils/cartState');
+const { resolvePickupStationId } = require('./utils/pickupStation');
 
 function resolveSubmitOrderMessage(error) {
     if (error && error.message
@@ -52,7 +53,8 @@ async function submitOrder(page, app, brandAnimation) {
         wx.showToast({ title: '请选择收货地址', icon: 'none' });
         return;
     }
-    if (deliveryType === 'pickup' && (!pickupStation || !pickupStation.id)) {
+    const pickupStationId = deliveryType === 'pickup' ? resolvePickupStationId(pickupStation) : '';
+    if (deliveryType === 'pickup' && !pickupStationId) {
         wx.showToast({ title: '请选择自提门店', icon: 'none' });
         return;
     }
@@ -91,7 +93,7 @@ async function submitOrder(page, app, brandAnimation) {
         const orderData = {
             address_id: deliveryType === 'pickup' ? addressId || undefined : addressId,
             delivery_type: deliveryType,
-            pickup_station_id: deliveryType === 'pickup' ? pickupStation.id : undefined,
+            pickup_station_id: deliveryType === 'pickup' ? pickupStationId : undefined,
             memo: remark,
             remark,
             items: orderItems.map((item) => ({

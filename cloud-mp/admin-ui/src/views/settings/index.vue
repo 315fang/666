@@ -100,7 +100,7 @@ const DEFAULT_TAB_BAR = {
     { index: 0, text: '商城首页' },
     { index: 1, text: '全部商品' },
     { index: 2, text: '热门活动' },
-    { index: 3, text: '我的会员' }
+    { index: 3, text: '我的' }
   ]
 }
 
@@ -235,7 +235,8 @@ const miniProgramForm = reactive({
     growth_bar_subtitle_template: '距离「{next}」还需 {need} 成长值',
     growth_bar_max_tier_text: '您已达到当前成长体系最高档位',
     growth_privileges_entry_text: '查看权益',
-    growth_privileges_page_title: '成长值与权益说明'
+    growth_privileges_page_title: '权益中心',
+    membership_center_page_title: '权益中心'
   },
   logistics_config: {
     shipping_mode: 'third_party',

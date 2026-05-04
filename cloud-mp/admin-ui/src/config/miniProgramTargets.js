@@ -62,6 +62,14 @@ export const MINI_PROGRAM_TARGETS = [
     note: '惊喜礼遇页'
   },
   {
+    key: 'category:bundle-zone',
+    title: '组合专区',
+    group: '营销入口',
+    link_type: 'category',
+    link_value: 'bundle-zone',
+    note: '分类页组合商品专区，适合首页大图跳转'
+  },
+  {
     key: 'page:flex-bundles',
     title: '特惠随心选列表',
     group: '营销入口',
@@ -103,11 +111,11 @@ export const MINI_PROGRAM_TARGETS = [
   },
   {
     key: 'page:membership-center',
-    title: '会员中心',
+    title: '权益中心',
     group: '会员服务',
     link_type: 'page',
     link_value: '/pages/user/membership-center',
-    note: '会员权益中心'
+    note: '成长值、积分、券与身份权益'
   },
   {
     key: 'page:wallet',

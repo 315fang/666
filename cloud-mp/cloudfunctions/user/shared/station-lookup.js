@@ -28,7 +28,9 @@ function buildStationLookupValues(station = {}) {
         station._id,
         station.id,
         station._legacy_id,
-        station.station_id
+        station.legacy_id,
+        station.station_id,
+        station.station_key
     ]);
 }
 

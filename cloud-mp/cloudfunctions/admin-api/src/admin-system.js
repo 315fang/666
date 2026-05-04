@@ -204,7 +204,7 @@ function registerSystemRoutes(app, deps) {
             description: '成长值来源规则配置'
         });
         upsertConfigRow('growth_tier_config', toArray(nextConfig.growth_tiers), {
-            description: '成长值等级阶梯配置',
+            description: '成长值权益阶梯配置',
             is_public: true
         });
         upsertConfigRow('member_upgrade_rule_config', toObject(nextConfig.upgrade_rules, {}), {
@@ -218,7 +218,7 @@ function registerSystemRoutes(app, deps) {
         upsertConfigRow('point_level_config', toArray(nextConfig.point_levels), {
             category: 'POINTS',
             group: 'POINTS',
-            description: '积分中心等级特权配置',
+            description: '积分中心权益档位配置',
             is_public: true
         });
         upsertConfigRow('point_rule_config', toObject(nextConfig.point_rules, {}), {

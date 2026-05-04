@@ -18,6 +18,8 @@ const COMMISSION_TYPE_LABELS = {
   region_b3_virtual: '虚拟B3区域佣金',
   pickup_subsidy: '自提核销补贴',
   pickup_service_fee: '自提核销补贴',
+  refund_dev_fee: '退款开发费',
+  store_annual_goods_reward: '年度货品奖',
   year_end_dividend: '年终分红'
 }
 
@@ -41,6 +43,8 @@ export const COMMISSION_TYPE_OPTIONS = [
   { value: 'region_b3_virtual', label: COMMISSION_TYPE_LABELS.region_b3_virtual },
   { value: 'pickup_subsidy', label: COMMISSION_TYPE_LABELS.pickup_subsidy },
   { value: 'pickup_service_fee', label: COMMISSION_TYPE_LABELS.pickup_service_fee },
+  { value: 'refund_dev_fee', label: COMMISSION_TYPE_LABELS.refund_dev_fee },
+  { value: 'store_annual_goods_reward', label: COMMISSION_TYPE_LABELS.store_annual_goods_reward },
   { value: 'year_end_dividend', label: COMMISSION_TYPE_LABELS.year_end_dividend }
 ]
 

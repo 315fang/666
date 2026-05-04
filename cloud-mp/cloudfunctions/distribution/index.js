@@ -324,7 +324,25 @@ function isTestOrder(order = {}) {
     return order.is_test_order === true || order.is_test_order === 1 || order.is_test_order === '1';
 }
 
-function isPromotionCountedOrder(order = {}) {
+function parseTimestamp(value) {
+    if (!value) return null;
+    if (value instanceof Date) return value.getTime();
+    if (typeof value === 'number') return value;
+    if (typeof value === 'object') {
+        if (typeof value.getTime === 'function') return value.getTime();
+        if (typeof value._seconds === 'number') return value._seconds * 1000;
+        if (typeof value.seconds === 'number') return value.seconds * 1000;
+        if (typeof value.toDate === 'function') {
+            const date = value.toDate();
+            return date instanceof Date ? date.getTime() : null;
+        }
+        if (value.$date) return parseTimestamp(value.$date);
+    }
+    const time = new Date(value).getTime();
+    return Number.isFinite(time) ? time : null;
+}
+
+function isPromotionCountedOrder(order = {}, effectiveDays = DEFAULT_AGENT_UPGRADE_RULES.effective_order_days) {
     if (isTestOrder(order)) return false;
     const status = String(order.status || '').trim().toLowerCase();
     if (['cancelled', 'canceled', 'refunded', 'pending', 'pending_payment', 'after_sale', 'refunding'].includes(status)) {
@@ -333,16 +351,37 @@ function isPromotionCountedOrder(order = {}) {
     if (toNumber(order.refunded_cash_total, 0) > 0 || order.has_partial_refund === true) {
         return false;
     }
+    const confirmedAt = parseTimestamp(order.confirmed_at || order.completed_at || order.auto_confirmed_at);
+    if (!confirmedAt) return false;
+    const cutoff = Date.now() - Math.max(0, effectiveDays) * 24 * 60 * 60 * 1000;
+    if (confirmedAt > cutoff) return false;
     return true;
 }
 
-async function getPromotionSpendTotal(openid) {
+function getOrderNetGrowthForPromotion(order = {}) {
+    const earned = Math.max(0, Math.floor(toNumber(order.growth_earned, 0)));
+    const clawedBack = Math.max(0, Math.floor(toNumber(order.growth_clawback_total, 0)));
+    return Math.max(0, earned - clawedBack);
+}
+
+async function getPromotionSpendTotal(openid, effectiveDays = DEFAULT_AGENT_UPGRADE_RULES.effective_order_days) {
     if (!openid) return 0;
     const rows = await getAllRecords(db, 'orders', { openid }).catch(() => []);
     return roundMoney(rows.reduce((sum, row) => {
-        if (!isPromotionCountedOrder(row)) return sum;
+        if (!isPromotionCountedOrder(row, effectiveDays)) return sum;
         return sum + toNumber(row.pay_amount ?? row.actual_price ?? row.total_amount, 0);
     }, 0));
+}
+
+async function getStablePromotionGrowth(openid, currentGrowthValue = 0, effectiveDays = DEFAULT_AGENT_UPGRADE_RULES.effective_order_days) {
+    if (!openid) return 0;
+    const rows = await getAllRecords(db, 'orders', { openid }).catch(() => []);
+    const unstableOrderGrowth = rows.reduce((sum, row) => {
+        const netGrowth = getOrderNetGrowthForPromotion(row);
+        if (netGrowth <= 0) return sum;
+        return isPromotionCountedOrder(row, effectiveDays) ? sum : sum + netGrowth;
+    }, 0);
+    return Math.max(0, Math.floor(toNumber(currentGrowthValue, 0) - unstableOrderGrowth));
 }
 
 async function listUpgradePiggyBankRows(openid, limit = 500) {
@@ -996,6 +1035,26 @@ const handleAction = {
                     skippedCount++;
                     continue;
                 }
+            }
+            const isStorePeerBonus = String(comm.type || '').trim() === 'same_level'
+                && Number(comm.bonus_role_level || comm.level || 0) === 6;
+            if (isStorePeerBonus) {
+                if (String(comm.status || '') !== 'frozen') {
+                    skippedCount++;
+                    continue;
+                }
+                const approvalUpdate = await db.collection('commissions')
+                    .where({ _id: comm._id, status: 'frozen' })
+                    .update({
+                        data: { status: 'pending_approval', pending_approval_at: db.serverDate(), updated_at: db.serverDate() }
+                    })
+                    .catch((e) => {
+                        console.error('[distribution] ⚠️ 实体门店平级奖转待审核失败 commissionId=%s error=%s', comm._id, e.message);
+                        return { stats: { updated: 0 } };
+                    });
+                if (approvalUpdate?.stats?.updated > 0) settledCount++;
+                else skippedCount++;
+                continue;
             }
             const amount = toNumber(comm.amount, 0);
             try {
@@ -1709,9 +1768,13 @@ const handleAction = {
         if (!userRes.data || userRes.data.length === 0) throw notFound('用户不存在');
         const user = userRes.data[0];
         const currentLevel = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
-        const growthValue = toNumber(user.growth_value, 0);
+        const totalGrowthValue = toNumber(user.growth_value, 0);
         const upgradeRules = await loadAgentUpgradeRules();
-        const totalSpent = await getPromotionSpendTotal(openid);
+        const effectiveDays = toNumber(upgradeRules.effective_order_days, DEFAULT_AGENT_UPGRADE_RULES.effective_order_days);
+        const [totalSpent, growthValue] = await Promise.all([
+            getPromotionSpendTotal(openid, effectiveDays),
+            getStablePromotionGrowth(openid, totalGrowthValue, effectiveDays)
+        ]);
 
         // 查直属下级
         const clauses = [];
@@ -1783,7 +1846,16 @@ const handleAction = {
             next_level: normalizedNextLevel,
             next_name: normalizedNextLevel == null ? null : (ROLE_NAMES[nextLevel] || ''),
             conditions,
-            stats: { total_spent: totalSpent, recharge_total: rechargeTotal, growth_value: growthValue, c1_count: c1Count, b1_count: b1Count, b2_count: b2Count },
+            stats: {
+                total_spent: totalSpent,
+                recharge_total: rechargeTotal,
+                growth_value: totalGrowthValue,
+                upgrade_growth_value: growthValue,
+                pending_growth_value: Math.max(0, roundMoney(totalGrowthValue - growthValue)),
+                c1_count: c1Count,
+                b1_count: b1Count,
+                b2_count: b2Count
+            },
             piggy_bank: piggyBank
         });
     }),

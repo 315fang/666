@@ -39,13 +39,14 @@ function createDbMock(options = {}) {
     const command = {
         inc: (value) => ({ __op: 'inc', value }),
         in: (values) => ({ __op: 'in', values }),
+        or: (conditions) => ({ __op: 'or', conditions }),
         remove: () => ({ __op: 'remove' })
     };
     const user = {
         _id: 'user-doc-1',
         id: 1,
         openid: 'buyer-openid',
-        points: 50,
+        points: options.userPoints ?? 50,
         growth_value: options.userGrowthValue ?? 200,
         total_spent: 100,
         order_count: 1,
@@ -109,6 +110,7 @@ function createDbMock(options = {}) {
         ]
     };
     const refunds = options.includeInitialRefund === false ? [] : [refund];
+    const commissions = options.commissions || [];
 
     const adds = [];
     const db = {
@@ -174,9 +176,20 @@ function createDbMock(options = {}) {
             }
             if (name === 'commissions') {
                 return {
-                    where: () => createQuery({
-                        update: async () => ({ stats: { updated: 0 } })
-                    })
+                    where: (criteria = {}) => createQuery({
+                        get: async () => ({ data: commissions.filter((row) => matchesCriteria(row, criteria)) }),
+                        update: async ({ data }) => {
+                            const rows = commissions.filter((row) => matchesCriteria(row, criteria));
+                            rows.forEach((row) => applyDataPatch(row, data));
+                            return { stats: { updated: rows.length } };
+                        }
+                    }),
+                    add: async ({ data }) => {
+                        const row = { _id: `commission-${commissions.length + 1}`, ...data };
+                        commissions.push(row);
+                        adds.push({ collection: name, data: row });
+                        return { _id: row._id };
+                    }
                 };
             }
             if (name === 'wallet_logs' || name === 'goods_fund_logs') {
@@ -204,7 +217,7 @@ function createDbMock(options = {}) {
         }
     };
 
-    return { db, user, walletAccount, order, refund, refunds };
+    return { db, user, walletAccount, order, refund, refunds, commissions };
 }
 
 function loadOrderLifecycleWithDb(db, options = {}) {
@@ -271,8 +284,77 @@ test('goods fund refund claws back paid order reward points and clamps growth at
         assert.equal(order.status, 'refunded');
         assert.equal(refund.reward_points_clawback_amount, 10);
         assert.equal(refund.growth_clawback_amount, 100);
+        assert.equal(refund.growth_clawback_basis, 'order_growth_earned');
         assert.equal(refund.status, 'completed');
         assert.ok(refund.buyer_assets_reversed_at);
+    } finally {
+        restore();
+    }
+});
+
+test('goods fund refund records spent reward point shortfall as negative balance', async () => {
+    const { db, user, order, refund } = createDbMock({ userPoints: 3, userGrowthValue: 20 });
+    const { module, restore } = loadOrderLifecycleWithDb(db);
+    try {
+        await module.completeGoodsFundRefundSettlement('order-1', order, refund);
+
+        assert.equal(user.points, -7);
+        assert.equal(user.growth_value, 0);
+        assert.equal(order.reward_points_clawback_total, 10);
+        assert.equal(refund.reward_points_clawback_amount, 10);
+    } finally {
+        restore();
+    }
+});
+
+test('goods fund refund creates idempotent refund development fee ledger', async () => {
+    const { db, order, refund, commissions } = createDbMock({
+        userGrowthValue: 20,
+        commissions: [{
+            _id: 'same-level-1',
+            order_id: 'order-1',
+            order_no: 'ORD-GF-1',
+            openid: 'store-openid',
+            user_id: 'store-user',
+            type: 'same_level',
+            status: 'frozen',
+            bonus_role_level: 6,
+            amount: 20
+        }]
+    });
+    const { module, restore } = loadOrderLifecycleWithDb(db);
+    try {
+        await module.completeGoodsFundRefundSettlement('order-1', order, refund);
+
+        const devFee = commissions.find((row) => row.type === 'refund_dev_fee');
+        assert.ok(devFee, 'expected refund development fee record');
+        assert.equal(devFee.status, 'recorded');
+        assert.equal(devFee.amount, 1.5);
+        assert.equal(devFee.refund_id, 'refund-1');
+        assert.equal(devFee.openid, 'store-openid');
+        assert.equal(devFee.user_id, 'store-user');
+        assert.equal(devFee.from_openid, 'buyer-openid');
+        assert.equal(devFee.source_commission_id, 'same-level-1');
+
+        await module.ensureRefundDevFeeRecord('order-1', order, refund);
+        assert.equal(commissions.filter((row) => row.type === 'refund_dev_fee').length, 1);
+    } finally {
+        restore();
+    }
+});
+
+test('goods fund refund does not deduct unreleased frozen reward points', async () => {
+    const { db, user, order, refund } = createDbMock({ userPoints: 3, userGrowthValue: 20 });
+    order.points_award_status = 'frozen';
+    order.reward_points_released_total = 0;
+    const { module, restore } = loadOrderLifecycleWithDb(db);
+    try {
+        await module.completeGoodsFundRefundSettlement('order-1', order, refund);
+
+        assert.equal(user.points, 3);
+        assert.equal(user.growth_value, 0);
+        assert.equal(order.reward_points_clawback_total, 0);
+        assert.equal(refund.reward_points_clawback_amount, 0);
     } finally {
         restore();
     }
@@ -296,6 +378,35 @@ test('goods fund return refund stays pending instead of auto completing from use
         assert.equal(refunds.length, 1);
         assert.equal(refunds[0].status, 'pending');
         assert.equal(refunds[0].type, 'return_refund');
+        assert.equal(order.status, 'refunding');
+        assert.equal(user.agent_wallet_balance, 0);
+        assert.equal(walletAccount.balance, 0);
+        assert.equal(user.points, 50);
+        assert.equal(user.growth_value, 20);
+        assert.equal(order.refunded_cash_total || 0, 0);
+    } finally {
+        restore();
+    }
+});
+
+test('goods fund refund-only stays pending instead of auto completing from user apply', async () => {
+    const { db, user, walletAccount, order, refunds } = createDbMock({ includeInitialRefund: false, userGrowthValue: 20 });
+    order.status = 'paid';
+    const { module, restore } = loadOrderLifecycleWithDb(db, { order });
+    try {
+        const result = await module.applyRefund('buyer-openid', {
+            order_id: 'order-1',
+            type: 'refund_only',
+            reason: '不想要了/买重复了',
+            refund_quantity: 1,
+            refund_items: [{ refund_item_key: 'product-1::nosku::0', quantity: 1 }]
+        });
+
+        assert.equal(result.success, true);
+        assert.equal(result.auto_refunded, undefined);
+        assert.equal(refunds.length, 1);
+        assert.equal(refunds[0].status, 'pending');
+        assert.equal(refunds[0].type, 'refund_only');
         assert.equal(order.status, 'refunding');
         assert.equal(user.agent_wallet_balance, 0);
         assert.equal(walletAccount.balance, 0);

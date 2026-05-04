@@ -3385,8 +3385,8 @@ function createDefaultBranchAgentPolicy() {
         pickup_station_reward_rate: 0.025,
         pickup_station_subsidy_amount: 0,
         region_reward_tiers: [
-            { threshold: 0, rate: 0.01, label: '0元' },
-            { threshold: 100000, rate: 0.02, label: '10万' },
+            { threshold: 100000, rate: 0.01, label: '10万' },
+            { threshold: 300000, rate: 0.02, label: '30万' },
             { threshold: 1000000, rate: 0.03, label: '100万' }
         ]
     };
@@ -3423,16 +3423,23 @@ function normalizeBranchAgentPolicySnapshot(rawPolicy) {
 
 function isLegacyDefaultRegionRewardTiers(tiers = []) {
     if (!Array.isArray(tiers) || tiers.length !== 3) return false;
-    const legacy = [
-        { threshold: 100000, rate: 0.01 },
-        { threshold: 300000, rate: 0.02 },
-        { threshold: 1000000, rate: 0.03 }
+    const legacyCandidates = [
+        [
+            { threshold: 100000, rate: 0.01 },
+            { threshold: 300000, rate: 0.02 },
+            { threshold: 1000000, rate: 0.03 }
+        ],
+        [
+            { threshold: 0, rate: 0.01 },
+            { threshold: 100000, rate: 0.02 },
+            { threshold: 1000000, rate: 0.03 }
+        ]
     ];
-    return legacy.every((expected, index) => {
+    return legacyCandidates.some((legacy) => legacy.every((expected, index) => {
         const tier = tiers[index] || {};
         return toNumber(tier.threshold, -1) === expected.threshold
             && Math.abs(toNumber(tier.rate, -1) - expected.rate) < 0.000001;
-    });
+    }));
 }
 
 function getBranchAgentPolicySnapshot() {
@@ -3756,6 +3763,89 @@ function ensureBranchAgentCommissionForOrder(order, options = {}) {
         type: isVirtualB3 ? 'region_b3_virtual' : 'region_agent',
         description: `${isVirtualB3 ? '虚拟B3区域佣金' : '区域奖励'}：${pickString(station.name || station.region_name)}（累计${cumulativeAmount.toFixed(2)}元）`
     });
+}
+
+function pickupOrderMatchesStation(order = {}, station = {}) {
+    return rowMatchesLookup(station, order.pickup_station_id, [
+        station._id,
+        station.id,
+        station._legacy_id,
+        station.station_id,
+        station.station_key
+    ]) || rowMatchesLookup(station, order.pickup_verified_station_id, [
+        station._id,
+        station.id,
+        station._legacy_id,
+        station.station_id,
+        station.station_key
+    ]);
+}
+
+function resolvePickupStationClaimant(station = {}, staffRows = [], users = []) {
+    const explicit = findUserByAnyId(users, station.pickup_claimant_id || station.pickup_claimant_openid || station.claimant_id || station.user_id || station.openid);
+    if (explicit?.openid) return explicit;
+    const managerRow = staffRows.find((row) => (
+        pickString(row.status || 'active') === 'active'
+        && pickString(row.role || 'staff') === 'manager'
+        && rowMatchesLookup(station, row.station_id)
+    ));
+    return managerRow ? findUserByAnyId(users, managerRow.openid || managerRow.user_id) : null;
+}
+
+function buildRefundDeadlineFromOrder(order = {}, days = 7) {
+    const base = normalizeDateValue(order.pickup_verified_at || order.verified_at || order.confirmed_at || order.completed_at || order.updated_at || order.created_at);
+    const timestamp = Date.parse(base || '');
+    const date = Number.isFinite(timestamp) ? new Date(timestamp) : new Date();
+    date.setDate(date.getDate() + Math.max(0, Math.floor(toNumber(days, 7))));
+    return date.toISOString();
+}
+
+function ensurePickupServiceFeeForOrder(order = {}, context = {}) {
+    if (pickString(order.type).toLowerCase() === 'exchange') return null;
+    if (pickString(order.delivery_type) !== 'pickup') return null;
+    if (!pickString(order.pickup_verified_at || order.verified_at || order.confirmed_at || order.picked_up_at)) return null;
+    const { stations = [], staffRows = [], users = [], policy = getBranchAgentPolicySnapshot() } = context;
+    if (!policy.enabled || !policy.pickup_station_subsidy_enabled) return null;
+    const station = stations.find((row) => pickupOrderMatchesStation(order, row));
+    if (!station) return null;
+    const claimant = resolvePickupStationClaimant(station, staffRows, users);
+    if (!claimant?.openid) return null;
+    const rows = getCollection('commissions');
+    const orderId = order._id || order.id || order.order_no;
+    const existing = rows.find((row) => (
+        rowMatchesLookup(row, orderId, [row.order_id, row.order_no])
+        && rowMatchesLookup(row, claimant.openid, [row.openid, row.user_id])
+        && ['pickup_service_fee', 'pickup_subsidy'].includes(pickString(row.type).toLowerCase())
+    ));
+    if (existing) return existing;
+    const orderAmount = roundMoney(getOrderAmount(order));
+    let amount = roundMoney(orderAmount * toNumber(policy.pickup_station_reward_rate, 0));
+    if (amount <= 0) amount = roundMoney(policy.pickup_station_subsidy_amount);
+    if (amount <= 0) return null;
+    const row = {
+        id: nextId(rows),
+        openid: claimant.openid,
+        user_id: primaryId(claimant) || claimant.openid,
+        from_openid: order.openid || order.buyer_id || '',
+        order_id: order._id || order.id || null,
+        order_no: pickString(order.order_no),
+        amount,
+        level: toNumber(claimant.role_level ?? claimant.distributor_level, 0),
+        type: 'pickup_service_fee',
+        status: 'frozen',
+        pre_freeze_status: 'pending_approval',
+        commission_freeze_reason: 'pickup_service_fee_repair',
+        branch_station_id: primaryId(station),
+        pickup_verified_by: pickString(order.pickup_verified_by),
+        refund_deadline: buildRefundDeadlineFromOrder(order),
+        frozen_at: nowIso(),
+        created_at: nowIso(),
+        updated_at: nowIso(),
+        description: `门店服务费补记：${pickString(station.name || station.region_name || '门店')}`
+    };
+    rows.push(row);
+    saveCollection('commissions', rows);
+    return row;
 }
 
 function getUpgradeApplicationsSnapshot() {
@@ -4308,6 +4398,7 @@ function buildRefundRecord(refund, users, orders, products, skus) {
         points_refund_amount: roundMoney(refund.points_refund_amount),
         reward_points_clawback_amount: Math.max(0, toNumber(refund.reward_points_clawback_amount, 0)),
         growth_clawback_amount: Math.max(0, toNumber(refund.growth_clawback_amount, 0)),
+        growth_clawback_basis: pickString(refund.growth_clawback_basis),
         reject_reason: pickString(refund.reject_reason),
         return_company: pickString(refund.return_company || refund.return_shipping?.company),
         return_tracking_no: pickString(refund.return_tracking_no || refund.return_shipping?.tracking_no),
@@ -4359,6 +4450,8 @@ function getCommissionTypeLabel(type) {
         peer: '平级奖励',
         pickup_subsidy: '服务费',
         pickup_service_fee: '服务费',
+        refund_dev_fee: '退款开发费',
+        store_annual_goods_reward: '年度货品奖',
         agent_assist: '动销奖励',
         assist: '动销奖励',
         agent_fulfillment: '发货利润',
@@ -4383,6 +4476,8 @@ function buildCommissionSourceText(commission = {}, order = {}) {
         same_level: '来自平级奖励结算',
         pickup_subsidy: '来自门店服务费',
         pickup_service_fee: '来自门店服务费',
+        refund_dev_fee: '来自退款开发费台账',
+        store_annual_goods_reward: '来自年度货品奖励',
         agent_assist: '来自代理协助奖励',
         agent_fulfillment: '来自代理发货利润',
         region_agent: '来自区域代理收益',
@@ -4464,6 +4559,28 @@ function normalizeRestoredCommissionStatus(row = {}) {
     if (['pending', 'pending_approval'].includes(previousStatus)) return previousStatus;
     const type = pickString(row.type).toLowerCase();
     return REFUND_RESTORABLE_COMMISSION_TYPES.has(type) ? 'pending_approval' : 'pending';
+}
+
+function resolveGrowthClawbackBasis(order = {}) {
+    if (order.growth_earned !== undefined && order.growth_earned !== null && order.growth_earned !== '') {
+        return {
+            amount: Math.max(0, Math.floor(toNumber(order.growth_earned, 0))),
+            basis: 'order_growth_earned'
+        };
+    }
+    return {
+        amount: Math.max(0, Math.floor(toNumber(order.pay_amount ?? order.actual_price ?? order.total_amount, 0))),
+        basis: 'legacy_pay_amount'
+    };
+}
+
+function resolveRewardPointsClawbackBasis(order = {}) {
+    const totalEarned = Math.max(0, Math.floor(toNumber(order.points_earned, 0)));
+    const status = pickString(order.points_award_status).toLowerCase();
+    const hasReleaseSnapshot = order.reward_points_released_total !== undefined
+        || ['frozen', 'released', 'partially_released', 'cancelled'].includes(status);
+    if (!hasReleaseSnapshot) return totalEarned;
+    return Math.max(0, Math.min(totalEarned, Math.floor(toNumber(order.reward_points_released_total, 0))));
 }
 
 function applyUserMoneyChange(users, userRef, amount, options = {}) {
@@ -4606,7 +4723,13 @@ async function cancelCommissionsForOrder(orderId, reason) {
             const ownerRef = commissionOwnerRef(row);
             if (ownerRef) changedUserRefs.add(String(ownerRef));
         }
-        return result.row;
+        return result.changed
+            ? {
+                ...result.row,
+                commission_cancel_scope: 'whole_order_on_any_refund',
+                commission_cancel_policy: 'partial_refund_policy_v1'
+            }
+            : result.row;
     });
     if (changed) {
         if (dataStore._internals?.db) {
@@ -5538,6 +5661,7 @@ function buildOrderPatchAfterRefund(order = {}, refund = {}) {
             refundAmount: roundMoney(toNumber(refund.amount ?? refund.refund_amount, 0)),
             rewardPointsClawback: Math.max(0, toNumber(refund.reward_points_clawback_amount, 0)),
             growthClawback: Math.max(0, toNumber(refund.growth_clawback_amount, 0)),
+            growthClawbackBasis: pickString(refund.growth_clawback_basis, 'already_applied'),
             patch: {
                 items: toArray(order.items),
                 refunded_quantity_total: toNumber(order.refunded_quantity_total, 0),
@@ -5570,8 +5694,9 @@ function buildOrderPatchAfterRefund(order = {}, refund = {}) {
             refunded_cash_amount: Math.min(item.cash_paid_allocated_amount, roundMoney(item.refunded_cash_amount + toNumber(matched.cash_refund_amount, 0)))
         };
     });
-    const totalPointsEarned = Math.max(0, toNumber(order.points_earned, 0));
-    const totalGrowthEarned = Math.max(0, Math.floor(toNumber(order.pay_amount ?? order.actual_price ?? order.total_amount, 0)));
+    const totalPointsEarned = resolveRewardPointsClawbackBasis(order);
+    const growthBasis = resolveGrowthClawbackBasis(order);
+    const totalGrowthEarned = growthBasis.amount;
     const rewardPointsClawedBefore = Math.max(0, toNumber(order.reward_points_clawback_total, 0));
     const growthClawedBefore = Math.max(0, toNumber(order.growth_clawback_total, 0));
     const rewardPointsClawback = isFullRefund
@@ -5587,6 +5712,7 @@ function buildOrderPatchAfterRefund(order = {}, refund = {}) {
         refundAmount,
         rewardPointsClawback,
         growthClawback,
+        growthClawbackBasis: growthBasis.basis,
         patch: {
             items: nextOrderItems,
             refunded_quantity_total: nextRefundedQuantity,
@@ -5654,9 +5780,13 @@ function restoreOrderStockForRefund(orderId, refund = {}) {
     return { restored, quantity: refundQuantity };
 }
 
+function isRefundCompletionConfirmed(refund = {}) {
+    return refund.refund_completion_confirmed === true || pickString(refund.status) === 'completed';
+}
+
 /**
- * 退款完成后仅处理现金对应的用户侧统计。
- * 优惠券和下单抵扣积分不返还；奖励积分/成长值仅在整单退完时扣回。
+ * 退款完成结算后处理用户侧统计。
+ * 优惠券和下单抵扣积分不返还；奖励积分/成长值只在完成结算上下文中回退。
  * @param {string} orderId - 订单 ID 或 order_no
  */
 async function refundOrderExtras(orderId, refund = {}) {
@@ -5665,6 +5795,9 @@ async function refundOrderExtras(orderId, refund = {}) {
     if (!order) return;
 
     if (refund.buyer_assets_applied_at) {
+        return buildOrderPatchAfterRefund(order, refund);
+    }
+    if (!isRefundCompletionConfirmed(refund)) {
         return buildOrderPatchAfterRefund(order, refund);
     }
 
@@ -5688,7 +5821,7 @@ async function refundOrderExtras(orderId, refund = {}) {
         const u = users[userIndex];
         nextUserDocId = pickString(primaryId(u));
         nextUserPatch = {
-            points: Math.max(0, toNumber(u.points, 0) + pointsDelta),
+            points: Math.floor(toNumber(u.points, 0) + pointsDelta),
             growth_value: Math.max(0, toNumber(u.growth_value, 0) + growthDelta),
             total_spent: Math.max(0, toNumber(u.total_spent, 0) + spentDelta),
             order_count: Math.max(0, toNumber(u.order_count, 0) + orderCountDelta),
@@ -5746,6 +5879,7 @@ async function refundOrderExtras(orderId, refund = {}) {
         ...row,
         reward_points_clawback_amount: settlement.rewardPointsClawback,
         growth_clawback_amount: settlement.growthClawback,
+        growth_clawback_basis: settlement.growthClawbackBasis,
         order_progress_applied_at: nowIso(),
         buyer_assets_applied_at: nowIso(),
         updated_at: nowIso()
@@ -5754,6 +5888,7 @@ async function refundOrderExtras(orderId, refund = {}) {
         await directPatchDocument('refunds', String(refund._id || refund.id), {
             reward_points_clawback_amount: settlement.rewardPointsClawback,
             growth_clawback_amount: settlement.growthClawback,
+            growth_clawback_basis: settlement.growthClawbackBasis,
             order_progress_applied_at: nowIso(),
             buyer_assets_applied_at: nowIso()
         }).catch((err) => { console.error('[admin-api] 退款结算元数据写入失败:', err.message || err); });
@@ -9213,6 +9348,124 @@ app.post('/admin/api/commissions/repair-region-agent', auth, requirePermission('
     ok(res, { scanned, created, existing, skipped });
 });
 
+app.post('/admin/api/commissions/repair-pickup-service-fee', auth, requirePermission('commissions'), async (req, res) => {
+    await ensureFreshCollections(['orders', 'users', 'commissions', 'stations', 'station_staff', 'configs', 'app_configs']);
+    const orderLookup = pickString(req.body?.order_id || req.body?.order_no || req.query.order_id || req.query.order_no).trim();
+    let orders = getCollection('orders')
+        .filter((row) => pickString(row.delivery_type) === 'pickup')
+        .filter((row) => pickString(row.pickup_verified_at || row.verified_at || row.confirmed_at || row.picked_up_at));
+    if (orderLookup) {
+        orders = orders.filter((row) => rowMatchesLookup(row, orderLookup, [row.order_no]));
+    }
+    const context = {
+        users: getCollection('users'),
+        stations: getCollection('stations'),
+        staffRows: getCollection('station_staff'),
+        policy: getBranchAgentPolicySnapshot()
+    };
+    let scanned = 0;
+    let created = 0;
+    let existing = 0;
+    let skipped = 0;
+    for (const order of orders) {
+        scanned += 1;
+        const beforeCount = getCollection('commissions').length;
+        const result = ensurePickupServiceFeeForOrder(order, context);
+        const afterCount = getCollection('commissions').length;
+        if (afterCount > beforeCount) created += afterCount - beforeCount;
+        else if (result) existing += 1;
+        else skipped += 1;
+    }
+    createAuditLog(req.admin, 'commission.repair_pickup_service_fee', 'commissions', {
+        order_lookup: orderLookup || null,
+        scanned,
+        created,
+        existing,
+        skipped
+    });
+    await flushDataStoreOrThrow();
+    ok(res, { scanned, created, existing, skipped });
+});
+
+app.post('/admin/api/store-benefits/annual-goods-rewards', auth, requirePermission('commissions'), async (req, res) => {
+    await ensureFreshCollections(['station_procurement_orders', 'store_annual_goods_rewards', 'stations', 'station_staff', 'users']);
+    const requestedYear = Math.floor(toNumber(req.body?.year || req.query.year, new Date().getFullYear() - 1));
+    const settlementYear = Number.isFinite(requestedYear) && requestedYear > 2000 ? requestedYear : new Date().getFullYear() - 1;
+    const rewardRate = 0.05;
+    const rewardRows = getCollection('store_annual_goods_rewards');
+    const stations = getCollection('stations');
+    const staffRows = getCollection('station_staff');
+    const users = getCollection('users');
+    const grouped = new Map();
+
+    getCollection('station_procurement_orders')
+        .filter((row) => ['pending_receive', 'received'].includes(pickString(row.status)))
+        .forEach((row) => {
+            const dateText = normalizeDateValue(row.received_at || row.reviewed_at || row.updated_at || row.created_at);
+            const year = Number(dateText ? dateText.slice(0, 4) : NaN);
+            if (year !== settlementYear) return;
+            const station = findByLookup(stations, row.station_id);
+            if (!station) return;
+            const stationId = pickString(primaryId(station) || row.station_id);
+            if (!stationId) return;
+            const current = grouped.get(stationId) || { station, purchase_amount: 0, procurement_count: 0 };
+            current.purchase_amount = roundMoney(current.purchase_amount + toNumber(row.total_cost, 0));
+            current.procurement_count += 1;
+            grouped.set(stationId, current);
+        });
+
+    let scanned = 0;
+    let created = 0;
+    let updated = 0;
+    let skipped = 0;
+    const nextRows = [...rewardRows];
+    for (const [stationId, item] of grouped.entries()) {
+        scanned += 1;
+        const purchaseAmount = roundMoney(item.purchase_amount);
+        if (purchaseAmount <= 0) {
+            skipped += 1;
+            continue;
+        }
+        const claimant = resolvePickupStationClaimant(item.station, staffRows, users);
+        const rewardGoodsAmount = roundMoney(purchaseAmount * rewardRate);
+        const rowId = `annual-goods-${settlementYear}-${stationId}`;
+        const existingIndex = nextRows.findIndex((row) => pickString(row.id || row._id) === rowId);
+        const row = {
+            ...(existingIndex === -1 ? { id: rowId, created_at: nowIso() } : nextRows[existingIndex]),
+            store_id: stationId,
+            station_id: stationId,
+            store_name: pickString(item.station.name || item.station.station_name || item.station.title),
+            claimant_openid: pickString(claimant?.openid),
+            claimant_id: primaryId(claimant) || pickString(claimant?.openid),
+            settlement_year: settlementYear,
+            purchase_amount: purchaseAmount,
+            procurement_count: item.procurement_count,
+            reward_rate: rewardRate,
+            reward_goods_amount: rewardGoodsAmount,
+            status: pickString(existingIndex === -1 ? 'pending_approval' : nextRows[existingIndex].status || 'pending_approval'),
+            updated_at: nowIso()
+        };
+        if (existingIndex === -1) {
+            nextRows.push(row);
+            created += 1;
+        } else {
+            nextRows[existingIndex] = row;
+            updated += 1;
+        }
+    }
+
+    saveCollection('store_annual_goods_rewards', nextRows);
+    createAuditLog(req.admin, 'store_benefit.annual_goods_reward.settle', 'store_annual_goods_rewards', {
+        settlement_year: settlementYear,
+        scanned,
+        created,
+        updated,
+        skipped
+    });
+    await flushDataStoreOrThrow();
+    ok(res, { settlement_year: settlementYear, scanned, created, updated, skipped });
+});
+
 app.put('/admin/api/commissions/:id/approve', auth, requirePermission('commissions'), async (req, res) => {
     await ensureFreshCollections(['commissions', 'users', 'orders']);
     const rows = getCollection('commissions');
@@ -10148,12 +10401,14 @@ function createDefaultPeerBonusConfig() {
         social: {
             level_3: { pct: 10 },
             level_4: { pct: 20 },
-            level_5: { pct: 20 }
+            level_5: { pct: 20 },
+            level_6: { pct: 20 }
         },
         team: {
             level_3: { cash: 100, exchange_coupons: 2, coupon_product_value: 399, unlock_reward: 160, allowed_product_ids: [], allowed_sku_ids: [], exchange_title: '' },
             level_4: { cash: 2400, exchange_coupons: 15, coupon_product_value: 399, unlock_reward: 160, allowed_product_ids: [], allowed_sku_ids: [], exchange_title: '' },
-            level_5: { cash: 0, exchange_coupons: 0, coupon_product_value: 0, unlock_reward: 0, allowed_product_ids: [], allowed_sku_ids: [], exchange_title: '' }
+            level_5: { cash: 0, exchange_coupons: 0, coupon_product_value: 0, unlock_reward: 0, allowed_product_ids: [], allowed_sku_ids: [], exchange_title: '' },
+            level_6: { cash_pct: 20, cash: 0, exchange_coupons: 0, coupon_product_value: 0, unlock_reward: 0, allowed_product_ids: [], allowed_sku_ids: [], exchange_title: '' }
         },
         refund_dev_fee_pct: 1.5,
         level_1: 0,
@@ -10161,14 +10416,17 @@ function createDefaultPeerBonusConfig() {
         level_3: 100,
         level_4: 2000,
         level_5: 0,
+        level_6: 0,
         product_sets_3: 2,
         product_sets_4: 15,
-        product_sets_5: 0
+        product_sets_5: 0,
+        product_sets_6: 0
     };
 }
 
 function normalizePeerBonusLevelConfig(raw = {}, fallback = {}) {
     return {
+        cash_pct: Math.max(0, toNumber(raw.cash_pct, fallback.cash_pct || 0)),
         cash: Math.max(0, toNumber(raw.cash, fallback.cash || 0)),
         exchange_coupons: Math.max(0, Math.floor(toNumber(raw.exchange_coupons, fallback.exchange_coupons || 0))),
         coupon_product_value: Math.max(0, toNumber(raw.coupon_product_value, fallback.coupon_product_value || 0)),
@@ -10192,12 +10450,14 @@ function normalizePeerBonusConfig(raw = {}) {
         social: {
             level_3: { pct: Math.max(0, toNumber(source.social?.level_3?.pct, defaults.social.level_3.pct)) },
             level_4: { pct: Math.max(0, toNumber(source.social?.level_4?.pct, defaults.social.level_4.pct)) },
-            level_5: { pct: Math.max(0, toNumber(source.social?.level_5?.pct, defaults.social.level_5.pct)) }
+            level_5: { pct: Math.max(0, toNumber(source.social?.level_5?.pct, defaults.social.level_5.pct)) },
+            level_6: { pct: Math.max(0, toNumber(source.social?.level_6?.pct, defaults.social.level_6.pct)) }
         },
         team: {
             level_3: normalizePeerBonusLevelConfig(source.team?.level_3, defaults.team.level_3),
             level_4: normalizePeerBonusLevelConfig(source.team?.level_4, defaults.team.level_4),
-            level_5: normalizePeerBonusLevelConfig(source.team?.level_5, defaults.team.level_5)
+            level_5: normalizePeerBonusLevelConfig(source.team?.level_5, defaults.team.level_5),
+            level_6: normalizePeerBonusLevelConfig(source.team?.level_6, defaults.team.level_6)
         }
     };
 }

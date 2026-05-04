@@ -1,7 +1,7 @@
 {
   "miniprogram": {
     "quantity": {
-      "count": 121,
+      "count": 127,
       "files": [
         {
           "file": "cloud-mp/miniprogram/pages/cart/cart.js",
@@ -97,11 +97,11 @@
         },
         {
           "file": "cloud-mp/miniprogram/pages/stations/my-station.js",
-          "count": 6
+          "count": 11
         },
         {
           "file": "cloud-mp/miniprogram/pages/stations/my-station.wxml",
-          "count": 4
+          "count": 5
         },
         {
           "file": "cloud-mp/miniprogram/pages/user/userDashboard.js",

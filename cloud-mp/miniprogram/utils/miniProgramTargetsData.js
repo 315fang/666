@@ -129,11 +129,11 @@ module.exports = {
         },
         {
             key: 'page:membership-center',
-            title: '会员中心',
+            title: '权益中心',
             group: '会员服务',
             link_type: 'page',
             link_value: '/pages/user/membership-center',
-            note: '会员权益中心'
+            note: '成长值、积分、券与身份权益'
         },
         {
             key: 'page:wallet',

@@ -5,7 +5,14 @@
     style="max-width: 880px;"
     v-loading="miniProgramLoading"
   >
-    <el-divider content-position="left">品牌与分享</el-divider>
+    <div class="config-mode-row">
+      <el-radio-group v-model="configMode" size="small">
+        <el-radio-button value="basic">常用配置</el-radio-button>
+        <el-radio-button value="advanced">全部配置</el-radio-button>
+      </el-radio-group>
+    </div>
+
+    <el-divider content-position="left">品牌客服</el-divider>
     <el-form-item label="品牌名称">
       <el-input v-model="miniProgramForm.brand_config.brand_name" style="width:min(280px, 100%);" />
     </el-form-item>
@@ -94,21 +101,23 @@
       />
     </el-form-item>
 
-    <el-form-item label="首页导航主标题">
-      <el-input v-model="miniProgramForm.brand_config.nav_brand_title" style="width:min(280px, 100%);" />
-    </el-form-item>
-    <el-form-item label="首页导航副标题">
-      <el-input v-model="miniProgramForm.brand_config.nav_brand_sub" style="width:min(280px, 100%);" />
-    </el-form-item>
-    <el-form-item label="关于页简介">
-      <el-input v-model="miniProgramForm.brand_config.about_summary" type="textarea" :rows="2" />
-    </el-form-item>
-    <el-form-item label="活动页分享标题">
-      <el-input v-model="miniProgramForm.brand_config.activity_share_title" />
-    </el-form-item>
-    <el-form-item label="物流页标题">
-      <el-input v-model="miniProgramForm.brand_config.logistics_page_title" style="width:min(280px, 100%);" />
-    </el-form-item>
+    <div v-if="showAdvancedConfig" class="advanced-fields">
+      <el-form-item label="首页导航主标题">
+        <el-input v-model="miniProgramForm.brand_config.nav_brand_title" style="width:min(280px, 100%);" />
+      </el-form-item>
+      <el-form-item label="首页导航副标题">
+        <el-input v-model="miniProgramForm.brand_config.nav_brand_sub" style="width:min(280px, 100%);" />
+      </el-form-item>
+      <el-form-item label="关于页简介">
+        <el-input v-model="miniProgramForm.brand_config.about_summary" type="textarea" :rows="2" />
+      </el-form-item>
+      <el-form-item label="活动页分享标题">
+        <el-input v-model="miniProgramForm.brand_config.activity_share_title" />
+      </el-form-item>
+      <el-form-item label="物流页标题">
+        <el-input v-model="miniProgramForm.brand_config.logistics_page_title" style="width:min(280px, 100%);" />
+      </el-form-item>
+    </div>
 
     <el-divider content-position="left">底部导航栏（Tab）</el-divider>
     <el-alert
@@ -160,185 +169,190 @@
       <el-switch v-model="miniProgramForm.feature_flags.enable_lottery_entry" />
     </el-form-item>
 
-    <el-divider content-position="left">活动页默认文案</el-divider>
-    <el-form-item label="常驻活动标题">
-      <el-input v-model="miniProgramForm.activity_page_config.permanent_section_title" style="width:min(280px, 100%);" />
-    </el-form-item>
-    <el-form-item label="常驻活动说明">
-      <el-input v-model="miniProgramForm.activity_page_config.permanent_section_desc" />
-    </el-form-item>
-    <el-form-item label="限时活动标题">
-      <el-input v-model="miniProgramForm.activity_page_config.limited_section_title" style="width:min(280px, 100%);" />
-    </el-form-item>
-    <el-form-item label="限时活动说明">
-      <el-input v-model="miniProgramForm.activity_page_config.limited_section_desc" />
-    </el-form-item>
-    <el-form-item label="活动未配置提示">
-      <el-input v-model="miniProgramForm.activity_page_config.pending_toast" style="width:min(280px, 100%);" />
-    </el-form-item>
+    <div v-if="showAdvancedConfig" class="advanced-config">
+      <el-divider content-position="left">活动页默认文案</el-divider>
+      <el-form-item label="常驻活动标题">
+        <el-input v-model="miniProgramForm.activity_page_config.permanent_section_title" style="width:min(280px, 100%);" />
+      </el-form-item>
+      <el-form-item label="常驻活动说明">
+        <el-input v-model="miniProgramForm.activity_page_config.permanent_section_desc" />
+      </el-form-item>
+      <el-form-item label="限时活动标题">
+        <el-input v-model="miniProgramForm.activity_page_config.limited_section_title" style="width:min(280px, 100%);" />
+      </el-form-item>
+      <el-form-item label="限时活动说明">
+        <el-input v-model="miniProgramForm.activity_page_config.limited_section_desc" />
+      </el-form-item>
+      <el-form-item label="活动未配置提示">
+        <el-input v-model="miniProgramForm.activity_page_config.pending_toast" style="width:min(280px, 100%);" />
+      </el-form-item>
 
-    <ProductDetailPledgesEditor
-      :items="miniProgramForm.product_detail_pledges.items"
-      :pledge-keys="productDetailPledgeKeys"
-      :pledge-labels="productDetailPledgeLabels"
-    />
-
-    <el-divider content-position="left">抽奖页文案</el-divider>
-    <el-form-item label="抽奖页主标题">
-      <el-input v-model="miniProgramForm.lottery_config.hero_title" />
-    </el-form-item>
-    <el-form-item label="抽奖页副标题">
-      <el-input v-model="miniProgramForm.lottery_config.hero_subtitle" type="textarea" :rows="2" />
-    </el-form-item>
-    <el-form-item label="中奖提示">
-      <el-input v-model="miniProgramForm.lottery_config.result_win_title" style="width:min(280px, 100%);" />
-    </el-form-item>
-    <el-form-item label="未中奖提示">
-      <el-input v-model="miniProgramForm.lottery_config.result_miss_title" style="width:min(280px, 100%);" />
-    </el-form-item>
-
-    <el-divider content-position="left">会员与入口提示</el-divider>
-    <el-form-item label="登录提示文案">
-      <el-input v-model="miniProgramForm.membership_config.login_agreement_hint" />
-    </el-form-item>
-    <el-form-item label="拼团引导提示">
-      <el-input v-model="miniProgramForm.membership_config.group_buy_start_requirement_text" />
-    </el-form-item>
-    <el-form-item label="砍价发起提示">
-      <el-input v-model="miniProgramForm.membership_config.slash_start_requirement_text" />
-    </el-form-item>
-    <el-form-item label="自提站点提示">
-      <el-input v-model="miniProgramForm.membership_config.pickup_station_pending_text" />
-    </el-form-item>
-    <el-form-item label="自提核销提示">
-      <el-input v-model="miniProgramForm.membership_config.pickup_code_pending_text" />
-    </el-form-item>
-    <el-form-item label="团队中心最低等级(role_level)">
-      <el-input-number
-        v-model="miniProgramForm.membership_config.business_center_min_role_level"
-        :min="0"
-        :max="10"
-        controls-position="right"
-        style="width:min(200px, 100%);"
+      <ProductDetailPledgesEditor
+        :items="miniProgramForm.product_detail_pledges.items"
+        :pledge-keys="productDetailPledgeKeys"
+        :pledge-labels="productDetailPledgeLabels"
       />
-      <div class="field-hint">0=VIP用户，1=初级会员，2=高级会员，3=推广合伙人…；低于此等级不显示「团队中心」入口</div>
-    </el-form-item>
-    <el-form-item label="我的页·权益入口文案">
-      <el-input v-model="miniProgramForm.membership_config.growth_privileges_entry_text" placeholder="如：查看权益" style="max-width:360px;" />
-    </el-form-item>
-    <el-form-item label="我的页·成长进度副文案模版">
-      <el-input
-        v-model="miniProgramForm.membership_config.growth_bar_subtitle_template"
-        type="textarea"
-        :rows="2"
-        placeholder="距离「{next}」还需 {need} 成长值"
-        style="max-width:560px;"
-      />
-      <div class="field-hint">占位符：{next} 下一档名称；{need} 还差成长值（整数）。成长档位和门槛在「会员策略→成长规则」中配置。</div>
-    </el-form-item>
-    <el-form-item label="我的页·已达最高档提示">
-      <el-input
-        v-model="miniProgramForm.membership_config.growth_bar_max_tier_text"
-        type="textarea"
-        :rows="2"
-        style="max-width:560px;"
-      />
-    </el-form-item>
-    <el-form-item label="权益说明页标题">
-      <el-input v-model="miniProgramForm.membership_config.growth_privileges_page_title" style="max-width:360px;" />
-    </el-form-item>
 
-    <LightPromptModalsEditor :modals="miniProgramForm.light_prompt_modals" />
+      <el-divider content-position="left">抽奖页文案</el-divider>
+      <el-form-item label="抽奖页主标题">
+        <el-input v-model="miniProgramForm.lottery_config.hero_title" />
+      </el-form-item>
+      <el-form-item label="抽奖页副标题">
+        <el-input v-model="miniProgramForm.lottery_config.hero_subtitle" type="textarea" :rows="2" />
+      </el-form-item>
+      <el-form-item label="中奖提示">
+        <el-input v-model="miniProgramForm.lottery_config.result_win_title" style="width:min(280px, 100%);" />
+      </el-form-item>
+      <el-form-item label="未中奖提示">
+        <el-input v-model="miniProgramForm.lottery_config.result_miss_title" style="width:min(280px, 100%);" />
+      </el-form-item>
 
-    <el-divider content-position="left">物流模式</el-divider>
-    <el-form-item label="发货模式">
-      <el-radio-group v-model="miniProgramForm.logistics_config.shipping_mode">
-        <el-radio label="third_party">第三方物流查询</el-radio>
-        <el-radio label="manual">手工发货模式</el-radio>
-      </el-radio-group>
-    </el-form-item>
-    <el-form-item label="要求填写物流单号">
-      <el-switch v-model="miniProgramForm.logistics_config.shipping_tracking_no_required" />
-    </el-form-item>
-    <el-form-item label="要求填写承运方名称">
-      <el-switch v-model="miniProgramForm.logistics_config.shipping_company_name_required" />
-    </el-form-item>
-    <el-form-item label="保留物流详情页">
-      <el-switch v-model="miniProgramForm.logistics_config.shipping_manual_tracking_page_enabled" />
-    </el-form-item>
-    <el-form-item label="手工模式状态标题">
-      <el-input v-model="miniProgramForm.logistics_config.manual_status_text" />
-    </el-form-item>
-    <el-form-item label="手工模式说明">
-      <el-input v-model="miniProgramForm.logistics_config.manual_status_desc" type="textarea" :rows="2" />
-    </el-form-item>
-    <el-form-item label="无轨迹提示">
-      <el-input v-model="miniProgramForm.logistics_config.manual_empty_traces_text" />
-    </el-form-item>
-    <el-form-item label="刷新提示">
-      <el-input v-model="miniProgramForm.logistics_config.manual_refresh_toast" />
-    </el-form-item>
+      <el-divider content-position="left">会员与入口提示</el-divider>
+      <el-form-item label="登录提示文案">
+        <el-input v-model="miniProgramForm.membership_config.login_agreement_hint" />
+      </el-form-item>
+      <el-form-item label="拼团引导提示">
+        <el-input v-model="miniProgramForm.membership_config.group_buy_start_requirement_text" />
+      </el-form-item>
+      <el-form-item label="砍价发起提示">
+        <el-input v-model="miniProgramForm.membership_config.slash_start_requirement_text" />
+      </el-form-item>
+      <el-form-item label="自提站点提示">
+        <el-input v-model="miniProgramForm.membership_config.pickup_station_pending_text" />
+      </el-form-item>
+      <el-form-item label="自提核销提示">
+        <el-input v-model="miniProgramForm.membership_config.pickup_code_pending_text" />
+      </el-form-item>
+      <el-form-item label="团队中心最低等级(role_level)">
+        <el-input-number
+          v-model="miniProgramForm.membership_config.business_center_min_role_level"
+          :min="0"
+          :max="10"
+          controls-position="right"
+          style="width:min(200px, 100%);"
+        />
+        <div class="field-hint">0=VIP用户，1=初级会员，2=高级会员，3=推广合伙人…；低于此等级不显示「团队中心」入口</div>
+      </el-form-item>
+      <el-form-item label="我的页·权益入口文案">
+        <el-input v-model="miniProgramForm.membership_config.growth_privileges_entry_text" placeholder="如：查看权益" style="max-width:360px;" />
+      </el-form-item>
+      <el-form-item label="我的页·成长进度副文案模版">
+        <el-input
+          v-model="miniProgramForm.membership_config.growth_bar_subtitle_template"
+          type="textarea"
+          :rows="2"
+          placeholder="距离「{next}」还需 {need} 成长值"
+          style="max-width:560px;"
+        />
+        <div class="field-hint">占位符：{next} 下一档名称；{need} 还差成长值（整数）。成长档位和门槛在「会员策略→成长规则」中配置。</div>
+      </el-form-item>
+      <el-form-item label="我的页·已达最高档提示">
+        <el-input
+          v-model="miniProgramForm.membership_config.growth_bar_max_tier_text"
+          type="textarea"
+          :rows="2"
+          style="max-width:560px;"
+        />
+      </el-form-item>
+      <el-form-item label="权益中心标题">
+        <el-input v-model="miniProgramForm.membership_config.membership_center_page_title" placeholder="如：权益中心" style="max-width:360px;" />
+      </el-form-item>
+      <el-form-item label="兼容说明页标题">
+        <el-input v-model="miniProgramForm.membership_config.growth_privileges_page_title" style="max-width:360px;" />
+      </el-form-item>
 
-    <el-divider content-position="left">退货寄回地址</el-divider>
-    <el-alert
-      type="info"
-      :closable="false"
-      show-icon
-      style="max-width: 880px; margin-bottom: 12px;"
-      title="退货退款审核通过后，小程序售后详情会展示该地址；后台仍需在收到退货后点击确认收货并退款。"
-    />
-    <el-form-item label="收件人">
-      <el-input v-model="miniProgramForm.logistics_config.return_address.receiver_name" style="width:min(280px, 100%);" />
-    </el-form-item>
-    <el-form-item label="联系电话">
-      <el-input v-model="miniProgramForm.logistics_config.return_address.receiver_phone" style="width:min(280px, 100%);" />
-    </el-form-item>
-    <el-form-item label="省 / 市 / 区">
-      <div class="return-address-grid">
-        <el-input v-model="miniProgramForm.logistics_config.return_address.province" placeholder="省" />
-        <el-input v-model="miniProgramForm.logistics_config.return_address.city" placeholder="市" />
-        <el-input v-model="miniProgramForm.logistics_config.return_address.district" placeholder="区/县" />
-      </div>
-    </el-form-item>
-    <el-form-item label="详细地址">
-      <el-input v-model="miniProgramForm.logistics_config.return_address.detail" type="textarea" :rows="2" />
-    </el-form-item>
-    <el-form-item label="邮政编码">
-      <el-input v-model="miniProgramForm.logistics_config.return_address.postal_code" style="width:min(220px, 100%);" />
-    </el-form-item>
-    <el-form-item label="退货备注">
-      <el-input v-model="miniProgramForm.logistics_config.return_address.note" type="textarea" :rows="2" placeholder="如：请勿到付，寄回前请保留快递底单" />
-    </el-form-item>
+      <LightPromptModalsEditor :modals="miniProgramForm.light_prompt_modals" />
 
-    <el-divider content-position="left">提现手续费（小程序）</el-divider>
-    <el-alert
-      type="info"
-      :closable="false"
-      show-icon
-      style="max-width: 880px; margin-bottom: 12px;"
-      title="保存后对提现接口立即生效；若此处未填写某字段，则沿用运营库表 WITHDRAWAL 中的 FEE_RATE / FEE_CAP_MAX。费率按 0～100 表示百分比（如 0.6 表示 0.6%）。"
-    />
-    <el-form-item label="手续费 (%)">
-      <el-input-number
-        v-model="miniProgramForm.withdrawal_config.fee_rate_percent"
-        :min="0"
-        :max="100"
-        :step="0.1"
-        :precision="2"
-        style="width:min(220px, 100%);"
+      <el-divider content-position="left">物流模式</el-divider>
+      <el-form-item label="发货模式">
+        <el-radio-group v-model="miniProgramForm.logistics_config.shipping_mode">
+          <el-radio label="third_party">第三方物流查询</el-radio>
+          <el-radio label="manual">手工发货模式</el-radio>
+        </el-radio-group>
+      </el-form-item>
+      <el-form-item label="要求填写物流单号">
+        <el-switch v-model="miniProgramForm.logistics_config.shipping_tracking_no_required" />
+      </el-form-item>
+      <el-form-item label="要求填写承运方名称">
+        <el-switch v-model="miniProgramForm.logistics_config.shipping_company_name_required" />
+      </el-form-item>
+      <el-form-item label="保留物流详情页">
+        <el-switch v-model="miniProgramForm.logistics_config.shipping_manual_tracking_page_enabled" />
+      </el-form-item>
+      <el-form-item label="手工模式状态标题">
+        <el-input v-model="miniProgramForm.logistics_config.manual_status_text" />
+      </el-form-item>
+      <el-form-item label="手工模式说明">
+        <el-input v-model="miniProgramForm.logistics_config.manual_status_desc" type="textarea" :rows="2" />
+      </el-form-item>
+      <el-form-item label="无轨迹提示">
+        <el-input v-model="miniProgramForm.logistics_config.manual_empty_traces_text" />
+      </el-form-item>
+      <el-form-item label="刷新提示">
+        <el-input v-model="miniProgramForm.logistics_config.manual_refresh_toast" />
+      </el-form-item>
+
+      <el-divider content-position="left">退货寄回地址</el-divider>
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        style="max-width: 880px; margin-bottom: 12px;"
+        title="退货退款审核通过后，小程序售后详情会展示该地址；后台仍需在收到退货后点击确认收货并退款。"
       />
-      <div class="field-hint">0 表示不按比例收取；与「封顶」同时生效时取 min(按比例金额, 封顶)。</div>
-    </el-form-item>
-    <el-form-item label="手续费封顶 (元/笔)">
-      <el-input-number
-        v-model="miniProgramForm.withdrawal_config.fee_cap_max"
-        :min="0"
-        :step="1"
-        :precision="2"
-        style="width:min(220px, 100%);"
+      <el-form-item label="收件人">
+        <el-input v-model="miniProgramForm.logistics_config.return_address.receiver_name" style="width:min(280px, 100%);" />
+      </el-form-item>
+      <el-form-item label="联系电话">
+        <el-input v-model="miniProgramForm.logistics_config.return_address.receiver_phone" style="width:min(280px, 100%);" />
+      </el-form-item>
+      <el-form-item label="省 / 市 / 区">
+        <div class="return-address-grid">
+          <el-input v-model="miniProgramForm.logistics_config.return_address.province" placeholder="省" />
+          <el-input v-model="miniProgramForm.logistics_config.return_address.city" placeholder="市" />
+          <el-input v-model="miniProgramForm.logistics_config.return_address.district" placeholder="区/县" />
+        </div>
+      </el-form-item>
+      <el-form-item label="详细地址">
+        <el-input v-model="miniProgramForm.logistics_config.return_address.detail" type="textarea" :rows="2" />
+      </el-form-item>
+      <el-form-item label="邮政编码">
+        <el-input v-model="miniProgramForm.logistics_config.return_address.postal_code" style="width:min(220px, 100%);" />
+      </el-form-item>
+      <el-form-item label="退货备注">
+        <el-input v-model="miniProgramForm.logistics_config.return_address.note" type="textarea" :rows="2" placeholder="如：请勿到付，寄回前请保留快递底单" />
+      </el-form-item>
+
+      <el-divider content-position="left">提现手续费（小程序）</el-divider>
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        style="max-width: 880px; margin-bottom: 12px;"
+        title="保存后对提现接口立即生效；若此处未填写某字段，则沿用运营库表 WITHDRAWAL 中的 FEE_RATE / FEE_CAP_MAX。费率按 0～100 表示百分比（如 0.6 表示 0.6%）。"
       />
-      <div class="field-hint">0 表示不封顶。仅在小程序 JSON 中显式填写时才会覆盖库表默认值。</div>
-    </el-form-item>
+      <el-form-item label="手续费 (%)">
+        <el-input-number
+          v-model="miniProgramForm.withdrawal_config.fee_rate_percent"
+          :min="0"
+          :max="100"
+          :step="0.1"
+          :precision="2"
+          style="width:min(220px, 100%);"
+        />
+        <div class="field-hint">0 表示不按比例收取；与「封顶」同时生效时取 min(按比例金额, 封顶)。</div>
+      </el-form-item>
+      <el-form-item label="手续费封顶 (元/笔)">
+        <el-input-number
+          v-model="miniProgramForm.withdrawal_config.fee_cap_max"
+          :min="0"
+          :step="1"
+          :precision="2"
+          style="width:min(220px, 100%);"
+        />
+        <div class="field-hint">0 表示不封顶。仅在小程序 JSON 中显式填写时才会覆盖库表默认值。</div>
+      </el-form-item>
+    </div>
 
     <el-form-item>
       <el-button type="primary" @click="onSave" :loading="miniProgramSaving">
@@ -349,7 +363,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus, RefreshRight } from '@element-plus/icons-vue'
 import { uploadFile } from '@/api/modules/mediaUpload'
@@ -367,6 +381,8 @@ const props = defineProps({
 
 const posterUploading = ref(false)
 const replaceUploadRef = ref(null)
+const configMode = ref('basic')
+const showAdvancedConfig = computed(() => configMode.value === 'advanced')
 
 function beforePosterUpload(file) {
   const isImage = ['image/jpeg', 'image/png', 'image/webp'].includes(file.type)
@@ -404,6 +420,9 @@ function triggerReplace() {
 </script>
 
 <style scoped>
+.config-mode-row { display: flex; justify-content: flex-end; margin-bottom: 12px; }
+.advanced-fields,
+.advanced-config { padding-top: 2px; }
 .poster-upload-wrap { display: flex; flex-direction: column; gap: 8px; }
 .poster-preview { display: flex; align-items: flex-start; gap: 16px; }
 .poster-thumb { width: 120px; border-radius: 8px; border: 1px solid #e4e7ed; object-fit: cover; display: block; }

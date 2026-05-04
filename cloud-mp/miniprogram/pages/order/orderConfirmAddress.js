@@ -7,6 +7,7 @@ const {
 const { normalizeSpecDisplayText, normalizeOrderItems } = require('./orderSpecText');
 const { resolveCloudImageUrl } = require('./utils/cloudAsset');
 const { ErrorHandler } = require('../../utils/errorHandler');
+const { resolvePickupStationId, pickupStationMatches } = require('./utils/pickupStation');
 
 const WEEK_DAY_LABELS = {
     1: '周一',
@@ -158,10 +159,11 @@ function normalizePickupStationOption(station = {}) {
         station.district,
         station.address
     ].filter(Boolean).join(' '));
-    const stationId = station.id || station._id || '';
+    const stationId = resolvePickupStationId(station);
     return {
         ...station,
         id: stationId,
+        station_key: stationId,
         selectable,
         pickup_unavailable: !selectable,
         pickup_stock_text: selectable ? '有货' : '无货',
@@ -193,8 +195,7 @@ async function loadPickupStations(page) {
         const normalizedList = list.map((station) => normalizePickupStationOption(station));
         let pickupStation = page.data.pickupStation;
         if (pickupStation) {
-            const selectedId = String(pickupStation.id || pickupStation._id || '');
-            const latestSelected = normalizedList.find((station) => String(station.id || station._id || '') === selectedId);
+            const latestSelected = normalizedList.find((station) => pickupStationMatches(station, pickupStation));
             pickupStation = latestSelected && latestSelected.selectable ? latestSelected : null;
         }
         page.setData({ pickupStations: normalizedList, pickupStation });

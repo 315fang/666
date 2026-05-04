@@ -8,6 +8,8 @@ const {
 
 const REGION_REWARD_TYPES = new Set(['region_agent', 'region_b3_virtual']);
 const STORE_REWARD_TYPES = new Set(['pickup_service_fee', 'pickup_subsidy']);
+const STORE_PEER_REWARD_TYPES = new Set(['same_level']);
+const REFUND_DEV_FEE_TYPES = new Set(['refund_dev_fee']);
 const EARNING_ORDER_STATUSES = new Set([
     'pending_group',
     'paid',
@@ -315,7 +317,7 @@ function buildRegionRows({ branchStations, orders, commissions, users, policy })
     });
 }
 
-function buildStoreRows({ stations, staffRows, orders, commissions, users }) {
+function buildStoreRows({ stations, staffRows, orders, commissions, users, annualGoodsRewards = [] }) {
     return stations
         .filter((station) => pickString(station.status || 'active') !== 'deleted')
         .map((station) => {
@@ -324,6 +326,20 @@ function buildStoreRows({ stations, staffRows, orders, commissions, users }) {
             const orderAmount = roundMoney(matchedOrders.reduce((sum, order) => sum + getOrderAmount(order), 0));
             const stationCommissions = commissions.filter((commission) => commissionMatchesStore(commission, station, orders));
             const managerSummary = buildStoreManagerSummary(station, staffRows, users);
+            const recipientOpenids = new Set([
+                managerSummary.claimant?.openid,
+                ...(managerSummary.managers || []).map((user) => user.openid)
+            ].filter(Boolean).map((value) => pickString(value)));
+            const peerBonusCommissions = commissions.filter((commission) => (
+                STORE_PEER_REWARD_TYPES.has(pickString(commission.type).toLowerCase())
+                && toNumber(commission.bonus_role_level || commission.level, 0) === 6
+                && recipientOpenids.has(pickString(commission.openid))
+            ));
+            const refundDevFees = commissions.filter((commission) => (
+                REFUND_DEV_FEE_TYPES.has(pickString(commission.type).toLowerCase())
+                && recipientOpenids.has(pickString(commission.openid))
+            ));
+            const annualGoods = annualGoodsRewards.filter((row) => rowMatchesAnyLookup(station, [row.store_id, row.station_id]));
             return {
                 id: primaryId(station),
                 name: pickString(station.name || station.station_name || station.title || '未命名门店'),
@@ -338,6 +354,19 @@ function buildStoreRows({ stations, staffRows, orders, commissions, users }) {
                 verified_order_count: verifiedOrders.length,
                 order_amount: orderAmount,
                 rewards: summarizeCommissions(stationCommissions),
+                service_fee_rewards: summarizeCommissions(stationCommissions),
+                peer_bonus_rewards: summarizeCommissions(peerBonusCommissions),
+                refund_dev_fees: summarizeCommissions(refundDevFees),
+                annual_goods_rewards: {
+                    total: roundMoney(annualGoods.reduce((sum, row) => sum + toNumber(row.reward_goods_amount, 0), 0)),
+                    pending_approval: roundMoney(annualGoods
+                        .filter((row) => pickString(row.status || 'pending_approval') === 'pending_approval')
+                        .reduce((sum, row) => sum + toNumber(row.reward_goods_amount, 0), 0)),
+                    settled: roundMoney(annualGoods
+                        .filter((row) => ['settled', 'completed'].includes(pickString(row.status).toLowerCase()))
+                        .reduce((sum, row) => sum + toNumber(row.reward_goods_amount, 0), 0)),
+                    count: annualGoods.length
+                },
                 ...managerSummary,
                 last_reward_at: stationCommissions
                     .map((row) => pickString(row.settled_at || row.unfrozen_at || row.updated_at || row.created_at))
@@ -353,6 +382,9 @@ function summarizeRows(rows = []) {
         order_count: summary.order_count + toNumber(row.order_count, 0),
         order_amount: roundMoney(summary.order_amount + toNumber(row.order_amount, 0)),
         reward_total: roundMoney(summary.reward_total + toNumber(row.rewards?.total, 0)),
+        peer_bonus_total: roundMoney(summary.peer_bonus_total + toNumber(row.peer_bonus_rewards?.total, 0)),
+        annual_goods_total: roundMoney(summary.annual_goods_total + toNumber(row.annual_goods_rewards?.total, 0)),
+        refund_dev_fee_total: roundMoney(summary.refund_dev_fee_total + toNumber(row.refund_dev_fees?.total, 0)),
         pending_approval: roundMoney(summary.pending_approval + toNumber(row.rewards?.pending_approval, 0)),
         settled: roundMoney(summary.settled + toNumber(row.rewards?.settled, 0)),
         frozen: roundMoney(summary.frozen + toNumber(row.rewards?.frozen, 0))
@@ -360,6 +392,9 @@ function summarizeRows(rows = []) {
         order_count: 0,
         order_amount: 0,
         reward_total: 0,
+        peer_bonus_total: 0,
+        annual_goods_total: 0,
+        refund_dev_fee_total: 0,
         pending_approval: 0,
         settled: 0,
         frozen: 0
@@ -377,17 +412,18 @@ function registerBranchAgentEarningsRoutes(app, deps) {
     } = deps;
 
     app.get('/admin/api/branch-agents/earnings', auth, requirePermission('dealers'), async (_req, res) => {
-        await ensureFreshCollections(['users', 'orders', 'commissions', 'stations', 'station_staff', 'branch_agent_stations', 'configs']);
+        await ensureFreshCollections(['users', 'orders', 'commissions', 'stations', 'station_staff', 'branch_agent_stations', 'store_annual_goods_rewards', 'configs']);
         const users = getCollection('users');
         const orders = getCollection('orders');
         const commissions = getCollection('commissions');
         const stations = getCollection('stations');
         const staffRows = getCollection('station_staff');
         const branchStations = getCollection('branch_agent_stations');
+        const annualGoodsRewards = getCollection('store_annual_goods_rewards');
         const policy = typeof getBranchAgentPolicySnapshot === 'function' ? getBranchAgentPolicySnapshot() : {};
 
         const regions = buildRegionRows({ branchStations, orders, commissions, users, policy });
-        const stores = buildStoreRows({ stations, staffRows, orders, commissions, users });
+        const stores = buildStoreRows({ stations, staffRows, orders, commissions, users, annualGoodsRewards });
 
         ok(res, {
             summary: {

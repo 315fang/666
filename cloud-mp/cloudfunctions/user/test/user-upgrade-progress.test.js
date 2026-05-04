@@ -61,6 +61,27 @@ test('buildAgentUpgradeProgress recommends the closest B1 path across growth, te
     assert.match(progress.summary, /还差 ¥200/);
 });
 
+test('buildAgentUpgradeProgress uses stable upgrade growth when provided', () => {
+    const progress = buildAgentUpgradeProgress({
+        memberLevels,
+        currentRoleLevel: 1,
+        growthValue: 1200,
+        upgradeGrowthValue: 900,
+        effectiveSales: 0,
+        rechargeTotal: 0,
+        directMembers: [],
+        upgradeRules: {
+            c2_growth_value: 999
+        }
+    });
+
+    assert.equal(progress.recommended_path.key, 'c2_growth');
+    assert.equal(progress.metrics.growthValue, 900);
+    assert.equal(progress.metrics.totalGrowthValue, 1200);
+    assert.equal(progress.metrics.pendingGrowthValue, 300);
+    assert.equal(progress.recommended_path.requirements[0].remaining, 99);
+});
+
 test('buildAgentUpgradeProgress marks level 5 and above as max automatic upgrade level', () => {
     const progress = buildAgentUpgradeProgress({
         memberLevels,

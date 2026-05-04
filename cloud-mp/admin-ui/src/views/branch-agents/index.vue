@@ -29,7 +29,7 @@
               <div class="form-tip">当比例为 0 时，可用此处金额作为单笔兜底补贴。</div>
             </el-form-item>
             <el-divider content-position="left">区域奖励阶梯</el-divider>
-            <div class="form-tip" style="margin-bottom:12px">按收货地址匹配区域，累计当前地区订单实际支付总金额。默认规则：0元=1%，10万=2%，100万=3%。代理自购订单也参与计算。</div>
+            <div class="form-tip" style="margin-bottom:12px">按收货地址匹配区域，累计当前地区订单实际支付总金额。默认规则：10万=1%，30万=2%，100万=3%。代理自购订单也参与计算。</div>
             <el-table :data="regionRewardTierTableRows" border size="small" style="max-width:720px">
               <el-table-column prop="index" label="档位" width="72" />
               <el-table-column label="累计金额门槛（元）" min-width="220">
@@ -118,12 +118,14 @@
             <el-card shadow="never">
               <div class="earning-summary-card">
                 <div>
-                  <div class="summary-label">门店店长收益</div>
-                  <div class="summary-value">¥{{ fmtMoney(earnings.summary.stores.reward_total) }}</div>
+                  <div class="summary-label">门店权益收益</div>
+                  <div class="summary-value">¥{{ fmtMoney(storeBenefitTotal(earnings.summary.stores)) }}</div>
                 </div>
                 <div class="summary-meta">
                   <span>自提订单额 ¥{{ fmtMoney(earnings.summary.stores.order_amount) }}</span>
-                  <span>待审批 ¥{{ fmtMoney(earnings.summary.stores.pending_approval) }}</span>
+                  <span>平级奖 ¥{{ fmtMoney(earnings.summary.stores.peer_bonus_total) }}</span>
+                  <span>货品奖 ¥{{ fmtMoney(earnings.summary.stores.annual_goods_total) }}</span>
+                  <span>开发费 ¥{{ fmtMoney(earnings.summary.stores.refund_dev_fee_total) }}</span>
                 </div>
               </div>
             </el-card>
@@ -178,7 +180,11 @@
           <template #header>
             <div class="header-row">
               <span>门店店长收益</span>
-              <el-button size="small" :loading="loadingEarnings" @click="loadEarnings">刷新</el-button>
+              <div class="header-actions">
+                <el-button size="small" :loading="repairingPickupServiceFee" @click="repairPickupServiceFee">修复服务费</el-button>
+                <el-button size="small" type="primary" plain :loading="settlingAnnualGoods" @click="settleAnnualGoodsRewards">结算货品奖</el-button>
+                <el-button size="small" :loading="loadingEarnings" @click="loadEarnings">刷新</el-button>
+              </div>
             </div>
           </template>
           <el-table :data="earnings.stores" v-loading="loadingEarnings" stripe>
@@ -204,7 +210,16 @@
               <template #default="{ row }">{{ row.pickup_commission_tier || 'A' }}</template>
             </el-table-column>
             <el-table-column label="已生成服务费" width="130" align="right">
-              <template #default="{ row }">¥{{ fmtMoney(row.rewards?.total) }}</template>
+              <template #default="{ row }">¥{{ fmtMoney(row.service_fee_rewards?.total ?? row.rewards?.total) }}</template>
+            </el-table-column>
+            <el-table-column label="平级奖" width="110" align="right">
+              <template #default="{ row }">¥{{ fmtMoney(row.peer_bonus_rewards?.total) }}</template>
+            </el-table-column>
+            <el-table-column label="年度货品奖" width="120" align="right">
+              <template #default="{ row }">¥{{ fmtMoney(row.annual_goods_rewards?.total) }}</template>
+            </el-table-column>
+            <el-table-column label="退款开发费" width="120" align="right">
+              <template #default="{ row }">¥{{ fmtMoney(row.refund_dev_fees?.total) }}</template>
             </el-table-column>
             <el-table-column label="待审批" width="110" align="right">
               <template #default="{ row }">¥{{ fmtMoney(row.rewards?.pending_approval) }}</template>
@@ -321,15 +336,15 @@ import {
   getBranchAgentPolicy, updateBranchAgentPolicy,
   getBranchAgentStations, createBranchAgentStation, updateBranchAgentStation, deleteBranchAgentStation,
   getBranchAgentClaims, reviewBranchAgentClaim,
-  getBranchAgentEarnings
+  getBranchAgentEarnings, repairPickupServiceFeeCommissions, settleStoreAnnualGoodsRewards
 } from '@/api'
 import EntityPicker from '@/components/entity-picker'
 import { getUserNickname } from '@/utils/userDisplay'
 
 function defaultRegionRewardTiers() {
   return [
-    { threshold: 0, rate: 0.01, label: '0元' },
-    { threshold: 100000, rate: 0.02, label: '10万' },
+    { threshold: 100000, rate: 0.01, label: '10万' },
+    { threshold: 300000, rate: 0.02, label: '30万' },
     { threshold: 1000000, rate: 0.03, label: '100万' }
   ]
 }
@@ -356,6 +371,8 @@ const savingPolicy = ref(false)
 const loadingStations = ref(false)
 const loadingClaims = ref(false)
 const loadingEarnings = ref(false)
+const repairingPickupServiceFee = ref(false)
+const settlingAnnualGoods = ref(false)
 const savingStation = ref(false)
 const stationDialogVisible = ref(false)
 const claimantPickerVisible = ref(false)
@@ -372,8 +389,8 @@ const stations = ref([])
 const claims = ref([])
 const earnings = reactive({
   summary: {
-    regions: { order_count: 0, order_amount: 0, reward_total: 0, pending_approval: 0, settled: 0, frozen: 0 },
-    stores: { order_count: 0, order_amount: 0, reward_total: 0, pending_approval: 0, settled: 0, frozen: 0 }
+    regions: { order_count: 0, order_amount: 0, reward_total: 0, peer_bonus_total: 0, annual_goods_total: 0, refund_dev_fee_total: 0, pending_approval: 0, settled: 0, frozen: 0 },
+    stores: { order_count: 0, order_amount: 0, reward_total: 0, peer_bonus_total: 0, annual_goods_total: 0, refund_dev_fee_total: 0, pending_approval: 0, settled: 0, frozen: 0 }
   },
   regions: [],
   stores: []
@@ -388,6 +405,7 @@ const branchTypeText = (v) => ({ district: '区代理', area: '区代理', city:
 const displayUserName = (user, fallback = '-') => getUserNickname(user || {}, fallback)
 const fmtMoney = (value) => Number(value || 0).toFixed(2)
 const fmtPercent = (value) => `${(Number(value || 0) * 100).toFixed(2)}%`
+const storeBenefitTotal = (summary = {}) => Number(summary.reward_total || 0) + Number(summary.peer_bonus_total || 0) + Number(summary.annual_goods_total || 0) + Number(summary.refund_dev_fee_total || 0)
 
 function displayStoreOwner(row = {}) {
   const manager = Array.isArray(row.managers) && row.managers.length ? row.managers[0] : null
@@ -547,6 +565,59 @@ const loadEarnings = async () => {
   }
 }
 
+const repairPickupServiceFee = async () => {
+  let orderLookup = ''
+  try {
+    const result = await ElMessageBox.prompt(
+      '输入订单 ID 或订单号可只修复单笔；留空则扫描全部已核销自提订单。',
+      '修复自提服务费',
+      { inputPlaceholder: '可留空', confirmButtonText: '开始修复', cancelButtonText: '取消' }
+    )
+    orderLookup = String(result.value || '').trim()
+  } catch (_) {
+    return
+  }
+  repairingPickupServiceFee.value = true
+  try {
+    const res = await repairPickupServiceFeeCommissions(orderLookup ? { order_id: orderLookup } : {})
+    const data = res?.data || res || {}
+    ElMessage.success(`扫描 ${data.scanned || 0} 单，新增 ${data.created || 0} 条，已存在 ${data.existing || 0} 条，跳过 ${data.skipped || 0} 条`)
+    await loadEarnings()
+  } finally {
+    repairingPickupServiceFee.value = false
+  }
+}
+
+const settleAnnualGoodsRewards = async () => {
+  const defaultYear = String(new Date().getFullYear() - 1)
+  let year = defaultYear
+  try {
+    const result = await ElMessageBox.prompt(
+      '请输入要结算的进货年份。',
+      '年度货品奖结算',
+      {
+        inputValue: defaultYear,
+        inputPattern: /^\d{4}$/,
+        inputErrorMessage: '请输入 4 位年份',
+        confirmButtonText: '开始结算',
+        cancelButtonText: '取消'
+      }
+    )
+    year = String(result.value || defaultYear).trim()
+  } catch (_) {
+    return
+  }
+  settlingAnnualGoods.value = true
+  try {
+    const res = await settleStoreAnnualGoodsRewards({ year: Number(year) })
+    const data = res?.data || res || {}
+    ElMessage.success(`${data.settlement_year || year} 年：新增 ${data.created || 0} 条，更新 ${data.updated || 0} 条，跳过 ${data.skipped || 0} 条`)
+    await loadEarnings()
+  } finally {
+    settlingAnnualGoods.value = false
+  }
+}
+
 const reviewClaim = async (row, action) => {
   let note = ''
   if (action === 'reject') {
@@ -577,6 +648,14 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .form-tip {
   margin-top: 6px;

@@ -162,23 +162,25 @@ const normalizePositiveInt = (value, fallback = 1) => {
   return Number.isFinite(num) ? Math.max(1, num) : fallback
 }
 
+const normalizeNonNegativeInt = (value, fallback = 0) => {
+  const num = Math.floor(Number(value ?? fallback))
+  return Number.isFinite(num) ? Math.max(0, num) : fallback
+}
+
 const groupDisplayTitle = (group = {}, groupIndex = 0) => {
   const title = String(group.group_title || '').trim()
   return title || `第 ${groupIndex + 1} 组`
 }
 
 const resolveGroupSelectRule = (group = {}) => {
-  if (!group.advancedOpen) {
+  const mode = group.choice_mode || (Number(group.min_select ?? 1) === Number(group.max_select ?? 1) ? 'fixed' : 'range')
+  if (mode !== 'range') {
     const count = normalizePositiveInt(group.choice_count ?? group.max_select ?? group.min_select, 1)
     return { min: count, max: count }
   }
-  const mode = group.selection_mode || deriveSelectionMode(group.min_select, group.max_select)
-  if (mode === 'required_one') return { min: 1, max: 1 }
-  if (mode === 'optional_one') return { min: 0, max: 1 }
-  if (mode === 'multi') return { min: 1, max: Math.max(2, Number(group.max_select || 2)) }
   return {
-    min: Math.max(0, Number(group.min_select || 0)),
-    max: Math.max(1, Number(group.max_select || 1))
+    min: normalizeNonNegativeInt(group.min_select, 0),
+    max: normalizePositiveInt(group.max_select, 1)
   }
 }
 
@@ -187,6 +189,8 @@ const applyGroupSelectionMode = (group = {}) => {
   group.min_select = rule.min
   group.max_select = Math.max(rule.min || 1, rule.max)
   group.choice_count = Math.max(1, rule.max)
+  group.selection_mode = deriveSelectionMode(group.min_select, group.max_select)
+  group.choice_mode = group.choice_mode || (group.min_select === group.max_select ? 'fixed' : 'range')
 }
 
 const groupRuleSummary = (group = {}) => {
@@ -197,18 +201,42 @@ const groupRuleSummary = (group = {}) => {
   return `用户至少选 ${rule.min} 件，最多 ${rule.max} 件`
 }
 
+const deriveOptionQuantityRule = (option = {}) => {
+  if (option.quantity_rule) return option.quantity_rule
+  const repeatable = Number(option.repeatable || 0) === 1
+  const defaultQty = Math.max(1, Math.floor(Number(option.default_qty || 1)))
+  const maxQty = Math.max(defaultQty, Math.floor(Number(option.max_qty_per_order || defaultQty)))
+  if (!repeatable) return 'single'
+  if (defaultQty > 1 && defaultQty === maxQty) return 'fixed'
+  return 'adjustable'
+}
+
 const normalizeOptionQtyRule = (option = {}) => {
-  option.default_qty = Math.max(1, Math.floor(Number(option.default_qty || 1)))
-  option.repeatable = Number(option.repeatable || 0) === 1 ? 1 : 0
-  if (option.repeatable === 1) {
-    option.max_qty_per_order = Math.max(
-      option.default_qty,
-      Math.floor(Number(option.max_qty_per_order || option.default_qty || 1))
-    )
-  } else {
-    option.default_qty = 1
-    option.max_qty_per_order = 1
+  const rule = deriveOptionQuantityRule(option)
+  option.quantity_rule = rule
+  if (rule === 'fixed') {
+    const qty = Math.max(2, Math.floor(Number(option.default_qty || option.max_qty_per_order || 2)))
+    option.default_qty = qty
+    option.repeatable = 1
+    option.max_qty_per_order = qty
+    return
   }
+  if (rule === 'adjustable') {
+    const maxQty = Math.max(2, Math.floor(Number(option.max_qty_per_order || option.default_qty || 2)))
+    option.default_qty = 1
+    option.repeatable = 1
+    option.max_qty_per_order = maxQty
+    return
+  }
+  option.default_qty = 1
+  option.repeatable = 0
+  option.max_qty_per_order = 1
+}
+
+const fixedOptionRequiredQty = (option = {}) => {
+  return deriveOptionQuantityRule(option) === 'fixed'
+    ? Math.max(2, Math.floor(Number(option.default_qty || option.max_qty_per_order || 2)))
+    : 1
 }
 
 const buildAutoGroupKey = (group = {}, groupIndex = 0, seen = new Set()) => {
@@ -293,44 +321,61 @@ const hydrateBundleForm = async (bundle = {}) => {
   form.sort_weight = Number(bundle.sort_weight || bundle.sort_order || 0)
   form.status = Number(bundle.status || 0) === 0 ? 0 : 1
   form.publish_status = bundle.publish_status || 'published'
-  form.groups = (bundle.groups || []).map((group, groupIndex) => ({
-    local_key: `group-${groupIndex}-${Date.now()}`,
-    advancedOpen: Number(group.min_select || 1) !== Number(group.max_select || 1),
-    group_title: group.group_title || '',
-    group_key: group.group_key || '',
-    selection_mode: deriveSelectionMode(group.min_select, group.max_select),
-    choice_count: Number(group.min_select || 1) === Number(group.max_select || 1)
-      ? Number(group.max_select || 1)
-      : Math.max(1, Number(group.max_select || 1)),
-    min_select: Number(group.min_select || 1),
-    max_select: Number(group.max_select || 1),
-    sort_order: Number(group.sort_order || groupIndex),
-    options: (group.options || []).map((option, optionIndex) => ({
-      local_key: `option-${groupIndex}-${optionIndex}-${Date.now()}`,
-      advancedOpen: !!(option.sku_id || Number(option.repeatable || 0) === 1 || Number(option.enabled || 0) === 0 || Number(option.default_qty || 1) > 1),
-      bundle_product_select_id: String(option.bundle_product_id || option.product_id || ''),
-      product_id: String(option.product_id || ''),
-      bundle_product_id: String(option.bundle_product_id || ''),
-      product_library_source: option.product_library_source || (option.bundle_product_id ? 'bundle_products' : 'products'),
-      sku_id: String(option.sku_id || ''),
-      default_qty: Number(option.repeatable || 0) === 1 ? Number(option.default_qty || 1) : 1,
-      repeatable: Number(option.repeatable || 0) === 1 ? 1 : 0,
-      max_qty_per_order: Number(option.repeatable || 0) === 1
-        ? Math.max(Number(option.default_qty || 1), Number(option.max_qty_per_order || option.default_qty || 1))
-        : 1,
-      sort_order: Number(option.sort_order || optionIndex),
-      enabled: Number(option.enabled || 0) === 0 ? 0 : 1,
-      product_name: option.product_name || '',
-      sku_name: option.sku_name || '',
-      sku_spec: option.sku_spec || '',
-      commission_mode: option.commission_mode || FIXED_BUNDLE_COMMISSION_MODE,
-      commission_source: option.commission_source || FIXED_BUNDLE_COMMISSION_SOURCE,
-      commission_pool_amount: Number(option.commission_pool_amount || 0),
-      solo_commission_fixed_by_role: normalizeFixedCommissionMap(option.solo_commission_fixed_by_role),
-      direct_commission_fixed_by_role: normalizeFixedCommissionMap(option.direct_commission_fixed_by_role),
-      indirect_commission_fixed_by_role: normalizeFixedCommissionMap(option.indirect_commission_fixed_by_role)
-    }))
-  }))
+  form.groups = (bundle.groups || []).map((group, groupIndex) => {
+    const minSelect = normalizeNonNegativeInt(group.min_select, 1)
+    const maxSelect = Math.max(minSelect || 1, normalizePositiveInt(group.max_select ?? minSelect, minSelect || 1))
+    const choiceMode = minSelect === maxSelect ? 'fixed' : 'range'
+    return {
+      local_key: `group-${groupIndex}-${Date.now()}`,
+      advancedOpen: choiceMode === 'range',
+      group_title: group.group_title || '',
+      group_key: group.group_key || '',
+      choice_mode: choiceMode,
+      selection_mode: deriveSelectionMode(minSelect, maxSelect),
+      choice_count: choiceMode === 'fixed' ? maxSelect : Math.max(1, maxSelect),
+      min_select: minSelect,
+      max_select: maxSelect,
+      sort_order: Number(group.sort_order || groupIndex),
+      options: (group.options || []).map((option, optionIndex) => {
+        const repeatable = Number(option.repeatable || 0) === 1 ? 1 : 0
+        const defaultQty = repeatable === 1 ? normalizePositiveInt(option.default_qty, 1) : 1
+        const maxQty = repeatable === 1
+          ? Math.max(defaultQty, normalizePositiveInt(option.max_qty_per_order ?? option.default_qty, defaultQty))
+          : 1
+        const hydratedOption = {
+          local_key: `option-${groupIndex}-${optionIndex}-${Date.now()}`,
+          advancedOpen: !!(option.sku_id || Number(option.enabled || 0) === 0),
+          bundle_product_select_id: String(option.bundle_product_id || option.product_id || ''),
+          product_id: String(option.product_id || ''),
+          bundle_product_id: String(option.bundle_product_id || ''),
+          product_library_source: option.product_library_source || (option.bundle_product_id ? 'bundle_products' : 'products'),
+          sku_id: String(option.sku_id || ''),
+          quantity_rule: deriveOptionQuantityRule({
+            ...option,
+            default_qty: defaultQty,
+            repeatable,
+            max_qty_per_order: maxQty
+          }),
+          default_qty: defaultQty,
+          repeatable,
+          max_qty_per_order: maxQty,
+          sort_order: Number(option.sort_order || optionIndex),
+          enabled: Number(option.enabled || 0) === 0 ? 0 : 1,
+          product_name: option.product_name || '',
+          sku_name: option.sku_name || '',
+          sku_spec: option.sku_spec || '',
+          commission_mode: option.commission_mode || FIXED_BUNDLE_COMMISSION_MODE,
+          commission_source: option.commission_source || FIXED_BUNDLE_COMMISSION_SOURCE,
+          commission_pool_amount: Number(option.commission_pool_amount || 0),
+          solo_commission_fixed_by_role: normalizeFixedCommissionMap(option.solo_commission_fixed_by_role),
+          direct_commission_fixed_by_role: normalizeFixedCommissionMap(option.direct_commission_fixed_by_role),
+          indirect_commission_fixed_by_role: normalizeFixedCommissionMap(option.indirect_commission_fixed_by_role)
+        }
+        normalizeOptionQtyRule(hydratedOption)
+        return hydratedOption
+      })
+    }
+  })
 }
 
 // ============ Open / close 抽屉（父级通过 defineExpose 调用） ============
@@ -382,6 +427,10 @@ const validateForm = () => {
     const enabledOptionCount = group.options.filter((option) => Number(option.enabled || 0) !== 0).length
     if (enabledOptionCount === 0) return `步骤「${groupTitle}」至少需要启用 1 个候选商品`
     group.options.forEach(normalizeOptionQtyRule)
+    const fixedQtyFloor = group.options
+      .filter((option) => Number(option.enabled || 0) !== 0)
+      .reduce((max, option) => Math.max(max, fixedOptionRequiredQty(option)), 1)
+    if (Number(group.max_select || 0) < fixedQtyFloor) return `步骤「${groupTitle}」包含固定多件候选，本组最多至少需要 ${fixedQtyFloor} 件`
     const enabledCapacity = group.options
       .filter((option) => Number(option.enabled || 0) !== 0)
       .reduce((sum, option) => sum + (Number(option.repeatable || 0) === 1 ? Math.max(Number(option.default_qty || 1), Number(option.max_qty_per_order || option.default_qty || 1)) : 1), 0)
@@ -430,19 +479,22 @@ const buildPayload = () => ({
         min_select: rule.min,
         max_select: Math.max(rule.min || 1, rule.max),
         sort_order: Number(group.sort_order || groupIndex),
-        options: group.options.map((option, optionIndex) => ({
-          product_id: option.product_id,
-          bundle_product_id: option.bundle_product_id || '',
-          sku_id: option.sku_id || '',
-          default_qty: Number(option.repeatable || 0) === 1 ? Math.max(1, Number(option.default_qty || 1)) : 1,
-          repeatable: Number(option.repeatable || 0) === 1 ? 1 : 0,
-          max_qty_per_order: Number(option.repeatable || 0) === 1
-            ? Math.max(Number(option.default_qty || 1), Number(option.max_qty_per_order || option.default_qty || 1))
-            : 1,
-          sort_order: Number(option.sort_order || optionIndex),
-          enabled: Number(option.enabled || 0) === 0 ? 0 : 1,
-          ...buildOptionCommissionPayload(option)
-        }))
+        options: group.options.map((option, optionIndex) => {
+          normalizeOptionQtyRule(option)
+          return {
+            product_id: option.product_id,
+            bundle_product_id: option.bundle_product_id || '',
+            sku_id: option.sku_id || '',
+            default_qty: Number(option.repeatable || 0) === 1 ? Math.max(1, Number(option.default_qty || 1)) : 1,
+            repeatable: Number(option.repeatable || 0) === 1 ? 1 : 0,
+            max_qty_per_order: Number(option.repeatable || 0) === 1
+              ? Math.max(Number(option.default_qty || 1), Number(option.max_qty_per_order || option.default_qty || 1))
+              : 1,
+            sort_order: Number(option.sort_order || optionIndex),
+            enabled: Number(option.enabled || 0) === 0 ? 0 : 1,
+            ...buildOptionCommissionPayload(option)
+          }
+        })
       }
     })
   })()

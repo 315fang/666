@@ -44,6 +44,9 @@ const {
 } = require('./user-contract');
 const {
     pickString,
+    normalizeStationStockRow,
+    deriveStationStockStatus,
+    stockStatusText,
     rowMatchesLookup,
     sortStationsByPickupPreference,
     summarizeStationStockForItems
@@ -195,7 +198,7 @@ async function loadAgentUpgradeRules() {
 
 function discountText(discount) {
     void discount;
-    return '成长会员权益';
+    return '成长值权益';
 }
 
 function resolveGrowthValue(source = {}) {
@@ -324,6 +327,12 @@ function isEffectiveUpgradeOrder(order = {}, effectiveDays = DEFAULT_AGENT_UPGRA
     return confirmedAt <= cutoff;
 }
 
+function getOrderNetGrowthForUpgrade(order = {}) {
+    const earned = Math.max(0, Math.floor(toNum(order.growth_earned, 0)));
+    const clawedBack = Math.max(0, Math.floor(toNum(order.growth_clawback_total, 0)));
+    return Math.max(0, earned - clawedBack);
+}
+
 async function getEffectiveOrderSales(openid, effectiveDays = DEFAULT_AGENT_UPGRADE_RULES.effective_order_days) {
     if (!openid) return 0;
     const rows = await getAllRecords(db, 'orders', { openid }).catch(() => []);
@@ -331,6 +340,17 @@ async function getEffectiveOrderSales(openid, effectiveDays = DEFAULT_AGENT_UPGR
         if (!isEffectiveUpgradeOrder(row, effectiveDays)) return sum;
         return sum + toNum(row.pay_amount ?? row.actual_price ?? row.total_amount, 0);
     }, 0));
+}
+
+async function getStableUpgradeGrowth(openid, currentGrowthValue = 0, effectiveDays = DEFAULT_AGENT_UPGRADE_RULES.effective_order_days) {
+    if (!openid) return 0;
+    const rows = await getAllRecords(db, 'orders', { openid }).catch(() => []);
+    const unstableOrderGrowth = rows.reduce((sum, row) => {
+        const netGrowth = getOrderNetGrowthForUpgrade(row);
+        if (netGrowth <= 0) return sum;
+        return isEffectiveUpgradeOrder(row, effectiveDays) ? sum : sum + netGrowth;
+    }, 0);
+    return Math.max(0, Math.floor(toNum(currentGrowthValue, 0) - unstableOrderGrowth));
 }
 
 function isGrowthRuleMet(growthValue, target) {
@@ -386,6 +406,15 @@ function deriveEligibleRoleLevel(currentRoleLevel = 0, effectiveSales = 0, direc
     return nextRoleLevel;
 }
 
+function resolveUpgradeTriggerType(nextRoleLevel, growthValue, rechargeTotal, upgradeRules = DEFAULT_AGENT_UPGRADE_RULES) {
+    if (nextRoleLevel >= 3 && isGrowthRuleMet(growthValue, upgradeRules.b1_growth_value ?? DEFAULT_AGENT_UPGRADE_RULES.b1_growth_value)) return 'growth';
+    if (nextRoleLevel === 2 && isGrowthRuleMet(growthValue, upgradeRules.c2_growth_value ?? DEFAULT_AGENT_UPGRADE_RULES.c2_growth_value)) return 'growth';
+    if (nextRoleLevel >= 5 && rechargeTotal >= toNum(upgradeRules.b3_recharge, DEFAULT_AGENT_UPGRADE_RULES.b3_recharge)) return 'recharge';
+    if (nextRoleLevel >= 4 && rechargeTotal >= toNum(upgradeRules.b2_recharge, DEFAULT_AGENT_UPGRADE_RULES.b2_recharge)) return 'recharge';
+    if (nextRoleLevel >= 3 && rechargeTotal >= toNum(upgradeRules.b1_recharge, DEFAULT_AGENT_UPGRADE_RULES.b1_recharge)) return 'recharge';
+    return 'referral';
+}
+
 async function evaluateAgentUpgrade(openid) {
     const user = await userGrowth.getUser(openid);
     if (!user) throw notFound('用户不存在');
@@ -393,15 +422,17 @@ async function evaluateAgentUpgrade(openid) {
         loadAgentUpgradeRules(),
         loadMembershipConfig()
     ]);
-    const [directMembers, rechargeTotal, effectiveSales] = await Promise.all([
+    const effectiveDays = toNum(upgradeRules.effective_order_days, DEFAULT_AGENT_UPGRADE_RULES.effective_order_days);
+    const growthValue = Math.max(0, toNum(user.growth_value, 0));
+    const [directMembers, rechargeTotal, effectiveSales, upgradeGrowthValue] = await Promise.all([
         getDirectMembers(user),
         getRechargeTotal(openid),
-        getEffectiveOrderSales(openid, toNum(upgradeRules.effective_order_days, DEFAULT_AGENT_UPGRADE_RULES.effective_order_days))
+        getEffectiveOrderSales(openid, effectiveDays),
+        getStableUpgradeGrowth(openid, growthValue, effectiveDays)
     ]);
     const memberLevels = normalizeMemberLevels(membershipConfig.member_levels);
     const currentRoleLevel = toNum(user.role_level, 0);
-    const growthValue = Math.max(0, toNum(user.growth_value, 0));
-    const nextRoleLevel = deriveEligibleRoleLevel(currentRoleLevel, effectiveSales, directMembers, rechargeTotal, upgradeRules, growthValue);
+    const nextRoleLevel = deriveEligibleRoleLevel(currentRoleLevel, effectiveSales, directMembers, rechargeTotal, upgradeRules, upgradeGrowthValue);
     const roleMeta = memberLevels.find((item) => Number(item.level) === nextRoleLevel);
     return {
         user,
@@ -410,6 +441,7 @@ async function evaluateAgentUpgrade(openid) {
         currentRoleLevel,
         nextRoleLevel,
         growthValue,
+        upgradeGrowthValue,
         rechargeTotal,
         effectiveSales,
         directMembers,
@@ -423,11 +455,15 @@ async function syncEligibleRoleLevelIfNeeded(openid) {
     if (evaluation.nextRoleLevel <= evaluation.currentRoleLevel) {
         return { ...evaluation, synced: false };
     }
+    return applyAgentRoleUpgrade(openid, evaluation, { triggerSource: 'user_auto_sync' });
+}
+
+async function applyAgentRoleUpgrade(openid, evaluation, options = {}) {
     const nextDistributorLevel = Math.max(
         toNum(evaluation.user.distributor_level != null ? evaluation.user.distributor_level : evaluation.user.agent_level, 0),
         evaluation.nextRoleLevel
     );
-    await db.collection('users').where({ openid }).update({
+    const updateRes = await db.collection('users').where({ openid, role_level: _.lt(evaluation.nextRoleLevel) }).update({
         data: {
             role_level: evaluation.nextRoleLevel,
             role_name: evaluation.roleName,
@@ -439,6 +475,36 @@ async function syncEligibleRoleLevelIfNeeded(openid) {
             updated_at: db.serverDate()
         }
     });
+    if (!updateRes.stats || updateRes.stats.updated === 0) {
+        const refreshedUser = await userGrowth.getUser(openid);
+        return {
+            ...evaluation,
+            synced: false,
+            concurrent: true,
+            currentRoleLevel: toNum(refreshedUser?.role_level, evaluation.currentRoleLevel),
+            user: refreshedUser || evaluation.user
+        };
+    }
+    await db.collection('promotion_logs').add({
+        data: {
+            openid,
+            user_id: evaluation.user.id || evaluation.user._legacy_id || evaluation.user._id || openid,
+            from_level: evaluation.currentRoleLevel,
+            to_level: evaluation.nextRoleLevel,
+            from_name: DEFAULT_ROLE_NAMES[evaluation.currentRoleLevel] || 'VIP用户',
+            to_name: evaluation.roleName,
+            trigger_type: resolveUpgradeTriggerType(evaluation.nextRoleLevel, evaluation.upgradeGrowthValue, evaluation.rechargeTotal, evaluation.upgradeRules),
+            trigger_source: options.triggerSource || 'user_upgrade',
+            trigger_order_id: options.triggerOrderId || '',
+            total_spent: evaluation.effectiveSales,
+            recharge_total: evaluation.rechargeTotal,
+            growth_value: evaluation.growthValue,
+            upgrade_growth_value: evaluation.upgradeGrowthValue,
+            direct_member_count: evaluation.directMembers.length,
+            promoted_at: db.serverDate(),
+            created_at: db.serverDate()
+        }
+    }).catch((err) => console.error('[user] 晋升日志写入失败:', err.message));
     const refreshedUser = await userGrowth.getUser(openid);
     return {
         ...evaluation,
@@ -463,7 +529,7 @@ function normalizeStation(row = {}) {
     const hasCoord = Number.isFinite(la) && Number.isFinite(lo);
     return {
         ...row,
-        id: row.id || row._legacy_id || row._id,
+        id: row.id || row._legacy_id || row.station_id || row.station_key || row._id,
         latitude: hasCoord ? la : null,
         longitude: hasCoord ? lo : null,
         coordinate_missing: !hasCoord,
@@ -756,6 +822,108 @@ function buildStoreManagerOrderSummary(order = {}, context = {}) {
     };
 }
 
+function findRecordByLookup(rows = [], lookup) {
+    return (Array.isArray(rows) ? rows : []).find((row) => rowMatchesLookup(row, lookup, [row.sku_id, row.productId])) || null;
+}
+
+async function queryProductsByStockRows(stockRows = []) {
+    const productLookups = [...new Set((stockRows || [])
+        .map((row) => pickString(row.product_id))
+        .filter(Boolean))];
+    if (!productLookups.length) return [];
+    const [byDoc, byId, byLegacy] = await Promise.all([
+        queryRecordsByFieldValues('products', '_id', productLookups),
+        queryRecordsByFieldValues('products', 'id', productLookups),
+        queryRecordsByFieldValues('products', '_legacy_id', productLookups)
+    ]);
+    return dedupeRows([...byDoc, ...byId, ...byLegacy], 'products');
+}
+
+async function querySkusByStockRows(stockRows = []) {
+    const skuLookups = [...new Set((stockRows || [])
+        .map((row) => pickString(row.sku_id))
+        .filter(Boolean))];
+    if (!skuLookups.length) return [];
+    const [byDoc, byId, byLegacy, bySkuId] = await Promise.all([
+        queryRecordsByFieldValues('skus', '_id', skuLookups),
+        queryRecordsByFieldValues('skus', 'id', skuLookups),
+        queryRecordsByFieldValues('skus', '_legacy_id', skuLookups),
+        queryRecordsByFieldValues('skus', 'sku_id', skuLookups)
+    ]);
+    return dedupeRows([...byDoc, ...byId, ...byLegacy, ...bySkuId], 'skus');
+}
+
+function buildStoreManagerInventoryRecord(stockRow = {}, context = {}) {
+    const row = normalizeStationStockRow(stockRow);
+    const station = findStationInLookupMap(context.stationMap, row.station_id);
+    const product = findRecordByLookup(context.products || [], row.product_id);
+    const sku = row.sku_id ? findRecordByLookup(context.skus || [], row.sku_id) : null;
+    const status = deriveStationStockStatus(row.available_qty, 1);
+    return {
+        id: row._id || row.id,
+        station_id: row.station_id,
+        station_name: pickString(station?.name || stockRow.station_snapshot?.name),
+        product_id: row.product_id,
+        product_name: pickString(product?.name || stockRow.product_snapshot?.name || stockRow.product_name),
+        sku_id: row.sku_id,
+        sku_name: pickString(sku?.name || stockRow.sku_snapshot?.name || stockRow.sku_name),
+        sku_spec: pickString(sku?.spec || sku?.spec_value || stockRow.sku_snapshot?.spec || stockRow.sku_spec),
+        available_qty: row.available_qty,
+        reserved_qty: row.reserved_qty,
+        on_hand_qty: row.available_qty + row.reserved_qty,
+        cost_price: row.cost_price,
+        stock_status: status,
+        stock_status_text: stockStatusText(status),
+        low_stock: status !== 'sufficient',
+        updated_at: toIsoString(stockRow.updated_at || stockRow.created_at)
+    };
+}
+
+function stationStockLogTypeText(type = '') {
+    return ({
+        procure_in: '采购入库',
+        reserve: '订单预占',
+        release: '释放预占',
+        pickup_consume: '核销消耗',
+        refund_restore: '退货恢复',
+        manual_adjust: '后台调整'
+    }[pickString(type)] || '库存变动');
+}
+
+function buildStoreManagerStockLogRecord(logRow = {}, context = {}) {
+    const station = findStationInLookupMap(context.stationMap, logRow.station_id);
+    const product = findRecordByLookup(context.products || [], logRow.product_id);
+    const sku = logRow.sku_id ? findRecordByLookup(context.skus || [], logRow.sku_id) : null;
+    const rawQuantity = Math.floor(toNum(logRow.quantity, 0));
+    const quantityDelta = ['reserve', 'pickup_consume'].includes(pickString(logRow.type))
+        ? -Math.abs(rawQuantity)
+        : rawQuantity;
+    return {
+        id: logRow._id || logRow.id || [
+            pickString(logRow.station_id, 'station'),
+            pickString(logRow.type, 'stock'),
+            pickString(logRow.order_no || logRow.procurement_no || logRow.created_at || logRow.updated_at, 'log')
+        ].join('_'),
+        station_id: pickString(logRow.station_id),
+        station_name: pickString(station?.name || logRow.station_snapshot?.name),
+        stock_id: pickString(logRow.stock_id),
+        product_id: pickString(logRow.product_id),
+        product_name: pickString(product?.name || logRow.product_snapshot?.name || logRow.product_name),
+        sku_id: pickString(logRow.sku_id),
+        sku_name: pickString(sku?.name || logRow.sku_snapshot?.name || logRow.sku_name),
+        sku_spec: pickString(sku?.spec || sku?.spec_value || logRow.sku_snapshot?.spec || logRow.sku_spec),
+        type: pickString(logRow.type),
+        type_text: stationStockLogTypeText(logRow.type),
+        quantity: rawQuantity,
+        quantity_delta: quantityDelta,
+        quantity_text: `${quantityDelta > 0 ? '+' : ''}${quantityDelta}`,
+        order_no: pickString(logRow.order_no),
+        procurement_no: pickString(logRow.procurement_no),
+        remark: pickString(logRow.remark),
+        created_at: toIsoString(logRow.created_at || logRow.updated_at)
+    };
+}
+
 async function buildStoreManagerWorkbench(openid) {
     const currentUser = await findUserByOpenid(openid);
     const currentUserIds = buildUserIdCandidates(currentUser).map((id) => String(id));
@@ -774,12 +942,18 @@ async function buildStoreManagerWorkbench(openid) {
                 pending_order_count: 0,
                 recent_verified_count: 0,
                 procurement_pending_count: 0,
+                inventory_sku_count: 0,
+                inventory_available_qty: 0,
+                inventory_reserved_qty: 0,
+                inventory_low_stock_count: 0,
                 service_fee_total: 0,
                 principal_return_total: 0
             },
             stations: [],
             pending_orders: [],
             recent_verified_orders: [],
+            inventory: [],
+            recent_stock_logs: [],
             procurements: []
         };
     }
@@ -811,11 +985,42 @@ async function buildStoreManagerWorkbench(openid) {
     const stationLookupIds = [...buildStationLookupSet(stations)];
     const userMap = buildStoreManagerUserMap(users || []);
     const stationMap = buildStationLookupMap(stations);
-    const [stationOrdersRaw, procurementsRaw] = await Promise.all([
+    const [stationOrdersRaw, procurementsRaw, stationStockRowsRaw, stationStockLogsRaw] = await Promise.all([
         queryRecordsByFieldValues('orders', 'pickup_station_id', stationLookupIds),
-        queryRecordsByFieldValues('station_procurement_orders', 'station_id', stationLookupIds)
+        queryRecordsByFieldValues('station_procurement_orders', 'station_id', stationLookupIds),
+        queryRecordsByFieldValues('station_sku_stocks', 'station_id', stationLookupIds),
+        queryRecordsByFieldValues('station_stock_logs', 'station_id', stationLookupIds)
     ]);
     const stationOrders = (stationOrdersRaw || []).filter((order) => String(order.delivery_type || '') === 'pickup');
+    const stationStockRows = (stationStockRowsRaw || [])
+        .filter((row) => findStationInLookupMap(stationMap, row.station_id));
+    const stationStockLogs = (stationStockLogsRaw || [])
+        .filter((row) => findStationInLookupMap(stationMap, row.station_id));
+    const stockLookupRows = [...stationStockRows, ...stationStockLogs];
+    const [inventoryProducts, inventorySkus] = await Promise.all([
+        queryProductsByStockRows(stockLookupRows),
+        querySkusByStockRows(stockLookupRows)
+    ]);
+    const inventoryRows = stationStockRows
+        .map((row) => buildStoreManagerInventoryRecord(row, {
+            stationMap,
+            products: inventoryProducts,
+            skus: inventorySkus
+        }))
+        .sort((a, b) => {
+            if (a.low_stock !== b.low_stock) return a.low_stock ? -1 : 1;
+            const stationCompare = pickString(a.station_name).localeCompare(pickString(b.station_name), 'zh-Hans-CN');
+            if (stationCompare !== 0) return stationCompare;
+            return pickString(a.product_name).localeCompare(pickString(b.product_name), 'zh-Hans-CN');
+        });
+    const recentStockLogs = stationStockLogs
+        .sort((a, b) => parseTimestamp(b.created_at || b.updated_at) - parseTimestamp(a.created_at || a.updated_at))
+        .slice(0, 10)
+        .map((row) => buildStoreManagerStockLogRecord(row, {
+            stationMap,
+            products: inventoryProducts,
+            skus: inventorySkus
+        }));
     const verifierLookups = stationOrders.flatMap((order) => [order.pickup_verified_by]);
     const verifierUsers = await queryUsersByLookups(verifierLookups);
     verifierUsers.forEach((user) => {
@@ -875,6 +1080,10 @@ async function buildStoreManagerWorkbench(openid) {
             pending_order_count: pendingOrdersAll.length,
             recent_verified_count: recentVerifiedOrdersAll.length,
             procurement_pending_count: procurementRows.filter((row) => ['pending_approval', 'pending_receive'].includes(row.status)).length,
+            inventory_sku_count: inventoryRows.length,
+            inventory_available_qty: inventoryRows.reduce((sum, row) => sum + toNum(row.available_qty, 0), 0),
+            inventory_reserved_qty: inventoryRows.reduce((sum, row) => sum + toNum(row.reserved_qty, 0), 0),
+            inventory_low_stock_count: inventoryRows.filter((row) => row.low_stock).length,
             service_fee_total: roundMoney((commissionRows || [])
                 .filter((row) => claimantOpenids.includes(pickString(row.openid)) && ['pickup_service_fee', 'pickup_subsidy'].includes(pickString(row.type)))
                 .reduce((sum, row) => sum + toNum(row.amount, 0), 0)),
@@ -885,6 +1094,8 @@ async function buildStoreManagerWorkbench(openid) {
         stations,
         pending_orders: pendingOrders,
         recent_verified_orders: recentVerifiedOrders,
+        inventory: inventoryRows.slice(0, 30),
+        recent_stock_logs: recentStockLogs,
         procurements: procurementRows
     };
 }
@@ -1127,7 +1338,7 @@ async function loadUserReviewLookup(openid) {
 }
 
 async function getDashboardOrderStats(openid) {
-    const statuses = ['pending_payment', 'pending_group', 'paid', 'shipped'];
+    const statuses = ['pending_payment', 'pending_group', 'paid', 'shipped', 'pickup_pending'];
     const counts = {};
 
     await Promise.all(statuses.map(async (status) => {
@@ -1147,7 +1358,7 @@ async function getDashboardOrderStats(openid) {
     return {
         pending: counts.pending_payment || 0,
         paid: (counts.paid || 0) + (counts.pending_group || 0),
-        shipped: counts.shipped || 0,
+        shipped: (counts.shipped || 0) + (counts.pickup_pending || 0),
         pendingReview: (completedOrders || []).filter((order) => isPendingReviewOrder(order, reviewLookup)).length,
         refund: refundRes.total || 0
     };
@@ -1874,7 +2085,7 @@ const handleAction = {
     // ===== 升级 / 其他 =====
     'upgradeEligibility': asyncHandler(async (openid) => {
         const evaluation = await evaluateAgentUpgrade(openid);
-        const points = Math.max(0, toNum(evaluation.user.points || evaluation.user.growth_value, 0));
+        const points = Math.max(0, toNum(evaluation.user.points, 0));
         const canUpgrade = evaluation.nextRoleLevel > evaluation.currentRoleLevel;
         const agentUpgradeProgress = buildAgentUpgradeProgress(evaluation);
         return success({
@@ -1882,6 +2093,7 @@ const handleAction = {
             current_name: evaluation.user.role_name || DEFAULT_ROLE_NAMES[evaluation.currentRoleLevel] || 'VIP用户',
             current_points: points,
             current_growth_value: evaluation.growthValue,
+            upgrade_growth_value: evaluation.upgradeGrowthValue,
             can_upgrade: canUpgrade,
             next_level: evaluation.nextRoleLevel,
             next_name: evaluation.roleName,
@@ -1902,22 +2114,12 @@ const handleAction = {
         if (evaluation.nextRoleLevel <= evaluation.currentRoleLevel) {
             throw badRequest('当前未满足升级条件');
         }
-        const nextDistributorLevel = Math.max(
-            toNum(evaluation.user.distributor_level != null ? evaluation.user.distributor_level : evaluation.user.agent_level, 0),
-            evaluation.nextRoleLevel
-        );
-        await db.collection('users').where({ openid }).update({
-            data: {
-                role_level: evaluation.nextRoleLevel,
-                role_name: evaluation.roleName,
-                distributor_level: nextDistributorLevel,
-                agent_level: nextDistributorLevel,
-                participate_distribution: 1,
-                discount_rate: 1,
-                updated_at: db.serverDate()
-            },
+        const result = await applyAgentRoleUpgrade(openid, evaluation, { triggerSource: 'user_manual_upgrade' });
+        return success({
+            new_level: result.currentRoleLevel,
+            role_name: result.user?.role_name || evaluation.roleName,
+            synced: result.synced === true
         });
-        return success({ new_level: evaluation.nextRoleLevel, role_name: evaluation.roleName });
     }),
 
     'upgradeApply': asyncHandler(async (openid, params) => {

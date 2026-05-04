@@ -1,11 +1,10 @@
-// pages/user/membership-center.js - 会员权益中心（整合版）
+// pages/user/membership-center.js - 权益中心（整合版）
 const { get } = require('../../utils/request');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
 const { applyGrowthTierDisplayNames, calculateCumulativeGrowthPercent } = require('../../utils/growthTierDisplay');
 const { ROLE_NAMES } = require('../../config/constants');
 const {
-    buildMembershipCardViewModel,
-    getMembershipCardMeta
+    buildMembershipCardViewModel
 } = require('../../utils/membershipCardBuilder');
 
 function resolveCurrentGrowthTierMin(rawTiers, currentTierMeta, growthValue) {
@@ -29,11 +28,12 @@ function sanitizeTierDesc(desc) {
     const text = String(desc || '').trim();
     if (!text) return '';
     if (/折|原价|复购价/.test(text)) {
-        return '成长值提升可解锁更多成长会员权益';
+        return '成长值提升可解锁更多权益';
     }
     return text
-        .replace(/积分会员/g, '成长会员')
-        .replace(/积分权益/g, '成长会员权益')
+        .replace(/积分会员/g, '成长值档位')
+        .replace(/成长会员权益/g, '成长值权益')
+        .replace(/积分权益/g, '权益')
         .replace(/积分/g, '成长值');
 }
 
@@ -68,6 +68,40 @@ function normalizeUpgradeProgress(raw) {
     };
 }
 
+function pickNumberValue(source = {}, keys = [], fallback = 0) {
+    for (const key of keys) {
+        const value = source && source[key];
+        if (value === null || value === undefined || value === '') continue;
+        const number = Number(value);
+        if (Number.isFinite(number)) return number;
+    }
+    return fallback;
+}
+
+function resolvePointsBalance(data = {}) {
+    return Math.max(0, pickNumberValue(data, [
+        'available_points',
+        'balance_points',
+        'balance',
+        'points',
+        'total_points'
+    ]));
+}
+
+function resolveCouponCount(data = {}) {
+    const explicit = pickNumberValue(data, [
+        'total',
+        'count',
+        'unused_count'
+    ], NaN);
+    if (Number.isFinite(explicit)) {
+        return Math.max(0, explicit);
+    }
+    if (Array.isArray(data.list)) return data.list.length;
+    if (Array.isArray(data.coupons)) return data.coupons.length;
+    return 0;
+}
+
 Page({
     data: {
         loading: true,
@@ -85,12 +119,8 @@ Page({
         currentGrowthMin: 0,
         currentRoleLevel: 0,
         currentRoleName: 'VIP用户',
-        activeCard: 'consume',
-        cardSwiperCurrent: 0,
-        cardReady: false,
         consumeCardSummary: {},
         agentCardSummary: {},
-        currentCardMeta: {},
         agentUpgradeProgress: normalizeUpgradeProgress(null)
     },
 
@@ -110,7 +140,7 @@ Page({
     },
 
     async loadData() {
-        this.setData({ loading: true, loadError: false, cardReady: false });
+        this.setData({ loading: true, loadError: false });
         try {
             const [profileRes, metaRes, pointsRes, couponsRes] = await Promise.all([
                 get('/user/profile'),
@@ -126,9 +156,9 @@ Page({
             const meta = (metaRes && metaRes.code === 0 && metaRes.data) ? metaRes.data : {};
             const currentMeta = meta.current || {};
             
-            // 积分和券数据
-            const pointsBalance = (pointsRes.code === 0 && pointsRes.data) ? (pointsRes.data.available_points || pointsRes.data.balance || 0) : 0;
-            const couponCount = (couponsRes.code === 0 && couponsRes.data) ? (couponsRes.data.total || 0) : 0;
+            // 积分和券数据。不同接口历史字段不完全一致，这里统一归一到资产中心口径。
+            const pointsBalance = (pointsRes.code === 0 && pointsRes.data) ? resolvePointsBalance(pointsRes.data) : 0;
+            const couponCount = (couponsRes.code === 0 && couponsRes.data) ? resolveCouponCount(couponsRes.data) : 0;
 
             const rawTiers = applyGrowthTierDisplayNames(
                 (meta.growth_tiers || []).slice().sort((a, b) => (a.min || 0) - (b.min || 0))
@@ -185,7 +215,10 @@ Page({
                 isLast: idx === rawTiers.length - 1
             }));
             const memberLevels = rawMembers.map((m) => ({ ...m }));
-            const cardViewModel = buildMembershipCardViewModel({
+            const {
+                consumeCardSummary,
+                agentCardSummary
+            } = buildMembershipCardViewModel({
                 growthValue: Math.floor(g),
                 currentTierName: currentTier.name || '普通会员',
                 nextTierMin: nextMin,
@@ -197,15 +230,6 @@ Page({
                 currentRoleName: roleName
             });
             const agentUpgradeProgress = normalizeUpgradeProgress(meta.agent_upgrade_progress);
-            if (agentUpgradeProgress.visible && agentUpgradeProgress.state !== 'max_auto_level') {
-                cardViewModel.activeCard = 'agent';
-                cardViewModel.cardSwiperCurrent = 1;
-                cardViewModel.currentCardMeta = getMembershipCardMeta({
-                    activeCard: 'agent',
-                    consumeCardSummary: cardViewModel.consumeCardSummary,
-                    agentCardSummary: cardViewModel.agentCardSummary
-                });
-            }
 
             this.setData({
                 loading: false,
@@ -222,50 +246,14 @@ Page({
                 currentGrowthMin: activeTierMin,
                 currentRoleLevel: roleLevel,
                 currentRoleName: roleName,
-                ...cardViewModel,
-                agentUpgradeProgress,
-                cardReady: true
+                consumeCardSummary,
+                agentCardSummary,
+                agentUpgradeProgress
             });
         } catch (e) {
             console.error('[membership-center] 加载失败:', e);
-            this.setData({ loading: false, loadError: true, cardReady: false });
+            this.setData({ loading: false, loadError: true });
         }
-    },
-
-    onCardSwiperChange(e) {
-        if (!this.data.cardReady) return;
-        const current = Number(e.detail && e.detail.current);
-        const cardSwiperCurrent = current === 1 ? 1 : 0;
-        const activeCard = cardSwiperCurrent === 1 ? 'agent' : 'consume';
-        if (cardSwiperCurrent === this.data.cardSwiperCurrent && activeCard === this.data.activeCard) {
-            return;
-        }
-        this.setData({
-            cardSwiperCurrent,
-            activeCard,
-            currentCardMeta: getMembershipCardMeta({
-                activeCard,
-                consumeCardSummary: this.data.consumeCardSummary,
-                agentCardSummary: this.data.agentCardSummary
-            })
-        });
-    },
-
-    onCardTabTap(e) {
-        if (!this.data.cardReady) return;
-        const type = e.currentTarget.dataset.type;
-        const cardSwiperCurrent = type === 'agent' ? 1 : 0;
-        const activeCard = cardSwiperCurrent === 1 ? 'agent' : 'consume';
-        if (activeCard === this.data.activeCard) return;
-        this.setData({
-            cardSwiperCurrent,
-            activeCard,
-            currentCardMeta: getMembershipCardMeta({
-                activeCard,
-                consumeCardSummary: this.data.consumeCardSummary,
-                agentCardSummary: this.data.agentCardSummary
-            })
-        });
     },
 
     goTeamCenter() {
@@ -278,6 +266,14 @@ Page({
 
     goCouponList() {
         wx.navigateTo({ url: '/pages/coupon/list' });
+    },
+
+    goCouponCenter() {
+        wx.navigateTo({ url: '/pages/coupon/center' });
+    },
+
+    goLottery() {
+        wx.navigateTo({ url: '/pages/lottery/lottery' });
     },
 
     onRetry() {

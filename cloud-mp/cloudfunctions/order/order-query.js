@@ -34,6 +34,12 @@ function normalizeStatusForQuery(status) {
     return status || null;
 }
 
+function resolveOrderStatusesForQuery(status) {
+    const normalized = normalizeStatusForQuery(status);
+    if (normalized === 'shipped') return ['shipped', 'pickup_pending'];
+    return normalized ? [normalized] : [];
+}
+
 function displayAmount(value) {
     const num = Number(value);
     if (!Number.isFinite(num)) return '0.00';
@@ -960,6 +966,7 @@ async function formatOrderForClient(order = {}, cache = new Map(), defaultAutoCa
 async function queryOrders(openid, params = {}) {
     try {
         const status = normalizeStatusForQuery(params.status);
+        const statusList = resolveOrderStatusesForQuery(params.status);
         const page = Math.max(1, toNumber(params.page, 1));
         const limit = Math.max(1, Math.min(100, toNumber(params.limit || params.pageSize || params.size, 20)));
         const offset = (page - 1) * limit;
@@ -990,7 +997,11 @@ async function queryOrders(openid, params = {}) {
         }
 
         const where = { openid };
-        if (status) where.status = status;
+        if (statusList.length === 1) {
+            where.status = statusList[0];
+        } else if (statusList.length > 1) {
+            where.status = _.in(statusList);
+        }
 
         try {
             const [countRes, pageRes] = await Promise.all([
@@ -1045,7 +1056,7 @@ async function queryOrders(openid, params = {}) {
 
 async function getOrderCounts(openid) {
     const cache = new Map();
-    const statuses = ['pending_payment', 'pending_group', 'paid', 'shipped'];
+    const statuses = ['pending_payment', 'pending_group', 'paid', 'shipped', 'pickup_pending'];
     const counts = {};
 
     await Promise.all(statuses.map(async (status) => {
@@ -1063,6 +1074,7 @@ async function getOrderCounts(openid) {
     ]);
 
     counts.pending = counts.pending_payment || 0;
+    counts.shipped = (counts.shipped || 0) + (counts.pickup_pending || 0);
     counts.pending_review = (completedOrders || []).filter((order) => isPendingReviewOrder(order, reviewLookup)).length;
     counts.refund = refundRes.total || 0;
     return counts;
@@ -1164,6 +1176,7 @@ module.exports = {
     getOrderCounts,
     getOrderDetail,
     getOrderByIdOrNo,
+    resolveOrderStatusesForQuery,
     listRefunds,
     getRefundDetail
 };

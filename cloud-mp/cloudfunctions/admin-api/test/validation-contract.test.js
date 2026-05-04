@@ -501,6 +501,151 @@ test('GET /admin/api/branch-agents/earnings summarizes region and store rewards'
     }
 });
 
+test('POST /admin/api/commissions/repair-pickup-service-fee backfills verified pickup service fee', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const dataStore = app.locals.dataStore;
+    const tempPrefix = 'test-pickup-fee-repair';
+    const managerOpenid = `${tempPrefix}-manager`;
+    const stationId = `${tempPrefix}-station`;
+    const orderId = `${tempPrefix}-order`;
+    const orderNo = `${tempPrefix}-order-no`;
+    const cleanup = () => {
+        dataStore.saveCollection?.('users', dataStore.getCollection('users').filter((row) => String(row.openid) !== managerOpenid));
+        dataStore.saveCollection?.('stations', dataStore.getCollection('stations').filter((row) => String(row.id || row._id) !== stationId));
+        dataStore.saveCollection?.('station_staff', dataStore.getCollection('station_staff').filter((row) => !String(row.id || row._id || '').startsWith(tempPrefix)));
+        dataStore.saveCollection?.('orders', dataStore.getCollection('orders').filter((row) => String(row.id || row._id) !== orderId));
+        dataStore.saveCollection?.('commissions', dataStore.getCollection('commissions').filter((row) => !String(row.id || row._id || '').startsWith(tempPrefix) && String(row.order_id) !== orderId));
+    };
+
+    cleanup();
+    dataStore.saveCollection?.('users', dataStore.getCollection('users').concat({
+        _id: `${tempPrefix}-user`,
+        id: `${tempPrefix}-user`,
+        openid: managerOpenid,
+        nickname: '服务费修复店长',
+        role_level: 6,
+        status: 1
+    }));
+    dataStore.saveCollection?.('stations', dataStore.getCollection('stations').concat({
+        _id: stationId,
+        id: stationId,
+        name: '服务费修复门店',
+        status: 'active',
+        pickup_claimant_id: managerOpenid
+    }));
+    dataStore.saveCollection?.('station_staff', dataStore.getCollection('station_staff').concat({
+        _id: `${tempPrefix}-staff`,
+        id: `${tempPrefix}-staff`,
+        station_id: stationId,
+        openid: managerOpenid,
+        role: 'manager',
+        status: 'active'
+    }));
+    dataStore.saveCollection?.('orders', dataStore.getCollection('orders').concat({
+        _id: orderId,
+        id: orderId,
+        order_no: orderNo,
+        openid: `${tempPrefix}-buyer`,
+        status: 'completed',
+        delivery_type: 'pickup',
+        pickup_station_id: stationId,
+        pay_amount: 100,
+        confirmed_at: '2026-04-24T00:00:00.000Z'
+    }));
+
+    try {
+        const response = await invoke('/admin/api/commissions/repair-pickup-service-fee', {
+            method: 'POST',
+            admin,
+            body: { order_id: orderId }
+        });
+        assert.equal(response.statusCode, 200, response.body?.message || JSON.stringify(response.body));
+        assert.equal(response.body.data?.created, 1);
+        const commission = dataStore.getCollection('commissions').find((row) => String(row.order_id) === orderId && row.type === 'pickup_service_fee');
+        assert.ok(commission, 'expected pickup service fee commission');
+        assert.equal(Number(commission.amount), 2.5);
+        assert.equal(commission.openid, managerOpenid);
+
+        const secondResponse = await invoke('/admin/api/commissions/repair-pickup-service-fee', {
+            method: 'POST',
+            admin,
+            body: { order_id: orderId }
+        });
+        assert.equal(secondResponse.statusCode, 200);
+        assert.equal(secondResponse.body.data?.created, 0);
+        assert.equal(secondResponse.body.data?.existing, 1);
+    } finally {
+        cleanup();
+    }
+});
+
+test('POST /admin/api/store-benefits/annual-goods-rewards settles yearly goods reward ledger', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const dataStore = app.locals.dataStore;
+    const tempPrefix = 'test-annual-goods';
+    const managerOpenid = `${tempPrefix}-manager`;
+    const stationId = `${tempPrefix}-station`;
+    const cleanup = () => {
+        dataStore.saveCollection?.('users', dataStore.getCollection('users').filter((row) => String(row.openid) !== managerOpenid));
+        dataStore.saveCollection?.('stations', dataStore.getCollection('stations').filter((row) => String(row.id || row._id) !== stationId));
+        dataStore.saveCollection?.('station_staff', dataStore.getCollection('station_staff').filter((row) => !String(row.id || row._id || '').startsWith(tempPrefix)));
+        dataStore.saveCollection?.('station_procurement_orders', dataStore.getCollection('station_procurement_orders').filter((row) => !String(row.id || row._id || '').startsWith(tempPrefix)));
+        dataStore.saveCollection?.('store_annual_goods_rewards', dataStore.getCollection('store_annual_goods_rewards').filter((row) => !String(row.id || row._id || '').includes(tempPrefix)));
+    };
+
+    cleanup();
+    dataStore.saveCollection?.('users', dataStore.getCollection('users').concat({
+        _id: `${tempPrefix}-user`,
+        id: `${tempPrefix}-user`,
+        openid: managerOpenid,
+        nickname: '年度货品店长',
+        role_level: 6,
+        status: 1
+    }));
+    dataStore.saveCollection?.('stations', dataStore.getCollection('stations').concat({
+        _id: stationId,
+        id: stationId,
+        name: '年度货品门店',
+        status: 'active',
+        pickup_claimant_id: managerOpenid
+    }));
+    dataStore.saveCollection?.('station_staff', dataStore.getCollection('station_staff').concat({
+        _id: `${tempPrefix}-staff`,
+        id: `${tempPrefix}-staff`,
+        station_id: stationId,
+        openid: managerOpenid,
+        role: 'manager',
+        status: 'active'
+    }));
+    dataStore.saveCollection?.('station_procurement_orders', dataStore.getCollection('station_procurement_orders').concat({
+        _id: `${tempPrefix}-procurement`,
+        id: `${tempPrefix}-procurement`,
+        station_id: stationId,
+        status: 'received',
+        total_cost: 10000,
+        received_at: '2025-05-01T00:00:00.000Z'
+    }));
+
+    try {
+        const response = await invoke('/admin/api/store-benefits/annual-goods-rewards', {
+            method: 'POST',
+            admin,
+            body: { year: 2025 }
+        });
+        assert.equal(response.statusCode, 200, response.body?.message || JSON.stringify(response.body));
+        assert.equal(response.body.data?.created, 1);
+        const reward = dataStore.getCollection('store_annual_goods_rewards').find((row) => String(row.store_id) === stationId && Number(row.settlement_year) === 2025);
+        assert.ok(reward, 'expected annual goods reward row');
+        assert.equal(Number(reward.purchase_amount), 10000);
+        assert.equal(Number(reward.reward_goods_amount), 500);
+        assert.equal(reward.claimant_openid, managerOpenid);
+    } finally {
+        cleanup();
+    }
+});
+
 test('GET /admin/api/orders hides cancelled orders unless explicitly included', async () => {
     await ensureReady();
     const admin = getEnabledAdmin();
@@ -638,6 +783,192 @@ test('PUT /admin/api/refunds/:id/reject restores refund-frozen commissions witho
         assert.equal(settled?.status, 'settled');
         assert.equal(Number(user?.commission_balance), 10);
         assert.equal(order?.status, 'paid');
+    } finally {
+        cleanup();
+    }
+});
+
+test('PUT /admin/api/refunds/:id/complete requires return logistics before return-refund payout', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const dataStore = app.locals.dataStore;
+    const tempPrefix = 'test-return-refund-require-logistics';
+    const orderId = `${tempPrefix}-order`;
+    const orderNo = `${tempPrefix}-no`;
+    const refundId = `${tempPrefix}-refund`;
+    const userOpenid = `${tempPrefix}-openid`;
+    const cleanup = () => {
+        dataStore.saveCollection?.('users', dataStore.getCollection('users')
+            .filter((row) => String(row.openid || row.id || row._id) !== userOpenid));
+        dataStore.saveCollection?.('orders', dataStore.getCollection('orders')
+            .filter((row) => String(row._id || row.id || row.order_no) !== orderId && String(row.order_no || '') !== orderNo));
+        dataStore.saveCollection?.('refunds', dataStore.getCollection('refunds')
+            .filter((row) => String(row._id || row.id) !== refundId));
+    };
+
+    cleanup();
+    dataStore.saveCollection?.('users', dataStore.getCollection('users').concat({
+        _id: `${tempPrefix}-user`,
+        id: `${tempPrefix}-user`,
+        openid: userOpenid,
+        nickname: '退货退款物流测试用户',
+        agent_wallet_balance: 0,
+        status: 1
+    }));
+    dataStore.saveCollection?.('orders', dataStore.getCollection('orders').concat({
+        _id: orderId,
+        id: orderId,
+        order_no: orderNo,
+        openid: userOpenid,
+        status: 'paid',
+        payment_method: 'goods_fund',
+        pay_amount: 20,
+        actual_price: 20,
+        total_amount: 20,
+        paid_at: '2026-04-24T00:00:00.000Z'
+    }));
+    dataStore.saveCollection?.('refunds', dataStore.getCollection('refunds').concat({
+        _id: refundId,
+        id: refundId,
+        order_id: orderId,
+        order_no: orderNo,
+        openid: userOpenid,
+        status: 'approved',
+        type: 'return_refund',
+        amount: 20,
+        payment_method: 'goods_fund',
+        created_at: '2026-04-24T00:10:00.000Z'
+    }));
+
+    try {
+        const response = await invoke(`/admin/api/refunds/${refundId}/complete`, {
+            method: 'PUT',
+            admin
+        });
+
+        assert.equal(response.statusCode, 400, response.body?.message || JSON.stringify(response.body));
+        assert.match(String(response.body?.message || ''), /退货物流单号/);
+        const refund = dataStore.getCollection('refunds').find((row) => String(row._id || row.id) === refundId);
+        assert.equal(refund?.status, 'approved');
+    } finally {
+        cleanup();
+    }
+});
+
+test('PUT /admin/api/refunds/:id/complete marks return-refund goods as received before payout', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const dataStore = app.locals.dataStore;
+    const tempPrefix = 'test-return-refund-received';
+    const orderId = `${tempPrefix}-order`;
+    const orderNo = `${tempPrefix}-no`;
+    const refundId = `${tempPrefix}-refund`;
+    const userOpenid = `${tempPrefix}-openid`;
+    const storeOpenid = `${tempPrefix}-store-openid`;
+    const walletId = `wallet-${tempPrefix}-user`;
+    const cleanup = () => {
+        dataStore.saveCollection?.('users', dataStore.getCollection('users')
+            .filter((row) => ![userOpenid, storeOpenid].includes(String(row.openid || row.id || row._id))));
+        dataStore.saveCollection?.('orders', dataStore.getCollection('orders')
+            .filter((row) => String(row._id || row.id || row.order_no) !== orderId && String(row.order_no || '') !== orderNo));
+        dataStore.saveCollection?.('refunds', dataStore.getCollection('refunds')
+            .filter((row) => String(row._id || row.id) !== refundId));
+        dataStore.saveCollection?.('commissions', dataStore.getCollection('commissions')
+            .filter((row) => String(row.order_id || row.order_no) !== orderId && String(row.order_no || '') !== orderNo));
+        dataStore.saveCollection?.('wallet_accounts', dataStore.getCollection('wallet_accounts')
+            .filter((row) => String(row._id || row.id) !== walletId));
+        dataStore.saveCollection?.('wallet_logs', dataStore.getCollection('wallet_logs')
+            .filter((row) => String(row.ref_id || row.refund_id || '').indexOf(tempPrefix) === -1));
+        dataStore.saveCollection?.('goods_fund_logs', dataStore.getCollection('goods_fund_logs')
+            .filter((row) => String(row.order_no || row.order_id || '').indexOf(tempPrefix) === -1));
+    };
+
+    cleanup();
+    dataStore.saveCollection?.('users', dataStore.getCollection('users').concat({
+        _id: `${tempPrefix}-user`,
+        id: `${tempPrefix}-user`,
+        openid: userOpenid,
+        nickname: '退货退款确认收货测试用户',
+        agent_wallet_balance: 0,
+        status: 1
+    }));
+    dataStore.saveCollection?.('users', dataStore.getCollection('users').concat({
+        _id: `${tempPrefix}-store-user`,
+        id: `${tempPrefix}-store-user`,
+        openid: storeOpenid,
+        nickname: '退款开发费门店',
+        balance: 0,
+        commission_balance: 0,
+        status: 1
+    }));
+    dataStore.saveCollection?.('wallet_accounts', dataStore.getCollection('wallet_accounts').concat({
+        _id: walletId,
+        id: walletId,
+        user_id: `${tempPrefix}-user`,
+        openid: userOpenid,
+        balance: 0,
+        account_type: 'goods_fund',
+        status: 'active'
+    }));
+    dataStore.saveCollection?.('orders', dataStore.getCollection('orders').concat({
+        _id: orderId,
+        id: orderId,
+        order_no: orderNo,
+        openid: userOpenid,
+        status: 'paid',
+        payment_method: 'goods_fund',
+        pay_amount: 20,
+        actual_price: 20,
+        total_amount: 20,
+        paid_at: '2026-04-24T00:00:00.000Z'
+    }));
+    dataStore.saveCollection?.('refunds', dataStore.getCollection('refunds').concat({
+        _id: refundId,
+        id: refundId,
+        order_id: orderId,
+        order_no: orderNo,
+        openid: userOpenid,
+        status: 'approved',
+        type: 'return_refund',
+        amount: 20,
+        cash_refund_amount: 20,
+        refund_quantity_effective: 1,
+        payment_method: 'goods_fund',
+        return_company: '顺丰速运',
+        return_tracking_no: `${tempPrefix}-tracking`,
+        created_at: '2026-04-24T00:10:00.000Z'
+    }));
+    dataStore.saveCollection?.('commissions', dataStore.getCollection('commissions').concat({
+        _id: `${tempPrefix}-same-level`,
+        id: `${tempPrefix}-same-level`,
+        order_id: orderId,
+        order_no: orderNo,
+        openid: storeOpenid,
+        user_id: `${tempPrefix}-store-user`,
+        type: 'same_level',
+        status: 'frozen',
+        bonus_role_level: 6,
+        amount: 4
+    }));
+
+    try {
+        const response = await invoke(`/admin/api/refunds/${refundId}/complete`, {
+            method: 'PUT',
+            admin
+        });
+
+        assert.equal(response.statusCode, 200, response.body?.message || JSON.stringify(response.body));
+        const refund = dataStore.getCollection('refunds').find((row) => String(row._id || row.id) === refundId);
+        assert.equal(refund?.status, 'completed');
+        assert.ok(refund?.return_received_at, 'expected return_received_at to be written');
+        assert.equal(refund?.return_tracking_no, `${tempPrefix}-tracking`);
+        const user = dataStore.getCollection('users').find((row) => String(row.openid) === userOpenid);
+        assert.equal(Number(user?.agent_wallet_balance), 20);
+        const devFee = dataStore.getCollection('commissions').find((row) => String(row.type) === 'refund_dev_fee' && String(row.refund_id) === refundId);
+        assert.equal(devFee?.openid, storeOpenid);
+        assert.equal(devFee?.user_id, `${tempPrefix}-store-user`);
+        assert.equal(Number(devFee?.amount), 0.3);
+        assert.equal(devFee?.source_commission_id, `${tempPrefix}-same-level`);
     } finally {
         cleanup();
     }

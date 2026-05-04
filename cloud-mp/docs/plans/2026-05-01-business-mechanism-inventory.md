@@ -308,7 +308,7 @@
 
 1. 将后台 `membership` 页面口径调整为“身份与权益规则”，不新增独立会员体系。
 2. 将后台导航分组改成五个业务中心，保留原路由和权限 key。
-3. 将小程序 tab 文案 `我的会员` 评估改为 `我的` 或 `我的权益`，避免和代理身份重复。
+3. 小程序 tab 默认文案已收为 `我的`，避免和代理身份重复；线上存量配置如仍为 `我的会员`，通过运营参数改回。
 4. 将 `distribution/center` 拆成用户与渠道摘要 + 资金摘要，详情仍跳转原页面。
 5. 针对 `agent_system_peer_bonus` / `agent_system_peer-bonus` 做配置 key 决策。
 6. 针对 `wallet_logs.type/change_type` 做写入归一化方案。

@@ -2,12 +2,12 @@
   <div class="membership-page">
     <el-tabs v-model="activeTab">
 
-      <!-- Tab 1: 会员等级 -->
-      <el-tab-pane label="会员等级" name="levels">
+      <!-- Tab 1: 身份等级 -->
+      <el-tab-pane label="身份等级" name="levels">
         <el-card>
           <template #header>
             <div class="card-header">
-              <span>会员等级定义</span>
+              <span>身份等级定义</span>
               <el-button type="primary" @click="saveLevels" :loading="savingLevels">保存配置</el-button>
             </div>
           </template>
@@ -16,7 +16,7 @@
             type="info"
             :closable="false"
             style="margin-bottom:12px"
-            title="这里只维护等级名称、概况说明与权益描述；成交价统一按商品标价结算，角色差异体现在积分和团队权益。"
+            title="这里维护唯一会员身份（role_level）的名称、说明与展示色；成长值只是升级进度，不再作为第二套会员身份。成交价统一按商品标价结算，角色差异体现在积分和团队权益。"
           />
 
           <div class="level-grid">
@@ -44,12 +44,12 @@
         </el-card>
       </el-tab-pane>
 
-      <!-- Tab 2: 成长规则 -->
-      <el-tab-pane label="成长规则" name="growth">
+      <!-- Tab 2: 成长值规则 -->
+      <el-tab-pane label="成长值规则" name="growth">
         <el-card>
           <template #header>
             <div class="card-header">
-              <span>用户成长值获取规则</span>
+              <span>成长值获取与身份晋升规则</span>
               <el-button type="primary" @click="saveLevels" :loading="savingLevels">保存配置</el-button>
             </div>
           </template>
@@ -98,18 +98,18 @@
               type="warning"
               :closable="false"
               style="margin-bottom:12px"
-              title="成长值与角色等级仅影响积分与团队权益，不再影响订单成交价。"
+              title="role_level 是唯一身份等级；成长值只用于升级判断、进度展示和权益说明，不再制造另一套会员等级。"
             />
           </el-form>
         </el-card>
       </el-tab-pane>
 
-      <!-- Tab 3: 成长值特权档位（积分中心） / 积分任务分值 -->
-      <el-tab-pane label="成长值等级" name="points">
+      <!-- Tab 3: 积分权益档位 / 积分任务分值 -->
+      <el-tab-pane label="积分权益" name="points">
         <el-card>
           <template #header>
             <div class="card-header">
-              <span>小程序「积分中心·等级特权」（按成长值定档）</span>
+              <span>小程序「积分中心·权益档位」（按成长值定档）</span>
               <div class="header-actions">
                 <el-button type="primary" plain @click="addPointLevel">新增一档</el-button>
                 <el-button type="primary" @click="saveLevels" :loading="savingLevels">保存配置</el-button>
@@ -120,7 +120,7 @@
             type="info"
             :closable="false"
             style="margin-bottom:12px"
-            title="与可消费积分无关：此处阶梯按用户「成长值」（消费/任务等累计，见成长规则）划分特权档位，控制积分中心「等级特权」列表与名称；积分余额仍用于抽奖、活动购、积分抵扣等。最高档「上限」留空表示无上限（显示为 xxx+）。"
+            title="这里不是会员身份配置：此处按「成长值」划分积分中心的权益展示档位；积分余额仍用于抽奖、活动购、积分抵扣等。最高档「上限」留空表示无上限（显示为 xxx+）。"
           />
           <el-table :data="pointLevels" border size="small">
             <el-table-column label="档位" width="90">
@@ -367,12 +367,12 @@ function defaultPeerBonusConfig() {
 const peerBonus = reactive(defaultPeerBonusConfig())
 
 const defaultGrowthTiers = () => [
-  { min: 0, discount: 1, name: 'VIP用户', desc: '基础积分权益' },
-  { min: 299, discount: 1, name: '初级会员', desc: '成长值提升后解锁更多积分权益' },
-  { min: 999, discount: 1, name: '高级会员', desc: '成长值提升后解锁更多积分权益' },
-  { min: 3000, discount: 1, name: '推广合伙人', desc: '享受团队与复购积分权益' },
-  { min: 30000, discount: 1, name: '运营合伙人', desc: '享受团队与复购积分权益' },
-  { min: 198000, discount: 1, name: '区域合伙人', desc: '享受团队与复购积分权益' }
+  { min: 0, discount: 1, name: '基础进度', desc: '基础权益说明' },
+  { min: 299, discount: 1, name: '进阶进度', desc: '成长值提升后解锁更多权益说明' },
+  { min: 999, discount: 1, name: '高阶进度', desc: '成长值提升后解锁更多权益说明' },
+  { min: 3000, discount: 1, name: '合伙进度', desc: '配合身份等级展示团队与复购权益说明' },
+  { min: 30000, discount: 1, name: '运营进度', desc: '配合身份等级展示团队与复购权益说明' },
+  { min: 198000, discount: 1, name: '区域进度', desc: '配合身份等级展示团队权益说明' }
 ]
 
 const growthTiers = ref(defaultGrowthTiers())
@@ -523,19 +523,19 @@ const buildPointLevelsPayload = () => {
     const level = parseInt(row.level, 10)
     const min = parseInt(row.min, 10)
     if (!Number.isFinite(level) || level < 1) {
-      throw new Error(`成长值等级第 ${idx + 1} 行：档位序号须为 ≥1 的整数`)
+      throw new Error(`积分权益档位第 ${idx + 1} 行：档位序号须为 ≥1 的整数`)
     }
     if (!Number.isFinite(min) || min < 0) {
-      throw new Error(`成长值等级第 ${idx + 1} 行：成长值下限须为 ≥0 的整数`)
+      throw new Error(`积分权益档位第 ${idx + 1} 行：成长值下限须为 ≥0 的整数`)
     }
     let max = null
     if (row.maxInput !== '' && row.maxInput != null) {
       max = Math.floor(Number(row.maxInput))
       if (!Number.isFinite(max)) {
-        throw new Error(`成长值等级第 ${idx + 1} 行：成长值上限须为数字或留空`)
+        throw new Error(`积分权益档位第 ${idx + 1} 行：成长值上限须为数字或留空`)
       }
       if (max < min) {
-        throw new Error(`成长值等级第 ${idx + 1} 行：成长值上限不能小于下限`)
+        throw new Error(`积分权益档位第 ${idx + 1} 行：成长值上限不能小于下限`)
       }
     }
     const perks = String(row.perksText || '').split(/[,，]/).map((s) => s.trim()).filter(Boolean)
@@ -554,10 +554,10 @@ const normalizeGrowthTiersPayload = () => {
     const min = Number(row.min)
     const discount = Number(row.discount)
     if (!Number.isFinite(min) || min < 0) {
-      throw new Error(`成长值等级阶梯第 ${idx + 1} 行：成长值下限须 ≥0`)
+      throw new Error(`成长值权益阶梯第 ${idx + 1} 行：成长值下限须 ≥0`)
     }
     if (!Number.isFinite(discount) || discount <= 0 || discount > 1) {
-      throw new Error(`成长值等级阶梯第 ${idx + 1} 行：权益系数须在 (0,1]`)
+      throw new Error(`成长值权益阶梯第 ${idx + 1} 行：权益系数须在 (0,1]`)
     }
     return {
       min,

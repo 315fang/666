@@ -85,6 +85,28 @@ function resolveOrderPayAmount(order = {}, fallback = 0) {
     return fallback;
 }
 
+function resolveGrowthClawbackBasis(order = {}) {
+    if (order.growth_earned !== undefined && order.growth_earned !== null && order.growth_earned !== '') {
+        return {
+            amount: Math.max(0, Math.floor(toNumber(order.growth_earned, 0))),
+            basis: 'order_growth_earned'
+        };
+    }
+    return {
+        amount: Math.max(0, Math.floor(resolveOrderPayAmount(order, 0))),
+        basis: 'legacy_pay_amount'
+    };
+}
+
+function resolveRewardPointsClawbackBasis(order = {}) {
+    const totalEarned = Math.max(0, Math.floor(toNumber(order.points_earned, 0)));
+    const status = pickString(order.points_award_status).toLowerCase();
+    const hasReleaseSnapshot = order.reward_points_released_total !== undefined
+        || ['frozen', 'released', 'partially_released', 'cancelled'].includes(status);
+    if (!hasReleaseSnapshot) return totalEarned;
+    return Math.max(0, Math.min(totalEarned, Math.floor(toNumber(order.reward_points_released_total, 0))));
+}
+
 function getOrderTotalQuantity(order = {}) {
     const explicit = Math.max(0, toNumber(order.quantity, 0));
     if (explicit > 0) return explicit;
@@ -547,6 +569,10 @@ function buildBuyerRefundReversal(order = {}, refund = {}, isFullRefund = false,
     return userReversal;
 }
 
+function isRefundCompletionConfirmed(refund = {}) {
+    return refund.refund_completion_confirmed === true || pickString(refund.status) === 'completed';
+}
+
 async function reverseBuyerRefundAssets(openid, order = {}, refund = {}, isFullRefund = false) {
     try {
         const userRes = await db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] }));
@@ -565,6 +591,7 @@ async function reverseBuyerRefundAssets(openid, order = {}, refund = {}, isFullR
 
 async function reverseBuyerRefundAssetsWithMarker(openid, orderId, order = {}, refund = {}, isFullRefund = false) {
     if (refund.buyer_assets_reversed_at) return;
+    if (!isRefundCompletionConfirmed(refund)) return;
     await reverseBuyerRefundAssets(openid, order, refund, isFullRefund);
     try {
         await db.collection('refunds').doc(String(refund._id)).update({
@@ -583,6 +610,7 @@ async function applyRefundProgress(orderId, order = {}, refund = {}) {
             refundAmount: roundMoney(toNumber(refund.amount ?? refund.refund_amount, 0)),
             rewardPointsClawback: Math.max(0, toNumber(refund.reward_points_clawback_amount, 0)),
             growthClawback: Math.max(0, toNumber(refund.growth_clawback_amount, 0)),
+            growthClawbackBasis: pickString(refund.growth_clawback_basis, 'already_applied')
         };
     }
 
@@ -604,10 +632,9 @@ async function applyRefundProgress(orderId, order = {}, refund = {}) {
         };
     });
 
-    const totalPointsEarned = Math.max(0, toNumber(order.points_earned, 0));
-    const totalGrowthEarned = Math.max(0, Math.floor(
-        order.growth_earned != null ? toNumber(order.growth_earned, 0) : resolveOrderPayAmount(order, 0)
-    ));
+    const totalPointsEarned = resolveRewardPointsClawbackBasis(order);
+    const growthBasis = resolveGrowthClawbackBasis(order);
+    const totalGrowthEarned = growthBasis.amount;
     const rewardPointsClawedBefore = Math.max(0, toNumber(order.reward_points_clawback_total, 0));
     const growthClawedBefore = Math.max(0, toNumber(order.growth_clawback_total, 0));
     const rewardPointsClawback = isFullRefund
@@ -643,6 +670,7 @@ async function applyRefundProgress(orderId, order = {}, refund = {}) {
             data: {
                 reward_points_clawback_amount: rewardPointsClawback,
                 growth_clawback_amount: growthClawback,
+                growth_clawback_basis: growthBasis.basis,
                 order_progress_applied_at: db.serverDate(),
                 updated_at: db.serverDate(),
             }
@@ -651,17 +679,103 @@ async function applyRefundProgress(orderId, order = {}, refund = {}) {
         console.error('[system-refund] ⚠️ 退款记录更新失败 refundId=%s error=%s', refund._id, e.message);
     }
 
-    return { isFullRefund, refundQuantity, refundAmount, rewardPointsClawback, growthClawback };
+    return { isFullRefund, refundQuantity, refundAmount, rewardPointsClawback, growthClawback, growthClawbackBasis: growthBasis.basis };
+}
+
+async function applySettledCommissionClawback(comm = {}) {
+    const amount = roundMoney(toNumber(comm.amount, 0));
+    const openid = pickString(comm.openid || comm.receiver_openid || comm.beneficiary_openid);
+    if (!openid || amount <= 0) return null;
+
+    const userRes = await db.collection('users')
+        .where({ openid })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    const user = userRes.data && userRes.data[0];
+    if (!user) return null;
+
+    const currentBalance = roundMoney(toNumber(user.commission_balance ?? user.balance, 0));
+    const currentDebt = roundMoney(toNumber(user.debt_amount, 0));
+    const paidFromBalance = roundMoney(Math.min(currentBalance, amount));
+    const debtAdded = roundMoney(amount - paidFromBalance);
+    const nextBalance = roundMoney(currentBalance - paidFromBalance);
+    const nextPatch = {
+        commission_balance: nextBalance,
+        balance: nextBalance,
+        total_earned: roundMoney(Math.max(0, toNumber(user.total_earned, 0) - paidFromBalance)),
+        debt_amount: roundMoney(currentDebt + debtAdded),
+        updated_at: db.serverDate()
+    };
+    if (debtAdded > 0) {
+        nextPatch.debt_reason = `退款追回佣金 ${pickString(comm.order_no || comm.order_id)}`;
+    }
+
+    await db.collection('users').where({ openid }).update({ data: nextPatch });
+    return {
+        debited: paidFromBalance,
+        debt_added: debtAdded
+    };
+}
+
+async function clawBackSettledCommissions(orderId) {
+    const settledRes = await db.collection('commissions')
+        .where({ order_id: orderId, status: 'settled' })
+        .get()
+        .catch(() => ({ data: [] }));
+    for (const comm of (settledRes.data || [])) {
+        const commAmount = toNumber(comm.amount, 0);
+        if (commAmount <= 0 || comm.clawed_back_at) continue;
+        const statusUpdate = await db.collection('commissions')
+            .where({ _id: String(comm._id), status: 'settled' })
+            .update({
+                data: {
+                    status: 'cancelled',
+                    cancel_reason: '退款追回已结算佣金',
+                    cancelled_reason: '退款追回已结算佣金',
+                    commission_cancel_scope: 'whole_order_on_any_refund',
+                    commission_cancel_policy: 'partial_refund_policy_v1',
+                    clawed_back_at: db.serverDate(),
+                    updated_at: db.serverDate()
+                }
+            }).catch((err) => {
+                console.error('[system-refund] ⚠️ 已结算佣金取消状态更新失败 orderId=%s commissionId=%s error=%s', orderId, comm._id, err.message);
+                return { stats: { updated: 0 } };
+            });
+        if (!statusUpdate || !statusUpdate.stats || statusUpdate.stats.updated === 0) continue;
+        try {
+            const clawback = await applySettledCommissionClawback(comm);
+            if (clawback && comm._id) {
+                await db.collection('commissions').doc(String(comm._id)).update({
+                    data: {
+                        clawback_debited: clawback.debited,
+                        clawback_debt_added: clawback.debt_added,
+                        updated_at: db.serverDate()
+                    }
+                }).catch((err) => {
+                    console.error('[system-refund] ⚠️ 已结算佣金追回金额标记失败 commissionId=%s error=%s', comm._id, err.message);
+                });
+            }
+        } catch (err) {
+            console.error('[system-refund] ⚠️ 已结算佣金余额追回失败 orderId=%s commissionId=%s error=%s', orderId, comm._id, err.message);
+            await db.collection('rollback_error_logs').add({
+                data: { context: 'system_refund_clawback_commission_balance', openid: comm.openid, commission_id: String(comm._id), amount: commAmount, error: err.message, created_at: db.serverDate() }
+            }).catch(() => {});
+        }
+    }
 }
 
 async function cancelRefundRelatedCommissions(orderId, reason) {
     try {
         await db.collection('commissions')
-            .where({ order_id: orderId, status: _.in(['pending', 'frozen', 'pending_approval']) })
+            .where({ order_id: orderId, status: _.in(['pending', 'frozen', 'pending_approval', 'approved']) })
             .update({
                 data: {
                     status: 'cancelled',
                     cancel_reason: reason,
+                    cancelled_reason: reason,
+                    commission_cancel_scope: 'whole_order_on_any_refund',
+                    commission_cancel_policy: 'partial_refund_policy_v1',
                     cancelled_at: db.serverDate(),
                     updated_at: db.serverDate(),
                 }
@@ -669,6 +783,7 @@ async function cancelRefundRelatedCommissions(orderId, reason) {
     } catch (e) {
         console.error('[system-refund] ⚠️ 退款佣金取消失败 orderId=%s error=%s', orderId, e.message);
     }
+    await clawBackSettledCommissions(orderId);
 }
 
 async function restoreOrderStock(orderId, order = {}, refund = {}) {
@@ -1087,11 +1202,19 @@ async function processInternalRefund(order, refundContext) {
             buyer_assets_reversed_at: null,
             order_progress_applied_at: null,
             stock_restored_at: null,
+            refund_completion_confirmed: true,
         };
-        const { isFullRefund } = await applyRefundProgress(order._id, order, runtimeRefund);
+        const refundProgress = await applyRefundProgress(order._id, order, runtimeRefund);
+        const { isFullRefund, rewardPointsClawback, growthClawback, growthClawbackBasis } = refundProgress;
+        runtimeRefund.reward_points_clawback_amount = rewardPointsClawback;
+        runtimeRefund.growth_clawback_amount = growthClawback;
+        runtimeRefund.growth_clawback_basis = growthClawbackBasis;
+        runtimeRefund.order_progress_applied_at = runtimeRefund.order_progress_applied_at || '1';
         await reverseBuyerRefundAssetsWithMarker(order.openid, order._id, order, runtimeRefund, isFullRefund);
+        runtimeRefund.buyer_assets_reversed_at = runtimeRefund.buyer_assets_reversed_at || '1';
         await cancelRefundRelatedCommissions(order._id, method === 'goods_fund' ? '货款退款' : '余额退款');
         await restoreOrderStock(order._id, order, runtimeRefund);
+        runtimeRefund.stock_restored_at = runtimeRefund.stock_restored_at || '1';
         await db.collection('refunds').doc(String(refundContext.refundId)).update({
             data: {
                 status: 'completed',
@@ -1183,10 +1306,17 @@ async function settleCompletedGroupExpiredRefund(order = {}, refund = {}) {
         amount: roundMoney(refund.amount ?? refund.refund_amount),
         refund_amount: roundMoney(refund.refund_amount ?? refund.amount),
     };
-    const { isFullRefund } = await applyRefundProgress(order._id, order, refundRecord);
+    const refundProgress = await applyRefundProgress(order._id, order, refundRecord);
+    const { isFullRefund, rewardPointsClawback, growthClawback, growthClawbackBasis } = refundProgress;
+    refundRecord.reward_points_clawback_amount = rewardPointsClawback;
+    refundRecord.growth_clawback_amount = growthClawback;
+    refundRecord.growth_clawback_basis = growthClawbackBasis;
+    refundRecord.order_progress_applied_at = refundRecord.order_progress_applied_at || '1';
     await reverseBuyerRefundAssetsWithMarker(order.openid, order._id, order, refundRecord, isFullRefund);
+    refundRecord.buyer_assets_reversed_at = refundRecord.buyer_assets_reversed_at || '1';
     await cancelRefundRelatedCommissions(order._id, SYSTEM_REFUND_REASON);
     await restoreOrderStock(order._id, order, refundRecord);
+    refundRecord.stock_restored_at = refundRecord.stock_restored_at || '1';
     await clearOrderRefundFailure(order._id);
     return { settled: true, refundId: refund._id };
 }
@@ -1238,6 +1368,12 @@ module.exports = {
     recoverGroupExpiredRefunds,
     __test__: {
         isGroupExpiredRefundCandidate,
-        shouldRecoverGroupExpiredRefund
+        shouldRecoverGroupExpiredRefund,
+        resolveGrowthClawbackBasis,
+        applyRefundProgress,
+        cancelRefundRelatedCommissions,
+        clawBackSettledCommissions,
+        processInternalRefund,
+        settleCompletedGroupExpiredRefund
     }
 };

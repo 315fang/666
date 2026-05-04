@@ -41,7 +41,7 @@ var TAB_META = [
   }
 ];
 
-var FALLBACK_TEXT = ['商城首页', '全部商品', '热门活动', '我的会员'];
+var FALLBACK_TEXT = ['商城首页', '全部商品', '热门活动', '我的'];
 
 Component({
   data: {

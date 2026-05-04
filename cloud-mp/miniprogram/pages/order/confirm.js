@@ -31,6 +31,7 @@ const {
     calculateExpectedOrderGrowth,
     buildGrowthPreview
 } = require('./orderGrowthPreview');
+const { resolvePickupStationId, pickupStationMatches } = require('./utils/pickupStation');
 
 const DISCOUNT_RESTRICTED_ORDER_TYPES = new Set(['group', 'slash', 'limited_sale', 'limited_spot', 'bundle', 'exchange']);
 const GOODS_IMAGE_PLACEHOLDER = '/assets/images/placeholder.svg';
@@ -254,6 +255,8 @@ Page({
     async onLoad(options) {
         const safeOptions = options || {};
         this._loadOptions = { ...safeOptions };
+        this._hasShownOnce = false;
+        wx.removeStorageSync('selectedPickupStation');
         const roleLevel = app.globalData.userInfo?.role_level || 0;
         this.setData({
             from: safeOptions.from || 'cart',
@@ -267,7 +270,6 @@ Page({
         if (primaryReady) {
             await this._loadSupplementaryData();
         }
-        this._hasShownOnce = false;
         this._tryAutoCouponUsagePrompt();
     },
 
@@ -280,16 +282,11 @@ Page({
             });
             this.scheduleOrderBenefitPreviewRefresh();
         }
-        if (!this._hasShownOnce) {
-            this._hasShownOnce = true;
-            return;
-        }
         const selectedPickupStation = wx.getStorageSync('selectedPickupStation');
         if (selectedPickupStation) {
             wx.removeStorageSync('selectedPickupStation');
-            const selectedId = String(selectedPickupStation.id || selectedPickupStation._id || selectedPickupStation.station_key || '');
             const latestStation = (this.data.pickupStations || [])
-                .find((item) => String(item.id || item._id || '') === selectedId);
+                .find((item) => pickupStationMatches(item, selectedPickupStation));
             const station = latestStation || selectedPickupStation;
             if (station.selectable === false) {
                 wx.showToast({ title: '该门店当前无货，请重新选择', icon: 'none' });
@@ -297,6 +294,10 @@ Page({
                 this.setData({ pickupStation: station });
             }
             this._tryAutoCouponUsagePrompt();
+            return;
+        }
+        if (!this._hasShownOnce) {
+            this._hasShownOnce = true;
             return;
         }
         // 从地址选择页返回时刷新地址
@@ -742,7 +743,7 @@ Page({
         }
         wx.setStorageSync('pickupStationSelectPayload', {
             stations,
-            selectedId: this.data.pickupStation ? (this.data.pickupStation.id || this.data.pickupStation._id || this.data.pickupStation.station_key || '') : '',
+            selectedId: this.data.pickupStation ? resolvePickupStationId(this.data.pickupStation) : '',
             updatedAt: Date.now()
         });
         wx.navigateTo({ url: '/pages/order/pickup-station-list' });

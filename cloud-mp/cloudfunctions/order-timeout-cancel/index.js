@@ -236,7 +236,6 @@ async function cancelTimedOutPendingOrders(defaultMinutes, now) {
                 await db.collection('users').where({ openid: order.openid }).update({
                     data: {
                         points: _.inc(toNumber(order.points_used, 0)),
-                        growth_value: _.inc(toNumber(order.points_used, 0)),
                         updated_at: db.serverDate(),
                     },
                 }).catch((e) => console.error('[OrderTimeoutCancel] 退积分失败:', order._id, e.message));

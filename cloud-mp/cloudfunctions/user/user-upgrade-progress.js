@@ -320,8 +320,14 @@ function buildAgentUpgradeProgress(evaluation = {}) {
     };
     const memberLevels = evaluation.memberLevels || [];
     const directMembers = evaluation.directMembers || [];
+    const totalGrowthValue = roundMoney(evaluation.growthValue);
+    const upgradeGrowthValue = roundMoney(
+        evaluation.upgradeGrowthValue != null ? evaluation.upgradeGrowthValue : evaluation.growthValue
+    );
     const metrics = {
-        growthValue: roundMoney(evaluation.growthValue),
+        growthValue: upgradeGrowthValue,
+        totalGrowthValue,
+        pendingGrowthValue: Math.max(0, roundMoney(totalGrowthValue - upgradeGrowthValue)),
         effectiveSales: roundMoney(evaluation.effectiveSales),
         rechargeTotal: roundMoney(evaluation.rechargeTotal),
         directC1Count: countDirectMembersAtLeast(directMembers, 1),

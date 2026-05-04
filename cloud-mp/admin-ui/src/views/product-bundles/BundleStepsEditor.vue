@@ -28,35 +28,48 @@
           <span class="group-rule-summary">{{ groupRuleSummary(group) }}</span>
         </div>
         <div class="group-actions">
-          <el-button text type="primary" size="small" @click="group.advancedOpen = !group.advancedOpen">
-            {{ group.advancedOpen ? '收起规则' : '高级规则' }}
-          </el-button>
           <el-button text type="danger" size="small" @click="removeGroup(groupIndex)">删除步骤</el-button>
         </div>
       </div>
 
       <div class="simple-rule-row">
-        <span>本组选</span>
-        <el-input-number
-          v-model="group.choice_count"
-          :min="1"
-          :precision="0"
-          controls-position="right"
-          class="choice-count-input"
-          @change="() => onGroupChoiceCountChange(group)"
-        />
-        <span>件</span>
-      </div>
-
-      <div v-if="group.advancedOpen" class="advanced-box group-advanced-box">
-        <div class="advanced-rule-grid">
-          <el-form-item label="最少选择">
-            <el-input-number v-model="group.min_select" :min="0" :precision="0" style="width:100%" @change="() => normalizeAdvancedGroupRule(group)" />
-          </el-form-item>
-          <el-form-item label="最多选择">
-            <el-input-number v-model="group.max_select" :min="1" :precision="0" style="width:100%" @change="() => normalizeAdvancedGroupRule(group)" />
-          </el-form-item>
-        </div>
+        <span>本组</span>
+        <el-radio-group v-model="group.choice_mode" size="small" @change="() => onGroupChoiceModeChange(group)">
+          <el-radio-button value="fixed">固定选</el-radio-button>
+          <el-radio-button value="range">可选范围</el-radio-button>
+        </el-radio-group>
+        <template v-if="group.choice_mode === 'range'">
+          <span>最少</span>
+          <el-input-number
+            v-model="group.min_select"
+            :min="0"
+            :precision="0"
+            controls-position="right"
+            class="choice-count-input"
+            @change="() => normalizeGroupRangeRule(group)"
+          />
+          <span>最多</span>
+          <el-input-number
+            v-model="group.max_select"
+            :min="Math.max(1, Number(group.min_select || 0))"
+            :precision="0"
+            controls-position="right"
+            class="choice-count-input"
+            @change="() => normalizeGroupRangeRule(group)"
+          />
+          <span>件</span>
+        </template>
+        <template v-else>
+          <el-input-number
+            v-model="group.choice_count"
+            :min="1"
+            :precision="0"
+            controls-position="right"
+            class="choice-count-input"
+            @change="() => onGroupChoiceCountChange(group)"
+          />
+          <span>件</span>
+        </template>
       </div>
 
       <div class="group-options-head">
@@ -98,6 +111,41 @@
             <span v-if="optionSkuDisplay(option)"> / {{ optionSkuDisplay(option) }}</span>
             <span class="option-rule-text">{{ optionRuleText(option) }}</span>
           </div>
+          <div class="option-quantity-rule">
+            <el-radio-group
+              v-model="option.quantity_rule"
+              size="small"
+              @change="(value) => onOptionQuantityRuleChange(group, option, value)"
+            >
+              <el-radio-button value="single">单件</el-radio-button>
+              <el-radio-button value="adjustable">可加减</el-radio-button>
+              <el-radio-button value="fixed">固定多件</el-radio-button>
+            </el-radio-group>
+            <div v-if="option.quantity_rule === 'adjustable'" class="option-quantity-extra">
+              <span>最多</span>
+              <el-input-number
+                v-model="option.max_qty_per_order"
+                :min="2"
+                :precision="0"
+                controls-position="right"
+                class="option-small-number"
+                @change="() => onAdjustableMaxQtyChange(group, option)"
+              />
+              <span>件</span>
+            </div>
+            <div v-else-if="option.quantity_rule === 'fixed'" class="option-quantity-extra">
+              <span>固定</span>
+              <el-input-number
+                v-model="option.default_qty"
+                :min="2"
+                :precision="0"
+                controls-position="right"
+                class="option-small-number"
+                @change="() => onFixedQtyChange(group, option)"
+              />
+              <span>件</span>
+            </div>
+          </div>
           <div class="option-actions">
             <el-button text type="primary" size="small" @click="option.advancedOpen = !option.advancedOpen">
               {{ option.advancedOpen ? '收起' : '高级' }}
@@ -124,30 +172,6 @@
                   :value="sku.value"
                 />
               </el-select>
-            </el-form-item>
-            <el-form-item label="默认数量" class="option-form-item option-form-item--qty">
-              <el-input-number
-                v-model="option.default_qty"
-                :min="1"
-                :precision="0"
-                style="width: 100%"
-                @change="() => onOptionDefaultQtyChange(option)"
-              />
-            </el-form-item>
-            <el-form-item label="选择次数" class="option-form-item option-form-item--repeat">
-              <el-select v-model="option.repeatable" style="width: 100%" @change="() => onOptionRepeatableChange(option)">
-                <el-option label="仅选一次" :value="0" />
-                <el-option label="可重复选" :value="1" />
-              </el-select>
-            </el-form-item>
-            <el-form-item v-if="option.repeatable === 1" label="最多数量" class="option-form-item option-form-item--max">
-              <el-input-number
-                v-model="option.max_qty_per_order"
-                :min="Math.max(1, Number(option.default_qty || 1))"
-                :precision="0"
-                style="width: 100%"
-                @change="() => normalizeOptionQtyRule(option)"
-              />
             </el-form-item>
             <el-form-item label="候选状态" class="option-form-item option-form-item--enabled">
               <el-switch v-model="option.enabled" :active-value="1" :inactive-value="0" active-text="启用" inactive-text="停用" />
@@ -198,14 +222,11 @@ const deriveSelectionMode = (minSelect = 1, maxSelect = 1) => {
 }
 
 const resolveGroupSelectRule = (group = {}) => {
-  if (!group.advancedOpen) {
+  const mode = group.choice_mode || (Number(group.min_select ?? 1) === Number(group.max_select ?? 1) ? 'fixed' : 'range')
+  if (mode !== 'range') {
     const count = normalizePositiveInt(group.choice_count ?? group.max_select ?? group.min_select, 1)
     return { min: count, max: count }
   }
-  const mode = group.selection_mode || deriveSelectionMode(group.min_select, group.max_select)
-  if (mode === 'required_one') return { min: 1, max: 1 }
-  if (mode === 'optional_one') return { min: 0, max: 1 }
-  if (mode === 'multi') return { min: 1, max: Math.max(2, Number(group.max_select || 2)) }
   return {
     min: Math.max(0, Number(group.min_select || 0)),
     max: Math.max(1, Number(group.max_select || 1))
@@ -220,18 +241,36 @@ const groupRuleSummary = (group = {}) => {
   return `用户至少选 ${rule.min} 件，最多 ${rule.max} 件`
 }
 
+const deriveOptionQuantityRule = (option = {}) => {
+  if (option.quantity_rule) return option.quantity_rule
+  const repeatable = Number(option.repeatable || 0) === 1
+  const defaultQty = Math.max(1, Math.floor(Number(option.default_qty || 1)))
+  const maxQty = Math.max(defaultQty, Math.floor(Number(option.max_qty_per_order || defaultQty)))
+  if (!repeatable) return 'single'
+  if (defaultQty > 1 && defaultQty === maxQty) return 'fixed'
+  return 'adjustable'
+}
+
 const normalizeOptionQtyRule = (option = {}) => {
-  option.default_qty = Math.max(1, Math.floor(Number(option.default_qty || 1)))
-  option.repeatable = Number(option.repeatable || 0) === 1 ? 1 : 0
-  if (option.repeatable === 1) {
-    option.max_qty_per_order = Math.max(
-      option.default_qty,
-      Math.floor(Number(option.max_qty_per_order || option.default_qty || 1))
-    )
-  } else {
-    option.default_qty = 1
-    option.max_qty_per_order = 1
+  const rule = deriveOptionQuantityRule(option)
+  option.quantity_rule = rule
+  if (rule === 'fixed') {
+    const qty = Math.max(2, Math.floor(Number(option.default_qty || option.max_qty_per_order || 2)))
+    option.default_qty = qty
+    option.repeatable = 1
+    option.max_qty_per_order = qty
+    return
   }
+  if (rule === 'adjustable') {
+    const maxQty = Math.max(2, Math.floor(Number(option.max_qty_per_order || option.default_qty || 2)))
+    option.default_qty = 1
+    option.repeatable = 1
+    option.max_qty_per_order = maxQty
+    return
+  }
+  option.default_qty = 1
+  option.repeatable = 0
+  option.max_qty_per_order = 1
 }
 
 // ============ 工厂 + 交互 helpers（仅 child 使用） ============
@@ -244,6 +283,7 @@ const createOption = (overrides = {}) => ({
   bundle_product_id: '',
   product_library_source: 'bundle_products',
   sku_id: '',
+  quantity_rule: 'single',
   default_qty: 1,
   repeatable: 0,
   max_qty_per_order: 1,
@@ -260,6 +300,7 @@ const createGroup = (overrides = {}) => ({
   advancedOpen: false,
   group_title: '',
   group_key: '',
+  choice_mode: 'fixed',
   selection_mode: 'required_one',
   choice_count: 1,
   min_select: 1,
@@ -271,39 +312,94 @@ const createGroup = (overrides = {}) => ({
 
 const onGroupChoiceCountChange = (group = {}) => {
   const count = normalizePositiveInt(group.choice_count, 1)
+  group.choice_mode = 'fixed'
   group.choice_count = count
   group.min_select = count
   group.max_select = count
   group.selection_mode = count === 1 ? 'required_one' : 'custom'
 }
 
-const normalizeAdvancedGroupRule = (group = {}) => {
-  group.advancedOpen = true
+const normalizeGroupRangeRule = (group = {}) => {
+  group.choice_mode = 'range'
   group.selection_mode = 'custom'
   group.min_select = Math.max(0, Math.floor(Number(group.min_select || 0)))
   group.max_select = Math.max(group.min_select || 1, Math.floor(Number(group.max_select || 1)))
   group.choice_count = Math.max(1, group.max_select)
 }
 
-const onOptionDefaultQtyChange = (option = {}) => {
-  option.default_qty = Math.max(1, Math.floor(Number(option.default_qty || 1)))
-  if (option.default_qty > 1) {
-    option.repeatable = 1
+const onGroupChoiceModeChange = (group = {}) => {
+  if (group.choice_mode === 'range') {
+    group.min_select = Math.max(0, Math.floor(Number(group.min_select || 1)))
+    group.max_select = Math.max(group.min_select || 1, Math.floor(Number(group.max_select || group.choice_count || 1)))
+    group.choice_count = Math.max(1, group.max_select)
+    group.selection_mode = 'custom'
+    return
   }
-  normalizeOptionQtyRule(option)
+  onGroupChoiceCountChange(group)
 }
 
-const onOptionRepeatableChange = (option = {}) => {
+const syncGroupCapacityForOption = (group = {}, option = {}) => {
+  const maxQty = Number(option.quantity_rule === 'fixed' ? option.default_qty : option.max_qty_per_order) || 1
+  if (maxQty <= 1) return
+  if (group.choice_mode === 'range') {
+    if (Number(group.max_select || 1) < maxQty) group.max_select = maxQty
+    if (Number(group.min_select || 0) > Number(group.max_select || 1)) group.min_select = group.max_select
+    group.choice_count = Math.max(1, Number(group.max_select || 1))
+    return
+  }
+  if (Number(group.choice_count || 1) < maxQty) {
+    group.choice_count = maxQty
+    group.min_select = maxQty
+    group.max_select = maxQty
+  }
+}
+
+const normalizeGroupForEditor = (group = {}) => {
+  if (!group.choice_mode) {
+    group.choice_mode = Number(group.min_select ?? 1) === Number(group.max_select ?? 1) ? 'fixed' : 'range'
+  }
+  group.choice_count = normalizePositiveInt(group.choice_count ?? group.max_select ?? group.min_select, 1)
+  if (group.choice_mode === 'range') {
+    normalizeGroupRangeRule(group)
+  } else {
+    onGroupChoiceCountChange(group)
+  }
+  const options = Array.isArray(group.options) ? group.options : []
+  options.forEach((option) => {
+    option.quantity_rule = deriveOptionQuantityRule(option)
+    normalizeOptionQtyRule(option)
+    syncGroupCapacityForOption(group, option)
+  })
+}
+
+const onOptionQuantityRuleChange = (group = {}, option = {}, value = '') => {
+  option.quantity_rule = value || 'single'
+  if (option.quantity_rule === 'adjustable') {
+    option.max_qty_per_order = Math.max(2, Number(option.max_qty_per_order || 2))
+  } else if (option.quantity_rule === 'fixed') {
+    option.default_qty = Math.max(2, Number(option.default_qty || option.max_qty_per_order || 2))
+  }
   normalizeOptionQtyRule(option)
+  syncGroupCapacityForOption(group, option)
+}
+
+const onAdjustableMaxQtyChange = (group = {}, option = {}) => {
+  option.quantity_rule = 'adjustable'
+  normalizeOptionQtyRule(option)
+  syncGroupCapacityForOption(group, option)
+}
+
+const onFixedQtyChange = (group = {}, option = {}) => {
+  option.quantity_rule = 'fixed'
+  normalizeOptionQtyRule(option)
+  syncGroupCapacityForOption(group, option)
 }
 
 const optionRuleText = (option = {}) => {
-  const defaultQty = Math.max(1, Number(option.default_qty || 1))
-  if (Number(option.repeatable || 0) === 1) {
-    const maxQty = Math.max(defaultQty, Number(option.max_qty_per_order || defaultQty))
-    return `默认 ${defaultQty} 件，用户最多可选 ${maxQty} 件`
-  }
-  return '用户只能选择 1 件'
+  const rule = deriveOptionQuantityRule(option)
+  if (rule === 'fixed') return `固定 ${Math.max(2, Number(option.default_qty || 2))} 件`
+  if (rule === 'adjustable') return `最多 ${Math.max(2, Number(option.max_qty_per_order || 2))} 件`
+  return '单件'
 }
 
 const addGroup = () => {
@@ -351,6 +447,7 @@ const applyStarterTemplate = async (type) => {
   const next = template.map((item, index) => createGroup({
     group_title: item.title,
     group_key: `step_${index + 1}`,
+    choice_mode: 'fixed',
     choice_count: item.count,
     min_select: item.count,
     max_select: item.count,
@@ -528,10 +625,12 @@ onMounted(() => {
   if (props.groups.length === 0) {
     props.groups.push(createGroup())
   }
+  props.groups.forEach(normalizeGroupForEditor)
   preloadSkusForGroups(props.groups)
 })
 
 watch(() => props.groups, (next) => {
+  next?.forEach(normalizeGroupForEditor)
   preloadSkusForGroups(next)
 })
 </script>
@@ -652,6 +751,7 @@ watch(() => props.groups, (next) => {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
   margin: 8px 0 14px;
   color: #374151;
   font-size: 13px;
@@ -697,7 +797,7 @@ watch(() => props.groups, (next) => {
 
 .option-form-grid {
   display: grid;
-  grid-template-columns: minmax(300px, 1.6fr) minmax(180px, 0.9fr) minmax(150px, 0.55fr) minmax(150px, 0.6fr) minmax(150px, 0.55fr);
+  grid-template-columns: minmax(300px, 1fr) minmax(110px, auto);
   gap: 12px;
   align-items: flex-start;
 }
@@ -721,17 +821,20 @@ watch(() => props.groups, (next) => {
 }
 
 .option-simple-row {
-  display: grid;
-  grid-template-columns: minmax(260px, 1.1fr) minmax(180px, 1fr) auto;
+  display: flex;
+  flex-wrap: wrap;
   gap: 12px;
   align-items: center;
 }
 
 .option-product-select {
-  width: 100%;
+  flex: 1 1 260px;
+  min-width: 220px;
+  width: auto;
 }
 
 .option-summary {
+  flex: 1 1 160px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -756,11 +859,33 @@ watch(() => props.groups, (next) => {
   color: #8a5f14;
 }
 
+.option-quantity-rule {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.option-quantity-extra {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #374151;
+  font-size: 12px;
+}
+
+.option-small-number {
+  width: 112px;
+}
+
 .option-actions {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 @media (max-width: 1180px) {
@@ -794,9 +919,24 @@ watch(() => props.groups, (next) => {
   }
 
   .advanced-rule-grid,
-  .option-form-grid,
-  .option-simple-row {
+  .option-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .option-simple-row {
+    align-items: stretch;
+  }
+
+  .option-product-select,
+  .option-summary,
+  .option-quantity-rule,
+  .option-actions {
+    flex-basis: 100%;
+    width: 100%;
+  }
+
+  .option-actions {
+    margin-left: 0;
   }
 
   .group-editor-head,

@@ -310,12 +310,28 @@ function resolveSupplyPriceByRole(product = {}, sku = {}, roleLevel = 0) {
 
 async function findStation(stationId) {
     if (!stationId) return null;
-    const num = toNumber(stationId, NaN);
-    const [legacy, doc] = await Promise.all([
-        Number.isFinite(num) ? db.collection('stations').where({ id: num }).limit(1).get().catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
-        db.collection('stations').doc(String(stationId)).get().catch(() => ({ data: null }))
-    ]);
-    return legacy.data[0] || doc.data || null;
+    const queryValues = normalizeLookupQueryValues([stationId]);
+    const queryFields = ['id', '_legacy_id', 'legacy_id', 'station_id', 'station_key'];
+    const docTask = db.collection('stations').doc(String(stationId)).get().catch(() => ({ data: null }));
+    const queryTasks = [];
+    queryValues.forEach((value) => {
+        queryFields.forEach((field) => {
+            queryTasks.push(
+                db.collection('stations')
+                    .where({ [field]: value })
+                    .limit(1)
+                    .get()
+                    .catch(() => ({ data: [] }))
+            );
+        });
+    });
+    const [...queryResults] = await Promise.all(queryTasks);
+    for (const result of queryResults) {
+        if (result.data && result.data[0]) return result.data[0];
+    }
+    const doc = await docTask;
+    if (doc.data) return doc.data;
+    return null;
 }
 
 function parseConfigValue(row, fallback) {
@@ -455,7 +471,7 @@ async function getPointDeductionRule() {
     );
     return {
         yuanPerPoint: yuanPerPoint > 0 ? yuanPerPoint : 0.1,
-        maxRatio: maxRatio > 0 ? Math.max(0.7, Math.min(1, maxRatio)) : 0.7
+        maxRatio: maxRatio > 0 ? Math.min(1, maxRatio) : 0.7
     };
 }
 
@@ -539,12 +555,29 @@ function normalizeLookupTokens(values = []) {
     return list;
 }
 
+function normalizeLookupQueryValues(values = []) {
+    const seen = new Set();
+    const output = [];
+    normalizeLookupTokens(values).forEach((token) => {
+        [token, Number.isFinite(Number(token)) ? Number(token) : null].forEach((value) => {
+            if (!hasValue(value)) return;
+            const key = `${typeof value}:${value}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            output.push(value);
+        });
+    });
+    return output;
+}
+
 function buildStationLookupValues(station = {}, extraValues = []) {
     return normalizeLookupTokens([
         station?._id,
         station?.id,
         station?._legacy_id,
+        station?.legacy_id,
         station?.station_id,
+        station?.station_key,
         extraValues
     ]);
 }
@@ -1217,7 +1250,6 @@ async function rollbackOrderCreateSideEffects({
             await db.collection('users').where({ openid }).update({
                 data: {
                     points: _.inc(points),
-                    growth_value: _.inc(points),
                     updated_at: db.serverDate()
                 }
             });
@@ -1707,7 +1739,7 @@ async function createOrder(openid, orderData) {
         const pointDeductRes = await db.collection('users')
             .where({ openid, points: _.gte(actualPoints) })
             .update({
-                data: { points: _.inc(-actualPoints), growth_value: _.inc(-actualPoints), updated_at: db.serverDate() }
+                data: { points: _.inc(-actualPoints), updated_at: db.serverDate() }
             })
             .catch(() => ({ stats: { updated: 0 } }));
         if (!pointDeductRes.stats || pointDeductRes.stats.updated === 0) {
@@ -1728,7 +1760,7 @@ async function createOrder(openid, orderData) {
                     const pointDeductRes = await db.collection('users')
                         .where({ openid, points: _.gte(actualPoints) })
                         .update({
-                            data: { points: _.inc(-actualPoints), growth_value: _.inc(-actualPoints), updated_at: db.serverDate() }
+                            data: { points: _.inc(-actualPoints), updated_at: db.serverDate() }
                         });
                     if (!pointDeductRes.stats || pointDeductRes.stats.updated === 0) {
                         // 积分不足（被并发抢占），回退为不使用积分
@@ -2103,7 +2135,7 @@ const freshBalance = toNumber(u.agent_wallet_balance, 0);
                 if (actualPoints > 0) {
                     try {
                         await db.collection('users').where({ openid }).update({
-                            data: { points: _.inc(actualPoints), growth_value: _.inc(actualPoints), updated_at: db.serverDate() }
+                            data: { points: _.inc(actualPoints), updated_at: db.serverDate() }
                         });
                     } catch (ptsErr) {
                         console.error('[OrderCreate] ⚠️ 积分回滚失败(货款余额不足) openid=%s points=%s error=%s', openid, actualPoints, ptsErr.message);
@@ -2150,7 +2182,7 @@ const freshBalance = toNumber(u.agent_wallet_balance, 0);
         if (actualPts > 0) {
             try {
                 await db.collection('users').where({ openid }).update({
-                    data: { points: _.inc(actualPts), growth_value: _.inc(actualPts), updated_at: db.serverDate() }
+                    data: { points: _.inc(actualPts), updated_at: db.serverDate() }
                 });
             } catch (ptsErr) {
                 rollbackErrors.push({ step: 'points_rollback', error: ptsErr.message || String(ptsErr) });
@@ -2287,7 +2319,7 @@ const freshBalance = toNumber(u.agent_wallet_balance, 0);
                 await restoreCouponForCancelledOrder('货款余额不足（并发）');
                 if (actualPoints > 0) {
                     await db.collection('users').where({ openid }).update({
-                        data: { points: _.inc(actualPoints), growth_value: _.inc(actualPoints), updated_at: db.serverDate() }
+                        data: { points: _.inc(actualPoints), updated_at: db.serverDate() }
                     }).catch((ptsErr) => {
                         console.error('[OrderCreate] ⚠️ 积分回滚失败(货款不足) openid=%s points=%s error=%s', openid, actualPoints, ptsErr.message);
                     });
@@ -2373,7 +2405,7 @@ const freshBalance = toNumber(u.agent_wallet_balance, 0);
                 await restoreCouponForCancelledOrder('货款支付处理失败');
                 if (actualPoints > 0) {
                     await db.collection('users').where({ openid }).update({
-                        data: { points: _.inc(actualPoints), growth_value: _.inc(actualPoints), updated_at: db.serverDate() }
+                        data: { points: _.inc(actualPoints), updated_at: db.serverDate() }
                     }).catch((ptsErr) => {
                         console.error('[OrderCreate] ⚠️ 积分回滚失败(货款支付) openid=%s points=%s error=%s', openid, actualPoints, ptsErr.message);
                     });

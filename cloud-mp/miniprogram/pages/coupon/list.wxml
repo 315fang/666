@@ -1,12 +1,16 @@
 <!--pages/coupon/list.wxml - 我的优惠券-->
 <view class="container">
   <!-- 导航 -->
-  <view class="nav-bar glass-dark" style="padding-top: {{navTopPadding}}px;">
-    <view class="nav-back ripple" bindtap="onBack">
-      <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
+  <view class="nav-bar" style="padding-top: {{navTopPadding}}px;">
+    <view class="nav-inner" style="height: {{navBarHeight}}px;">
+      <view class="nav-back ripple" bindtap="onBack">
+        <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
+      </view>
+      <view class="nav-title">
+        <text class="nav-title-text">我的优惠券</text>
+      </view>
+      <view class="nav-placeholder"></view>
     </view>
-    <text class="nav-title">我的优惠券</text>
-    <view class="nav-placeholder"/>
   </view>
 
   <!-- Tab 切换 -->

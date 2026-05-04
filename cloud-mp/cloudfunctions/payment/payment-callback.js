@@ -38,8 +38,8 @@ const {
 const DEFAULT_BRANCH_AGENT_POLICY = {
     enabled: true,
     region_reward_tiers: [
-        { threshold: 0, rate: 0.01, label: '0元' },
-        { threshold: 100000, rate: 0.02, label: '10万' },
+        { threshold: 100000, rate: 0.01, label: '10万' },
+        { threshold: 300000, rate: 0.02, label: '30万' },
         { threshold: 1000000, rate: 0.03, label: '100万' }
     ]
 };
@@ -109,16 +109,18 @@ const DEFAULT_PEER_BONUS_CONFIG = {
         level_3: { pct: 10 },
         level_4: { pct: 20 },
         level_5: { pct: 20 },
+        level_6: { pct: 20 },
     },
     team: {
         level_3: { cash: 100, exchange_coupons: 2, coupon_product_value: 399, unlock_reward: 160, allowed_product_ids: [], allowed_sku_ids: [], exchange_title: '' },
         level_4: { cash: 2400, exchange_coupons: 15, coupon_product_value: 399, unlock_reward: 160, allowed_product_ids: [], allowed_sku_ids: [], exchange_title: '' },
         level_5: { cash: 0, exchange_coupons: 0, coupon_product_value: 0, unlock_reward: 0, allowed_product_ids: [], allowed_sku_ids: [], exchange_title: '' },
+        level_6: { cash_pct: 20, cash: 0, exchange_coupons: 0, coupon_product_value: 0, unlock_reward: 0, allowed_product_ids: [], allowed_sku_ids: [], exchange_title: '' },
     },
     refund_dev_fee_pct: 1.5,
     // 兼容旧格式
-    level_1: 0, level_2: 0, level_3: 100, level_4: 2000, level_5: 0,
-    product_sets_3: 2, product_sets_4: 15, product_sets_5: 0
+    level_1: 0, level_2: 0, level_3: 100, level_4: 2000, level_5: 0, level_6: 0,
+    product_sets_3: 2, product_sets_4: 15, product_sets_5: 0, product_sets_6: 0
 };
 
 const DEFAULT_POINT_RULES = {
@@ -578,12 +580,28 @@ function isEffectiveUpgradeOrder(order = {}, effectiveDays = DEFAULT_AGENT_UPGRA
     return confirmedAt <= cutoff;
 }
 
+function getOrderNetGrowthForUpgrade(order = {}) {
+    const earned = Math.max(0, Math.floor(toNumber(order.growth_earned, 0)));
+    const clawedBack = Math.max(0, Math.floor(toNumber(order.growth_clawback_total, 0)));
+    return Math.max(0, earned - clawedBack);
+}
+
 async function getEffectiveOrderSales(openid, effectiveDays = DEFAULT_AGENT_UPGRADE_RULES.effective_order_days) {
     const rows = await getAllOrdersByOpenid(openid);
     return roundMoney(rows.reduce((sum, row) => {
         if (!isEffectiveUpgradeOrder(row, effectiveDays)) return sum;
         return sum + toNumber(row.pay_amount ?? row.actual_price ?? row.total_amount, 0);
     }, 0));
+}
+
+async function getStableUpgradeGrowth(openid, currentGrowthValue = 0, effectiveDays = DEFAULT_AGENT_UPGRADE_RULES.effective_order_days) {
+    const rows = await getAllOrdersByOpenid(openid);
+    const unstableOrderGrowth = rows.reduce((sum, row) => {
+        const netGrowth = getOrderNetGrowthForUpgrade(row);
+        if (netGrowth <= 0) return sum;
+        return isEffectiveUpgradeOrder(row, effectiveDays) ? sum : sum + netGrowth;
+    }, 0);
+    return Math.max(0, Math.floor(toNumber(currentGrowthValue, 0) - unstableOrderGrowth));
 }
 
 function isGrowthRuleMet(growthValue, target) {
@@ -633,8 +651,8 @@ function deriveEligibleRoleLevel(currentRoleLevel = 0, effectiveSales = 0, direc
     // B3 晋级：推荐 3 个 B2 或 30 个 B1 或充值 198000
     const b2OrAboveCount = directMembers.filter((member) => toNumber(member.role_level ?? member.distributor_level, 0) >= 4).length;
     if (
-        b2OrAboveCount >= toNumber(upgradeRules.b3_referee_b2_count, 3)
-        || b1OrAboveCount >= toNumber(upgradeRules.b3_referee_b1_count, 30)
+        b2OrAboveCount >= toNumber(upgradeRules.b3_referee_b2_count, DEFAULT_AGENT_UPGRADE_RULES.b3_referee_b2_count)
+        || b1OrAboveCount >= toNumber(upgradeRules.b3_referee_b1_count, DEFAULT_AGENT_UPGRADE_RULES.b3_referee_b1_count)
         || rechargeTotal >= toNumber(upgradeRules.b3_recharge, DEFAULT_AGENT_UPGRADE_RULES.b3_recharge)
     ) {
         nextRoleLevel = Math.max(nextRoleLevel, 5);
@@ -934,16 +952,23 @@ function normalizeBranchAgentPolicy(rawPolicy = {}) {
 
 function isLegacyDefaultRegionRewardTiers(tiers = []) {
     if (!Array.isArray(tiers) || tiers.length !== 3) return false;
-    const legacy = [
-        { threshold: 100000, rate: 0.01 },
-        { threshold: 300000, rate: 0.02 },
-        { threshold: 1000000, rate: 0.03 }
+    const legacyCandidates = [
+        [
+            { threshold: 100000, rate: 0.01 },
+            { threshold: 300000, rate: 0.02 },
+            { threshold: 1000000, rate: 0.03 }
+        ],
+        [
+            { threshold: 0, rate: 0.01 },
+            { threshold: 100000, rate: 0.02 },
+            { threshold: 1000000, rate: 0.03 }
+        ]
     ];
-    return legacy.every((expected, index) => {
+    return legacyCandidates.some((legacy) => legacy.every((expected, index) => {
         const tier = tiers[index] || {};
         return toNumber(tier.threshold, -1) === expected.threshold
             && Math.abs(toNumber(tier.rate, -1) - expected.rate) < 0.000001;
-    });
+    }));
 }
 
 async function fetchCollectionRows(collectionName, whereClause = null, maxRows = 5000) {
@@ -1251,7 +1276,15 @@ async function ensureAgentRoleSynced(orderId, order) {
     }
 
     try {
-        return await _doRoleSync(orderId, order);
+        const result = await _doRoleSync(orderId, order);
+        if (!result || result.upgraded !== true) {
+            await db.collection('orders').doc(orderId).update({
+                data: { role_synced_at: _.remove(), updated_at: db.serverDate() }
+            }).catch((unlockErr) => {
+                console.error('[RoleSync] 未晋升锁释放失败:', unlockErr.message);
+            });
+        }
+        return result;
     } catch (err) {
         // 锁后失败：回滚幂等标记，允许重试
         try {
@@ -1272,17 +1305,19 @@ async function _doRoleSync(orderId, order) {
     const { upgradeRules, memberLevels, piggyBank } = await loadAgentRuntimeConfig();
     if (upgradeRules.enabled === false) return { skipped: true };
 
-    const [directMembers, rechargeTotal, effectiveSales] = await Promise.all([
+    const effectiveDays = toNumber(upgradeRules.effective_order_days, DEFAULT_AGENT_UPGRADE_RULES.effective_order_days);
+    const growthValue = toNumber(user.growth_value, 0);
+    const [directMembers, rechargeTotal, effectiveSales, upgradeGrowthValue] = await Promise.all([
         getDirectMembers(user),
         getRechargeTotal(order.openid),
-        getEffectiveOrderSales(order.openid, toNumber(upgradeRules.effective_order_days, DEFAULT_AGENT_UPGRADE_RULES.effective_order_days))
+        getEffectiveOrderSales(order.openid, effectiveDays),
+        getStableUpgradeGrowth(order.openid, growthValue, effectiveDays)
     ]);
 
     const currentRoleLevel = toNumber(user.role_level ?? user.distributor_level ?? user.level, 0);
-    const growthValue = toNumber(user.growth_value, 0);
-    const nextRoleLevel = deriveEligibleRoleLevel(currentRoleLevel, effectiveSales, directMembers, rechargeTotal, upgradeRules, growthValue);
+    const nextRoleLevel = deriveEligibleRoleLevel(currentRoleLevel, effectiveSales, directMembers, rechargeTotal, upgradeRules, upgradeGrowthValue);
     if (nextRoleLevel <= currentRoleLevel) {
-        return { skipped: true, currentRoleLevel, nextRoleLevel };
+        return { skipped: true, currentRoleLevel, nextRoleLevel, growthValue, upgradeGrowthValue };
     }
 
     const previousParent = await findUserByAny(getUserReferrer(user));
@@ -1314,11 +1349,12 @@ async function _doRoleSync(orderId, order) {
             to_level: nextRoleLevel,
             from_name: DEFAULT_ROLE_NAMES[currentRoleLevel] || 'VIP用户',
             to_name: roleMeta.roleName,
-            trigger_type: resolveUpgradeTriggerType(nextRoleLevel, growthValue, rechargeTotal, upgradeRules),
+            trigger_type: resolveUpgradeTriggerType(nextRoleLevel, upgradeGrowthValue, rechargeTotal, upgradeRules),
             trigger_order_id: orderId,
             total_spent: effectiveSales,
             recharge_total: rechargeTotal,
             growth_value: growthValue,
+            upgrade_growth_value: upgradeGrowthValue,
             direct_member_count: directMembers.length,
             promoted_at: db.serverDate(),
             created_at: db.serverDate()
@@ -1488,9 +1524,6 @@ async function ensurePeerBonusCreated(orderId, order, roleSyncResult) {
     if (peerBonus.enabled === false) return { skipped: true };
 
     const bonusLevel = toNumber(roleSyncResult.nextRoleLevel, 0);
-    if (bonusLevel === 6) {
-        return { skipped: true, reason: 'lv6_no_same_level' };
-    }
     const targetParentRole = toNumber(parent.role_level ?? parent.distributor_level ?? parent.level, 0);
     if (bonusLevel <= 0 || targetParentRole !== bonusLevel) {
         return { skipped: true, reason: 'not_same_level' };
@@ -1503,8 +1536,8 @@ async function ensurePeerBonusCreated(orderId, order, roleSyncResult) {
         return { skipped: true, reason: 'already_created' };
     }
 
-    // 确定版本：用户个人设定 > 全局默认
-    const version = parent.peer_bonus_version || peerBonus.default_version || 'team';
+    // Lv6实体门店平级奖按业务图固定为一次性20%现金，不走兑换券版本。
+    const version = bonusLevel === 6 ? 'store_cash' : (parent.peer_bonus_version || peerBonus.default_version || 'team');
     const upgradePayment = getOrderTotalAmount(order);
     const cooldownDays = toNumber(peerBonus.cooldown_days, 90);
     const releaseAt = new Date(Date.now() + cooldownDays * 24 * 60 * 60 * 1000);
@@ -1513,13 +1546,19 @@ async function ensurePeerBonusCreated(orderId, order, roleSyncResult) {
     let exchangeCoupons = 0;
     let description = '';
 
-    if (version === 'social') {
-        const socialConfig = (peerBonus.social || {})[`level_${bonusLevel}`] || {};
+    if (bonusLevel === 6) {
+        const teamConfig = (peerBonus.team || {}).level_6 || DEFAULT_PEER_BONUS_CONFIG.team.level_6;
+        const pct = toNumber(teamConfig.cash_pct, DEFAULT_PEER_BONUS_CONFIG.team.level_6.cash_pct);
+        amount = roundMoney(upgradePayment * pct / 100);
+        exchangeCoupons = 0;
+        description = `实体门店平级奖（${pct}%现金）：下级升级为 ${roleSyncResult.roleName}`;
+    } else if (version === 'social') {
+        const socialConfig = (peerBonus.social || {})[`level_${bonusLevel}`] || DEFAULT_PEER_BONUS_CONFIG.social[`level_${bonusLevel}`] || {};
         const pct = toNumber(socialConfig.pct, 0);
         amount = roundMoney(upgradePayment * pct / 100);
         description = `平级奖（社会版${pct}%）：下级升级为 ${roleSyncResult.roleName}`;
     } else {
-        const teamConfig = (peerBonus.team || {})[`level_${bonusLevel}`] || {};
+        const teamConfig = (peerBonus.team || {})[`level_${bonusLevel}`] || DEFAULT_PEER_BONUS_CONFIG.team[`level_${bonusLevel}`] || {};
         amount = roundMoney(toNumber(teamConfig.cash, peerBonus[`level_${bonusLevel}`] || 0));
         exchangeCoupons = toNumber(teamConfig.exchange_coupons, peerBonus[`product_sets_${bonusLevel}`] || 0);
         description = `平级奖（团队版）：下级升级为 ${roleSyncResult.roleName}`;
@@ -1652,7 +1691,6 @@ async function ensurePointsAwarded(orderId, order) {
         }
 
         const updates = { total_spent: _.inc(payAmount), order_count: _.inc(1), updated_at: db.serverDate() };
-        if (pointsEarned > 0) updates.points = _.inc(pointsEarned);
         if (growthEarned > 0) updates.growth_value = _.inc(growthEarned);
 
         const userUpdate = await db.collection('users').where({ openid: order.openid }).update({ data: updates });
@@ -1664,18 +1702,24 @@ async function ensurePointsAwarded(orderId, order) {
         const existingLog = await db.collection('point_logs')
             .where({ openid: order.openid, source: 'order_pay', order_id: orderId })
             .limit(1).get().catch(() => ({ data: [] }));
-        if (!existingLog.data || existingLog.data.length === 0) {
+        const releaseAt = pointsEarned > 0 ? getRewardPointsReleaseAt() : null;
+        if (pointsEarned > 0 && (!existingLog.data || existingLog.data.length === 0)) {
             await db.collection('point_logs').add({
                 data: {
                     openid: order.openid,
                     type: 'earn',
                     amount: pointsEarned,
+                    original_amount: pointsEarned,
                     source: 'order_pay',
+                    status: 'frozen',
                     order_id: orderId,
                     buyer_role: buyerRole,
                     multiplier: purchasePointsPerHundred,
-                    description: `订单支付获得${pointsEarned}积分（每100元赠送${purchasePointsPerHundred}积分）`,
+                    release_at: releaseAt,
+                    refund_deadline: releaseAt,
+                    description: `订单支付获得${pointsEarned}积分（退款保护期后入账，每100元赠送${purchasePointsPerHundred}积分）`,
                     created_at: db.serverDate(),
+                    updated_at: db.serverDate(),
                 },
             }).catch((err) => {
                 pointLogError = err.message || String(err);
@@ -1685,7 +1729,10 @@ async function ensurePointsAwarded(orderId, order) {
 
         const completionPatch = {
             points_earned: pointsEarned,
-            growth_earned: growthEarned
+            growth_earned: growthEarned,
+            reward_points_released_total: pointsEarned > 0 ? 0 : _.remove(),
+            points_award_status: pointsEarned > 0 ? 'frozen' : 'no_points',
+            points_release_at: releaseAt || _.remove()
         };
         const removeFields = ['points_award_error'];
         if (pointLogError) {
@@ -2488,6 +2535,36 @@ function deriveRefundRevertStatus(order = {}) {
                 : (order.paid_at ? 'paid' : 'pending_payment')));
 }
 
+function resolveGrowthClawbackBasis(order = {}) {
+    if (order.growth_earned !== undefined && order.growth_earned !== null && order.growth_earned !== '') {
+        return {
+            amount: Math.max(0, Math.floor(toNumber(order.growth_earned, 0))),
+            basis: 'order_growth_earned'
+        };
+    }
+    return {
+        amount: Math.max(0, Math.floor(getOrderTotalAmount(order))),
+        basis: 'legacy_pay_amount'
+    };
+}
+
+function resolveRewardPointsClawbackBasis(order = {}) {
+    const totalEarned = Math.max(0, Math.floor(toNumber(order.points_earned, 0)));
+    const status = pickString(order.points_award_status).toLowerCase();
+    const hasReleaseSnapshot = hasValue(order.reward_points_released_total)
+        || ['frozen', 'released', 'partially_released', 'cancelled'].includes(status);
+    if (!hasReleaseSnapshot) return totalEarned;
+    return Math.max(0, Math.min(totalEarned, Math.floor(toNumber(order.reward_points_released_total, 0))));
+}
+
+function getRewardPointsReleaseAt() {
+    const days = Math.max(
+        0,
+        Math.floor(toNumber(process.env.POINTS_REWARD_FREEZE_DAYS || process.env.REFUND_MAX_DAYS || process.env.COMMISSION_FREEZE_DAYS, 7))
+    );
+    return new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+}
+
 function getOrderTotalQuantity(order = {}) {
     const explicit = Math.max(0, toNumber(order.quantity, 0));
     if (explicit > 0) return explicit;
@@ -2643,6 +2720,7 @@ function buildOrderPatchAfterRefund(order = {}, refund = {}) {
             refundAmount: roundMoney(firstNumber([refund.amount, refund.refund_amount], 0)),
             rewardPointsClawback: Math.max(0, toNumber(refund.reward_points_clawback_amount, 0)),
             growthClawback: Math.max(0, toNumber(refund.growth_clawback_amount, 0)),
+            growthClawbackBasis: pickString(refund.growth_clawback_basis, 'already_applied'),
             patch: {
                 items: toArray(order.items),
                 refunded_quantity_total: toNumber(order.refunded_quantity_total, 0),
@@ -2677,10 +2755,9 @@ function buildOrderPatchAfterRefund(order = {}, refund = {}) {
             refunded_cash_amount: Math.min(item.cash_paid_allocated_amount, roundMoney(item.refunded_cash_amount + toNumber(matched.cash_refund_amount, 0)))
         };
     });
-    const totalPointsEarned = Math.max(0, toNumber(order.points_earned, 0));
-    const totalGrowthEarned = Math.max(0, Math.floor(
-        order.growth_earned != null ? toNumber(order.growth_earned, 0) : getOrderTotalAmount(order)
-    ));
+    const totalPointsEarned = resolveRewardPointsClawbackBasis(order);
+    const growthBasis = resolveGrowthClawbackBasis(order);
+    const totalGrowthEarned = growthBasis.amount;
     const rewardPointsClawedBefore = Math.max(0, toNumber(order.reward_points_clawback_total, 0));
     const growthClawedBefore = Math.max(0, toNumber(order.growth_clawback_total, 0));
     const rewardPointsClawback = isFullRefund
@@ -2695,6 +2772,7 @@ function buildOrderPatchAfterRefund(order = {}, refund = {}) {
         refundAmount,
         rewardPointsClawback,
         growthClawback,
+        growthClawbackBasis: growthBasis.basis,
         patch: {
             items: nextOrderItems,
             refunded_quantity_total: nextRefundedQuantity,
@@ -2746,6 +2824,12 @@ function buildRefundRuntime(refund = {}, order = null) {
     };
 }
 
+function isRefundCompletionConfirmed(refund = {}) {
+    const status = pickString(refund.status).toLowerCase();
+    const wxStatus = pickString(refund.wx_refund_status || refund.refund_status).toUpperCase();
+    return refund.refund_completion_confirmed === true || status === 'completed' || wxStatus === 'SUCCESS';
+}
+
 async function cancelPendingCommissionsForRefund(orderId, reason) {
     try {
         await db.collection('commissions')
@@ -2755,6 +2839,8 @@ async function cancelPendingCommissionsForRefund(orderId, reason) {
                     status: 'cancelled',
                     cancel_reason: reason,
                     cancelled_reason: reason,
+                    commission_cancel_scope: 'whole_order_on_any_refund',
+                    commission_cancel_policy: 'partial_refund_policy_v1',
                     updated_at: db.serverDate()
                 }
             });
@@ -2762,6 +2848,42 @@ async function cancelPendingCommissionsForRefund(orderId, reason) {
         console.error('[payment-callback] ⚠️ 取消退款待结算佣金失败', e.message);
         await db.collection('rollback_error_logs').add({ data: { module: 'payment-callback', operation: 'cancel_pending_commissions', error: e.message, order_id: orderId, created_at: db.serverDate() } }).catch(() => {});
     }
+}
+
+async function applySettledCommissionClawback(comm = {}) {
+    const amount = roundMoney(toNumber(comm.amount, 0));
+    const openid = pickString(comm.openid || comm.receiver_openid || comm.beneficiary_openid);
+    if (!openid || amount <= 0) return null;
+
+    const userRes = await db.collection('users')
+        .where({ openid })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    const user = userRes.data && userRes.data[0];
+    if (!user) return null;
+
+    const currentBalance = roundMoney(toNumber(user.commission_balance ?? user.balance, 0));
+    const currentDebt = roundMoney(toNumber(user.debt_amount, 0));
+    const paidFromBalance = roundMoney(Math.min(currentBalance, amount));
+    const debtAdded = roundMoney(amount - paidFromBalance);
+    const nextBalance = roundMoney(currentBalance - paidFromBalance);
+    const nextPatch = {
+        commission_balance: nextBalance,
+        balance: nextBalance,
+        total_earned: roundMoney(Math.max(0, toNumber(user.total_earned, 0) - paidFromBalance)),
+        debt_amount: roundMoney(currentDebt + debtAdded),
+        updated_at: db.serverDate()
+    };
+    if (debtAdded > 0) {
+        nextPatch.debt_reason = `退款追回佣金 ${pickString(comm.order_no || comm.order_id)}`;
+    }
+
+    await db.collection('users').where({ openid }).update({ data: nextPatch });
+    return {
+        debited: paidFromBalance,
+        debt_added: debtAdded
+    };
 }
 
 async function clawBackSettledCommissions(orderId) {
@@ -2779,22 +2901,29 @@ async function clawBackSettledCommissions(orderId) {
                     status: 'cancelled',
                     cancel_reason: '退款追回已结算佣金',
                     cancelled_reason: '退款追回已结算佣金',
+                    commission_cancel_scope: 'whole_order_on_any_refund',
+                    commission_cancel_policy: 'partial_refund_policy_v1',
                     clawed_back_at: db.serverDate(),
                     updated_at: db.serverDate()
                 }
             }).catch((err) => {
                 console.error('[payment-callback] ⚠️ 佣金取消状态更新失败', err.message);
                 return { stats: { updated: 0 } };
-            });
+        });
         if (!statusUpdate || !statusUpdate.stats || statusUpdate.stats.updated === 0) continue;
         try {
-            await db.collection('users').where({ openid: comm.openid }).update({
-                data: {
-                    commission_balance: _.inc(-commAmount),
-                    balance: _.inc(-commAmount),
-                    updated_at: db.serverDate()
-                }
-            });
+            const clawback = await applySettledCommissionClawback(comm);
+            if (clawback && comm._id) {
+                await db.collection('commissions').doc(String(comm._id)).update({
+                    data: {
+                        clawback_debited: clawback.debited,
+                        clawback_debt_added: clawback.debt_added,
+                        updated_at: db.serverDate()
+                    }
+                }).catch((err) => {
+                    console.error('[payment-callback] ⚠️ 佣金追回金额标记失败:', err.message);
+                });
+            }
         } catch (err) {
             console.error('[payment-callback] ⚠️ 追回已结算佣金余额失败:', err.message);
             await db.collection('rollback_error_logs').add({ data: { module: 'payment-callback', operation: 'clawback_commission_balance', openid: comm.openid, commission_id: String(comm._id), amount: commAmount, error: err.message, created_at: db.serverDate() } }).catch(() => {});
@@ -2844,6 +2973,7 @@ async function restoreRefundOrderInventory(orderId, order = {}, refund = {}) {
 async function reverseBuyerAssetsForRefund(orderId, order = {}, refund = {}) {
     if (!order || !order.openid) return;
     if (refund.buyer_assets_reversed_at) return;
+    if (!isRefundCompletionConfirmed(refund)) return;
     const settlement = buildOrderPatchAfterRefund(order, refund);
     const pointsDelta = settlement.rewardPointsClawback > 0 ? -settlement.rewardPointsClawback : 0;
     const growthDelta = settlement.growthClawback > 0 ? -settlement.growthClawback : 0;
@@ -2865,6 +2995,7 @@ async function reverseBuyerAssetsForRefund(orderId, order = {}, refund = {}) {
                 data: {
                     reward_points_clawback_amount: settlement.rewardPointsClawback,
                     growth_clawback_amount: settlement.growthClawback,
+                    growth_clawback_basis: settlement.growthClawbackBasis,
                     order_progress_applied_at: db.serverDate(),
                     buyer_assets_reversed_at: db.serverDate(),
                     updated_at: db.serverDate()
@@ -3082,9 +3213,14 @@ async function handleRefundCallback(refundData, eventType) {
                     }
 
                     if (order) {
-                        const settlement = buildOrderPatchAfterRefund(order, refund);
-                        await restoreRefundOrderInventory(canonicalOrderId, order, refund);
-                        await reverseBuyerAssetsForRefund(canonicalOrderId, order, refund);
+                        const completionRefund = {
+                            ...refund,
+                            refund_completion_confirmed: true,
+                            wx_refund_status: refundStatus
+                        };
+                        const settlement = buildOrderPatchAfterRefund(order, completionRefund);
+                        await restoreRefundOrderInventory(canonicalOrderId, order, completionRefund);
+                        await reverseBuyerAssetsForRefund(canonicalOrderId, order, completionRefund);
                         try {
                             await db.collection('orders').doc(canonicalOrderId).update({ data: settlement.patch });
                         } catch (e) {
@@ -3394,7 +3530,13 @@ module.exports = {
         resolvePointBenefitRoleLevel,
         ensurePointsAwarded,
         ensureCommissionsCreated,
+        ensurePeerBonusCreated,
+        clawBackSettledCommissions,
+        buildOrderPatchAfterRefund,
         getPaidPostProcessSkipReason,
-        shouldRunPaidOrderPostProcess
+        shouldRunPaidOrderPostProcess,
+        deriveEligibleRoleLevel,
+        getOrderNetGrowthForUpgrade,
+        getStableUpgradeGrowth
     }
 };

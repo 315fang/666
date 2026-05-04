@@ -24,7 +24,7 @@ const DEFAULT_MINI_PROGRAM_CONFIG = {
                 { index: 0, text: '商城首页' },
                 { index: 1, text: '全部商品' },
                 { index: 2, text: '热门活动' },
-                { index: 3, text: '我的会员' }
+                { index: 3, text: '我的' }
             ]
         }
     },

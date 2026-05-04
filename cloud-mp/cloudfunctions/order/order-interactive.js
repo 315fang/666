@@ -78,7 +78,7 @@ async function ensurePickupSubsidyCommission(order, verifierOpenid) {
         findOneByAnyId('stations', order.pickup_station_id)
     ]);
     const policy = {
-        enabled: false,
+        enabled: true,
         pickup_station_subsidy_enabled: true,
         pickup_station_reward_rate: 0.025,
         pickup_station_subsidy_amount: 0,
@@ -86,8 +86,7 @@ async function ensurePickupSubsidyCommission(order, verifierOpenid) {
     };
     if (!policy.enabled || !policy.pickup_station_subsidy_enabled || !station) return null;
 
-    const claimantId = station.pickup_claimant_id || station.pickup_claimant_openid || station.claimant_id || station.user_id || station.openid;
-    const claimant = claimantId ? await findOneByAnyId('users', claimantId) : null;
+    const claimant = await resolvePickupStationClaimant(station);
     if (!claimant?.openid) return null;
 
     const existing = await db.collection('commissions')
@@ -128,6 +127,22 @@ async function ensurePickupSubsidyCommission(order, verifierOpenid) {
     return { _id: result._id, amount };
 }
 
+async function resolvePickupStationClaimant(station) {
+    const claimantId = station.pickup_claimant_id || station.pickup_claimant_openid || station.claimant_id || station.user_id || station.openid;
+    const claimant = claimantId ? await findOneByAnyId('users', claimantId) : null;
+    if (claimant?.openid) return claimant;
+
+    const stationLookupIds = buildStationLookupValues(station);
+    const staffRes = await db.collection('station_staff')
+        .where({ status: 'active', role: 'manager' })
+        .limit(500)
+        .get()
+        .catch(() => ({ data: [] }));
+    const managerRow = (staffRes.data || []).find((row) => lookupValuesIntersect([row.station_id], stationLookupIds));
+    if (!managerRow) return null;
+    return findOneByAnyId('users', managerRow.openid || managerRow.user_id);
+}
+
 async function findOneByAnyId(collectionName, rawId) {
     if (!hasValue(rawId)) return null;
 
@@ -139,11 +154,19 @@ async function findOneByAnyId(collectionName, rawId) {
     const numericId = Number(id);
     if (Number.isFinite(numericId)) candidates.push(numericId);
 
+    const lookupConditions = [
+        { id: _.in(candidates) },
+        { _legacy_id: _.in(candidates) }
+    ];
+    if (collectionName === 'users') {
+        lookupConditions.push(
+            { openid: _.in(candidates) },
+            { user_id: _.in(candidates) }
+        );
+    }
+
     const res = await db.collection(collectionName)
-        .where(_.or([
-            { id: _.in(candidates) },
-            { _legacy_id: _.in(candidates) }
-        ]))
+        .where(_.or(lookupConditions))
         .limit(1)
         .get()
         .catch(() => ({ data: [] }));
@@ -209,7 +232,9 @@ function buildStationLookupValues(station = {}, extraValues = []) {
         station._id,
         station.id,
         station._legacy_id,
+        station.legacy_id,
         station.station_id,
+        station.station_key,
         ...extraValues
     ]);
 }
@@ -1534,7 +1559,6 @@ async function lotteryDraw(openid, params) {
             await db.collection('users').where({ openid }).update({
                 data: {
                     points: _.inc(points),
-                    growth_value: _.inc(points),
                     updated_at: db.serverDate(),
                 },
             });

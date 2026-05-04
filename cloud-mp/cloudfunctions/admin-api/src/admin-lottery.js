@@ -321,7 +321,6 @@ function createLotteryAdminSupport(deps = {}) {
         users[userIndex] = {
             ...users[userIndex],
             points: before + points,
-            growth_value: toNumber(users[userIndex].growth_value, 0) + points,
             updated_at: nowIso()
         };
         const log = {

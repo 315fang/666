@@ -20,7 +20,7 @@ const DEFAULT_MINI_PROGRAM_CONFIG = {
                 { index: 0, text: '商城首页' },
                 { index: 1, text: '全部商品' },
                 { index: 2, text: '热门活动' },
-                { index: 3, text: '我的会员' }
+                { index: 3, text: '我的' }
             ]
         }
     },
@@ -44,7 +44,10 @@ const DEFAULT_MINI_PROGRAM_CONFIG = {
         result_miss_title: '这次差一点点'
     },
     membership_config: {
-        login_agreement_hint: '登录后查看订单、积分、佣金等信息'
+        login_agreement_hint: '登录后查看订单、积分、佣金等信息',
+        growth_privileges_entry_text: '查看权益',
+        growth_privileges_page_title: '权益中心',
+        membership_center_page_title: '权益中心'
     },
     logistics_config: {
         shipping_mode: 'third_party',

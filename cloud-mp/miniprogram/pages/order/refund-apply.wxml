@@ -6,7 +6,7 @@
       <radio value="refund_only" checked="{{type === 'refund_only'}}" color="#0F172A" />
       <view class="type-info">
         <text class="type-name">仅退款</text>
-        <text class="type-desc">无需退货，直接退款</text>
+        <text class="type-desc">无需退货，审核通过后退款</text>
       </view>
     </label>
     <label class="type-item {{type === 'return_refund' ? 'active' : ''}}">
@@ -81,7 +81,7 @@
   </view>
   <view class="refund-only-tip" wx:if="{{type === 'refund_only'}}">
     <image class="tip-icon-img" src="/assets/icons/info.svg" mode="aspectFit"/>
-    <text>仅退款不退货，不恢复库存</text>
+    <text>仅退款不退货，不恢复库存，审核通过后退款</text>
   </view>
 
   <!-- 提交按钮 -->

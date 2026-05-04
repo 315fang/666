@@ -165,6 +165,65 @@ test('order detail carries product image candidates for expired snapshot images'
     }
 });
 
+test('shipped order tab also returns pickup orders waiting for verification', async () => {
+    const collections = {
+        orders: [
+            {
+                _id: 'express-shipped',
+                order_no: 'EXPRESS-SHIPPED',
+                openid: 'openid-1',
+                status: 'shipped',
+                product_id: 'product-1',
+                quantity: 1,
+                total_amount: 88,
+                pay_amount: 88,
+                created_at: '2026-05-02T10:00:00.000Z',
+                items: []
+            },
+            {
+                _id: 'pickup-pending',
+                order_no: 'PICKUP-PENDING',
+                openid: 'openid-1',
+                status: 'pickup_pending',
+                delivery_type: 'pickup',
+                product_id: 'product-1',
+                quantity: 1,
+                total_amount: 66,
+                pay_amount: 66,
+                created_at: '2026-05-03T10:00:00.000Z',
+                items: []
+            },
+            {
+                _id: 'paid-order',
+                order_no: 'PAID-ORDER',
+                openid: 'openid-1',
+                status: 'paid',
+                product_id: 'product-1',
+                quantity: 1,
+                total_amount: 55,
+                pay_amount: 55,
+                created_at: '2026-05-04T10:00:00.000Z',
+                items: []
+            }
+        ],
+        products: [],
+        commissions: [],
+        reviews: [],
+        configs: [],
+        app_configs: []
+    };
+    const { module: orderQuery, restore } = loadOrderQueryModule(collections);
+    try {
+        assert.deepEqual(orderQuery.resolveOrderStatusesForQuery('shipped'), ['shipped', 'pickup_pending']);
+        const result = await orderQuery.queryOrders('openid-1', { status: 'shipped', page: 1, limit: 10 });
+        assert.deepEqual(result.list.map((order) => order.id), ['pickup-pending', 'express-shipped']);
+        assert.equal(result.pagination.total, 2);
+        assert.equal(result.list[0].status_text, '待核销');
+    } finally {
+        restore();
+    }
+});
+
 test('order detail keeps large integer yuan pay amount for bundle orders', async () => {
     const collections = {
         orders: [{

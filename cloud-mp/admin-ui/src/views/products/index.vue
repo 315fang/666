@@ -115,7 +115,7 @@
             <el-option v-for="cat in categories" :key="cat.id" :label="cat.name" :value="cat.id" />
           </el-select>
         </el-form-item>
-        <el-form-item label="简介">
+        <el-form-item v-show="productAdvancedOpen" label="简介">
           <el-input v-model="form.description" type="textarea" :rows="2" placeholder="列表页显示的简短描述（选填）" />
         </el-form-item>
 
@@ -125,12 +125,7 @@
           <span class="section-tip">主图最多 5 张，详情图不限</span>
         </div>
         <p class="image-spec-hint">
-          小程序首页/分类/商品详情主图展示均为<strong>1:1 裁剪（aspectFill）</strong>。
-          轮播主图建议上传<strong>正方形</strong>，例如 <strong>1080×1080</strong> 或 <strong>750×750</strong>（宽边 ≥750，避免模糊）；
-          价格与卖点尽量放在<strong>中心安全区</strong>（四边预留约 8%，避免被裁切）。
-          竖版长海报、多文字说明请放在下方「详情图」（详情图可用任意比例，宽度建议 ≥750px）。
-          若素材<strong>自带四周深色/浅色边框</strong>，前端会原样显示，请在设计侧<strong>满版 1:1 导出</strong>、去掉画板留白。
-          <strong>PNG 左右或四角透明</strong>时，小程序会透出占位底色（已与首页卡片区同色）；要完全无「条带」请改 <strong>JPG</strong> 或在画布上<strong>铺实色底</strong>再导出。
+          主图建议上传 <strong>1:1 正方形</strong>，详情图可放长图。
         </p>
 
         <el-form-item label="轮播主图" prop="images">
@@ -178,7 +173,7 @@
           :closable="false"
           show-icon
           class="form-alert"
-          title="零售价、成本价为必填；B1/B2/B3 发货成本价用于代理履约扣货款和锁定利润口径。"
+          title="日常发布只需要填售价、成本和库存；其他规则按需展开高级配置。"
         />
 
         <el-row :gutter="16">
@@ -188,16 +183,29 @@
             </el-form-item>
           </el-col>
           <el-col :span="8">
-            <el-form-item label="市场原价">
-              <el-input-number v-model="form.market_price" :min="0" :precision="2" style="width:100%" placeholder="划线价，选填" />
-            </el-form-item>
-          </el-col>
-          <el-col :span="8">
             <el-form-item label="成本价" prop="cost_price">
               <el-input-number v-model="form.cost_price" :min="0.01" :precision="2" style="width:100%" placeholder="必填" />
             </el-form-item>
           </el-col>
+          <el-col :span="8">
+            <el-form-item label="总库存">
+              <el-input-number v-model="form.stock" :min="0" :precision="0" style="width:100%" @change="syncSingleSkuStockFromTotal({ force: true })" />
+            </el-form-item>
+          </el-col>
         </el-row>
+
+        <div class="advanced-toggle-panel">
+          <div>
+            <div class="advanced-toggle-title">高级配置</div>
+            <div class="advanced-toggle-sub">规格、代理成本、营销开关、佣金和展示细项</div>
+          </div>
+          <el-button plain @click="productAdvancedOpen = !productAdvancedOpen">
+            {{ productAdvancedOpen ? '收起' : '展开' }}
+          </el-button>
+        </div>
+
+        <el-collapse-transition>
+          <div v-show="productAdvancedOpen" class="product-advanced-block">
 
         <div class="form-section-title">代理发货成本价</div>
         <el-alert
@@ -227,8 +235,8 @@
 
         <el-row :gutter="16">
           <el-col :span="12">
-            <el-form-item label="总库存">
-              <el-input-number v-model="form.stock" :min="0" :precision="0" style="width:100%" @change="syncSingleSkuStockFromTotal({ force: true })" />
+            <el-form-item label="市场原价">
+              <el-input-number v-model="form.market_price" :min="0" :precision="2" style="width:100%" placeholder="划线价，选填" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -371,6 +379,9 @@
                 </el-form-item>
               </el-col>
             </el-row>
+          </div>
+        </el-collapse-transition>
+
           </div>
         </el-collapse-transition>
 
@@ -551,6 +562,7 @@ const formRef = ref(null)
 const submitting = ref(false)
 const skuEnabled = ref(false)
 const skuPriceOverride = ref(false)
+const productAdvancedOpen = ref(false)
 
 const defaultForm = () => ({
   id: null,
@@ -711,6 +723,7 @@ const openForm = (row) => {
     })
     skuEnabled.value = (row.skus?.length > 0)
     skuPriceOverride.value = hasCustomSkuPrice(nextSkus, row.retail_price)
+    productAdvancedOpen.value = false
     syncSingleSkuStockFromTotal()
     // 编辑已有商品时，后端可能返回带签名的临时预览 URL；
     // 表单里改存稳定引用，预览仍沿用当前可显示地址。
@@ -720,6 +733,7 @@ const openForm = (row) => {
     Object.assign(form, defaultForm())
     skuEnabled.value = false
     skuPriceOverride.value = false
+    productAdvancedOpen.value = false
   }
   formVisible.value = true
 }
@@ -987,6 +1001,31 @@ onMounted(() => { loadCategories() })
 
 /* 展开更多价格 */
 .toggle-row { margin: -8px 0 12px; }
+
+.advanced-toggle-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 4px 0 14px;
+  padding: 12px;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  background: #fafbfc;
+}
+.advanced-toggle-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+}
+.advanced-toggle-sub {
+  margin-top: 3px;
+  font-size: 12px;
+  color: #909399;
+}
+.product-advanced-block {
+  padding-top: 2px;
+}
 
 /* 图片行 */
 .img-row { display: flex; flex-wrap: wrap; gap: 8px; }

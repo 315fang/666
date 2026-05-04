@@ -36,6 +36,8 @@ export const deleteBranchAgentStation = (id) => request({ url: `/branch-agents/s
 export const getBranchAgentClaims = (params) => request({ url: '/branch-agents/claims', method: 'get', params })
 export const reviewBranchAgentClaim = (id, data) => request({ url: `/branch-agents/claims/${id}/review`, method: 'put', data })
 export const getBranchAgentEarnings = () => request({ url: '/branch-agents/earnings', method: 'get' })
+export const repairPickupServiceFeeCommissions = (data) => request({ url: '/commissions/repair-pickup-service-fee', method: 'post', data })
+export const settleStoreAnnualGoodsRewards = (data) => request({ url: '/store-benefits/annual-goods-rewards', method: 'post', data })
 
 export const getUpgradeApplications = (params) => request({ url: '/upgrade-applications', method: 'get', params })
 export const reviewUpgradeApplication = (id, data) => request({ url: `/upgrade-applications/${id}/review`, method: 'put', data })

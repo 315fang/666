@@ -59,11 +59,153 @@ function procurementStatusMeta(status = '') {
     return map[status] || { text: status || '未知', className: 'tag-info' };
 }
 
+function stockStatusMeta(status = '') {
+    const map = {
+        sufficient: { text: '库存充足', className: 'tag-ok' },
+        tight: { text: '库存紧张', className: 'tag-warn' },
+        insufficient: { text: '暂时无货', className: 'tag-danger' }
+    };
+    return map[status] || { text: '库存未知', className: 'tag-info' };
+}
+
+function buildInventorySkuText(item = {}) {
+    return [
+        item.sku_name,
+        item.sku_spec
+    ].map(compactText).filter(Boolean).join(' / ') || '默认规格';
+}
+
+function buildInventoryRows(rows = [], filter = 'all') {
+    const source = Array.isArray(rows) ? rows : [];
+    return filter === 'low' ? source.filter((item) => item.low_stock) : source;
+}
+
+function stockLogTypeMeta(type = '') {
+    const map = {
+        procure_in: { text: '采购入库', className: 'tag-ok' },
+        reserve: { text: '订单预占', className: 'tag-warn' },
+        release: { text: '释放预占', className: 'tag-info' },
+        pickup_consume: { text: '核销消耗', className: 'tag-danger' },
+        refund_restore: { text: '退货恢复', className: 'tag-ok' },
+        manual_adjust: { text: '后台调整', className: 'tag-info' }
+    };
+    return map[type] || { text: '库存变动', className: 'tag-info' };
+}
+
+function signedQuantityText(value) {
+    const quantity = Number(value || 0);
+    if (!Number.isFinite(quantity)) return '0';
+    return `${quantity > 0 ? '+' : ''}${quantity}`;
+}
+
+function buildInventoryEmptyText(inventory = [], procurements = []) {
+    if (inventory.length) return '当前筛选下没有库存预警。';
+    if (procurements.some((item) => item.status === 'pending_receive')) {
+        return '已有采购通过审批，等待后台确认入库后会形成门店库存。';
+    }
+    if (procurements.some((item) => item.status === 'pending_approval')) {
+        return '已有采购申请待审批，审批并确认入库后会形成门店库存。';
+    }
+    return '当前门店暂无库存记录，采购入库后会在这里显示。';
+}
+
+function buildWorkbenchView(data = {}, inventoryFilter = 'all') {
+    const summary = data.summary || {};
+    const pendingOrderCount = Number(summary.pending_order_count || 0);
+    const lowStockCount = Number(summary.inventory_low_stock_count || 0);
+    const procurementPendingCount = Number(summary.procurement_pending_count || 0);
+    const inventory = (data.inventory || []).map((item) => ({
+        ...item,
+        sku_display: buildInventorySkuText(item),
+        station_name: item.station_name || '未命名门店',
+        product_name: item.product_name || '未命名商品',
+        cost_price_text: money(item.cost_price),
+        updated_at_text: normalizeDate(item.updated_at),
+        stock_status_text: item.stock_status_text || stockStatusMeta(item.stock_status).text,
+        stock_tag_class: stockStatusMeta(item.stock_status).className
+    }));
+    const visibleInventory = buildInventoryRows(inventory, inventoryFilter);
+    const procurements = (data.procurements || []).map((item) => ({
+        ...item,
+        status_text: procurementStatusMeta(item.status).text,
+        status_class: procurementStatusMeta(item.status).className,
+        created_at_text: normalizeDate(item.created_at),
+        received_at_text: normalizeDate(item.received_at)
+    }));
+    const recentStockLogs = (data.recent_stock_logs || []).map((item) => {
+        const meta = stockLogTypeMeta(item.type);
+        return {
+            ...item,
+            type_text: item.type_text || meta.text,
+            type_class: meta.className,
+            quantity_text: item.quantity_text || signedQuantityText(item.quantity_delta ?? item.quantity),
+            created_at_text: normalizeDate(item.created_at),
+            sku_display: buildInventorySkuText(item),
+            station_name: item.station_name || '未命名门店',
+            product_name: item.product_name || '未命名商品'
+        };
+    });
+    return {
+        ...data,
+        pending_orders: (data.pending_orders || []).map((item) => ({
+            ...item,
+            pickup_verified_at_text: normalizeDate(item.pickup_verified_at),
+            service_fee_amount_text: money(item.service_fee_amount),
+            principal_return_amount_text: money(item.principal_return_amount)
+        })),
+        recent_verified_orders: (data.recent_verified_orders || []).map((item) => ({
+            ...item,
+            pickup_verified_at_text: normalizeDate(item.pickup_verified_at),
+            service_fee_amount_text: money(item.service_fee_amount),
+            principal_return_amount_text: money(item.principal_return_amount),
+            principal_reversal_amount_text: money(item.principal_reversal_amount)
+        })),
+        procurements,
+        inventory,
+        visible_inventory: visibleInventory,
+        recent_stock_logs: recentStockLogs,
+        inventory_empty_text: buildInventoryEmptyText(inventory, procurements),
+        summary: {
+            ...summary,
+            service_fee_total_text: money(summary.service_fee_total),
+            principal_return_total_text: money(summary.principal_return_total)
+        },
+        focus_cards: [
+            {
+                key: 'pending',
+                label: '待核销',
+                value: pendingOrderCount,
+                unit: '单',
+                level: pendingOrderCount > 0 ? 'focus-hot' : 'focus-calm',
+                hint: pendingOrderCount > 0 ? '优先处理顾客自提' : '暂无待处理订单'
+            },
+            {
+                key: 'inventory',
+                label: '库存预警',
+                value: lowStockCount,
+                unit: '项',
+                level: lowStockCount > 0 ? 'focus-warn' : 'focus-calm',
+                hint: lowStockCount > 0 ? '建议补货或确认库存' : '库存状态平稳'
+            },
+            {
+                key: 'procurement',
+                label: '采购在途',
+                value: procurementPendingCount,
+                unit: '单',
+                level: procurementPendingCount > 0 ? 'focus-info' : 'focus-calm',
+                hint: procurementPendingCount > 0 ? '等待审批或入库' : '暂无在途采购'
+            }
+        ]
+    };
+}
+
 Page({
     data: {
         loading: true,
         scope: null,
         workbench: null,
+        inventoryFilter: 'all',
+        inventoryFilterLabel: '全部库存',
         products: [],
         skuOptions: [],
         procurementSubmitting: false,
@@ -121,37 +263,11 @@ Page({
                 nextForm.station_name = firstStation.name || '';
                 Object.assign(nextForm, receiveSnapshot);
             }
+            const workbench = buildWorkbenchView(data, this.data.inventoryFilter);
             this.setData({
                 loading: false,
                 scope,
-                workbench: {
-                    ...data,
-                    pending_orders: (data.pending_orders || []).map((item) => ({
-                        ...item,
-                        pickup_verified_at_text: normalizeDate(item.pickup_verified_at),
-                        service_fee_amount_text: money(item.service_fee_amount),
-                        principal_return_amount_text: money(item.principal_return_amount)
-                    })),
-                    recent_verified_orders: (data.recent_verified_orders || []).map((item) => ({
-                        ...item,
-                        pickup_verified_at_text: normalizeDate(item.pickup_verified_at),
-                        service_fee_amount_text: money(item.service_fee_amount),
-                        principal_return_amount_text: money(item.principal_return_amount),
-                        principal_reversal_amount_text: money(item.principal_reversal_amount)
-                    })),
-                    procurements: (data.procurements || []).map((item) => ({
-                        ...item,
-                        status_text: procurementStatusMeta(item.status).text,
-                        status_class: procurementStatusMeta(item.status).className,
-                        created_at_text: normalizeDate(item.created_at),
-                        received_at_text: normalizeDate(item.received_at)
-                    })),
-                    summary: {
-                        ...(data.summary || {}),
-                        service_fee_total_text: money(data.summary?.service_fee_total),
-                        principal_return_total_text: money(data.summary?.principal_return_total)
-                    }
-                },
+                workbench,
                 procurementForm: nextForm
             });
         } catch (e) {
@@ -162,6 +278,22 @@ Page({
                 loading: false
             });
         }
+    },
+
+    toggleInventoryFilter(e) {
+        const filter = e.currentTarget.dataset.filter === 'low' ? 'low' : 'all';
+        if (filter === this.data.inventoryFilter) return;
+        const workbench = this.data.workbench
+            ? {
+                ...this.data.workbench,
+                visible_inventory: buildInventoryRows(this.data.workbench.inventory, filter)
+            }
+            : null;
+        this.setData({
+            inventoryFilter: filter,
+            inventoryFilterLabel: filter === 'low' ? '只看预警' : '全部库存',
+            workbench
+        });
     },
 
     async loadProducts(keyword = '') {

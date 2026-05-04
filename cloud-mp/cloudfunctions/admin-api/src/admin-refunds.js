@@ -67,6 +67,82 @@ function registerRefundRoutes(app, deps) {
                 : name);
     }
 
+    function parseConfigValue(row, fallback) {
+        if (!row) return fallback;
+        const value = row.config_value !== undefined ? row.config_value : row.value;
+        if (value === undefined || value === null || value === '') return fallback;
+        if (typeof value === 'string') {
+            try { return JSON.parse(value); } catch (_) { return fallback; }
+        }
+        return value;
+    }
+
+    function getPeerBonusConfigSnapshot() {
+        const configRows = [...getCollection('configs'), ...getCollection('app_configs')];
+        const row = configRows.find((item) => ['agent_system_peer_bonus', 'agent_system_peer-bonus'].includes(pickString(item.config_key || item.key)));
+        return parseConfigValue(row, {}) || {};
+    }
+
+    function resolveRefundDevFeeRecipient(orderId, order = {}) {
+        const rows = getCollection('commissions');
+        const peerBonus = rows.find((row) => (
+            pickString(row.type) === 'same_level'
+            && toNumber(row.bonus_role_level || row.level, 0) === 6
+            && (
+                pickString(row.order_id) === pickString(orderId)
+                || (order.order_no && pickString(row.order_no) === pickString(order.order_no))
+            )
+            && pickString(row.openid || row.receiver_openid || row.beneficiary_openid || row.user_id)
+        ));
+        if (!peerBonus) return null;
+        const openid = pickString(peerBonus.openid || peerBonus.receiver_openid || peerBonus.beneficiary_openid || peerBonus.user_id);
+        return {
+            openid,
+            user_id: pickString(peerBonus.user_id || openid),
+            source_commission_id: pickString(peerBonus._id || peerBonus.id),
+            source_commission_amount: roundMoney(toNumber(peerBonus.amount, 0)),
+            from_openid: pickString(order.openid || order.buyer_openid || order.user_id)
+        };
+    }
+
+    function ensureRefundDevFeeRecord(orderId, order = {}, refund = {}) {
+        const refundId = pickString(refund._id || refund.id || refund.refund_id);
+        if (!refundId) return { skipped: true, reason: 'missing_refund_id' };
+        const refundAmount = roundMoney(toNumber(refund.amount ?? refund.refund_amount, 0));
+        if (refundAmount <= 0) return { skipped: true, reason: 'non_positive_refund' };
+        const rows = getCollection('commissions');
+        const existing = rows.find((row) => pickString(row.type) === 'refund_dev_fee' && pickString(row.refund_id) === refundId);
+        if (existing) return { skipped: true, existing: true, id: primaryId(existing) };
+        const peerBonus = getPeerBonusConfigSnapshot();
+        const pct = Math.max(0, toNumber(peerBonus.refund_dev_fee_pct, 1.5));
+        const amount = roundMoney(refundAmount * pct / 100);
+        if (amount <= 0) return { skipped: true, reason: 'zero_amount', pct };
+        const recipient = resolveRefundDevFeeRecipient(orderId, order);
+        if (!recipient) return { skipped: true, reason: 'missing_store_peer_bonus', pct };
+        const row = {
+            id: `refund-dev-fee-${refundId}`,
+            openid: recipient.openid,
+            user_id: recipient.user_id,
+            from_openid: recipient.from_openid || pickString(refund.openid),
+            order_id: orderId,
+            order_no: pickString(order.order_no || refund.order_no),
+            refund_id: refundId,
+            refund_no: pickString(refund.refund_no),
+            amount,
+            type: 'refund_dev_fee',
+            status: 'recorded',
+            refund_amount: refundAmount,
+            refund_dev_fee_pct: pct,
+            source_commission_id: recipient.source_commission_id,
+            source_commission_amount: recipient.source_commission_amount,
+            description: `退款开发费：退款金额${refundAmount.toFixed(2)}元 * ${pct}%`,
+            created_at: nowIso(),
+            updated_at: nowIso()
+        };
+        saveCollection('commissions', [...rows, row]);
+        return { created: true, id: row.id, amount, pct };
+    }
+
     async function claimRefundExecution(refund, lookupId, processingData) {
         const docId = pickString(refund?._id || refund?.id);
         if (!docId) return { ok: false, message: '退款记录缺少文档 ID' };
@@ -564,12 +640,12 @@ function registerRefundRoutes(app, deps) {
                 }
 
                 await cancelCommissionsForOrder(orderId, '货款退款完成，佣金作废');
+                ensureRefundDevFeeRecord(orderId, order, refund);
                 restoreOrderStockForRefund(orderId, refund);
                 pickupStockAdmin?.restorePickupStockForRefund?.(order, refund);
                 await Promise.resolve(pickupStockAdmin?.rollbackPickupPrincipalForRefund?.(order, refund)).catch((err) => { console.error('[admin-refunds] ⚠️ 回滚门店进货本金失败:', err.message || err); });
-                const settlement = await refundOrderExtras(orderId, refund);
-
                 const completedData = { status: 'completed', completed_at: nowIso(), updated_at: nowIso() };
+                const settlement = await refundOrderExtras(orderId, { ...refund, ...completedData, refund_completion_confirmed: true });
                 const refundPersisted = await persistPatchedRow('refunds', req.params.id, refund, completedData);
                 if (!refundPersisted.ok) throw new Error('退款记录更新失败');
 
@@ -651,12 +727,12 @@ function registerRefundRoutes(app, deps) {
                 });
 
                 await cancelCommissionsForOrder(orderId, '退款完成，佣金作废');
+                ensureRefundDevFeeRecord(orderId, order, refund);
                 restoreOrderStockForRefund(orderId, refund);
                 pickupStockAdmin?.restorePickupStockForRefund?.(order, refund);
                 await Promise.resolve(pickupStockAdmin?.rollbackPickupPrincipalForRefund?.(order, refund)).catch((err) => { console.error('[admin-refunds] ⚠️ 回滚门店进货本金失败:', err.message || err); });
-                const settlement = await refundOrderExtras(orderId, refund);
-
                 const completedData = { status: 'completed', completed_at: nowIso(), updated_at: nowIso() };
+                const settlement = await refundOrderExtras(orderId, { ...refund, ...completedData, refund_completion_confirmed: true });
                 const refundPersisted = await persistPatchedRow('refunds', req.params.id, refund, completedData);
                 if (!refundPersisted.ok) {
                     throw new Error('退款记录更新失败');
@@ -697,12 +773,12 @@ function registerRefundRoutes(app, deps) {
 
                 if (wxStatus === 'SUCCESS') {
                     await cancelCommissionsForOrder(orderId, '退款完成，佣金作废');
+                    ensureRefundDevFeeRecord(orderId, order, refund);
                     restoreOrderStockForRefund(orderId, refund);
                     pickupStockAdmin?.restorePickupStockForRefund?.(order, refund);
                     await Promise.resolve(pickupStockAdmin?.rollbackPickupPrincipalForRefund?.(order, refund)).catch((err) => { console.error('[admin-refunds] ⚠️ 回滚门店进货本金失败:', err.message || err); });
-                    const settlement = await refundOrderExtras(orderId, refund);
-
                     const completedData = { status: 'completed', completed_at: nowIso(), wx_refund_id: wxRefundId, wx_status: wxStatus, updated_at: nowIso() };
+                    const settlement = await refundOrderExtras(orderId, { ...refund, ...completedData, refund_completion_confirmed: true });
                     const refundPersisted = await persistPatchedRow('refunds', req.params.id, refund, completedData);
                     if (!refundPersisted.ok) throw new Error('退款记录更新失败');
                     const orderPersisted = await persistPatchedRow('orders', orderId, order, { ...settlement.patch, updated_at: nowIso() });
@@ -866,10 +942,11 @@ function registerRefundRoutes(app, deps) {
                 if (!refundPersisted.ok) throw new Error('退款回调更新失败');
 
                 await cancelCommissionsForOrder(orderId, '退款完成，佣金作废');
+                ensureRefundDevFeeRecord(orderId, order || {}, refund);
                 restoreOrderStockForRefund(orderId, refund);
                 pickupStockAdmin?.restorePickupStockForRefund?.(order, refund);
                 await Promise.resolve(pickupStockAdmin?.rollbackPickupPrincipalForRefund?.(order, refund)).catch((err) => { console.error('[admin-refunds] ⚠️ 回滚门店进货本金失败:', err.message || err); });
-                const settlement = await refundOrderExtras(orderId, refund);
+                const settlement = await refundOrderExtras(orderId, { ...refund, ...refundCompleteData, refund_completion_confirmed: true });
 
                 if (order) {
                     const orderPersisted = await persistPatchedRow('orders', orderId, order, { ...settlement.patch, updated_at: nowIso() });

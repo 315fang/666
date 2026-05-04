@@ -80,6 +80,7 @@ function createCloudBaseStore(options) {
         'goods_fund_logs',
         'upgrade_piggy_bank_logs',
         'station_procurement_orders',
+        'store_annual_goods_rewards',
         'station_sku_stocks',
         'station_stock_logs',
         'group_activities', 'group_members', 'group_orders',

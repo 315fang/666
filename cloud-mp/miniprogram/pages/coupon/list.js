@@ -84,7 +84,6 @@ function pxToRpx(px) {
 
 Page({
     data: {
-        statusBarHeight: 20,
         navTopPadding: 20,
         navBarHeight: 44,
         activeTab: 'unused',
@@ -96,7 +95,6 @@ Page({
 
     onLoad() {
         this.setData({
-            statusBarHeight: app.globalData.statusBarHeight || 20,
             navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
             navBarHeight: app.globalData.navBarHeight || 44
         });

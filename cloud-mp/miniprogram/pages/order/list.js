@@ -383,6 +383,13 @@ Page({
         }
     },
 
+    onViewPickupCredential(e) {
+        const order = e.currentTarget.dataset.order || {};
+        const id = order.id || order._id || '';
+        if (!id) return;
+        wx.navigateTo({ url: `/pages/order/pickup-credential?id=${id}` });
+    },
+
     // ★ 申请退款（从列表页直接操作）
     onApplyRefund(e) {
         const order = e.currentTarget.dataset.order;

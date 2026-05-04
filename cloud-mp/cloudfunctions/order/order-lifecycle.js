@@ -22,6 +22,7 @@ const DEFAULT_POINT_RULES = {
         remark: '评价订单奖励'
     }
 };
+const DEFAULT_REFUND_DEV_FEE_PCT = 1.5;
 
 function toNumber(value, fallback = 0) {
     if (value === null || value === undefined || value === '') return fallback;
@@ -142,6 +143,11 @@ async function loadPointRules() {
             remark: pickString(reviewImage.remark, pickString(review.remark, DEFAULT_POINT_RULES.review.remark))
         }
     };
+}
+
+async function loadPeerBonusConfig() {
+    const row = await getConfigByKey('agent_system_peer_bonus') || await getConfigByKey('agent_system_peer-bonus');
+    return parseConfigValue(row, {}) || {};
 }
 
 function getOrderTotalQuantity(order = {}) {
@@ -715,18 +721,21 @@ async function completeGoodsFundRefundSettlement(orderId, order = {}, refund = {
         amount: refundAmount,
         refund_amount: refundAmount,
         type: refund.type,
-        refund_quantity_effective: refundQuantity
+        refund_quantity_effective: refundQuantity,
+        refund_completion_confirmed: true
     };
 
     const refundProgress = await applyRefundProgress(canonicalOrderId, order, refundRecord);
-    const { isFullRefund, rewardPointsClawback, growthClawback } = refundProgress;
+    const { isFullRefund, rewardPointsClawback, growthClawback, growthClawbackBasis } = refundProgress;
     refundRecord.reward_points_clawback_amount = rewardPointsClawback;
     refundRecord.growth_clawback_amount = growthClawback;
+    refundRecord.growth_clawback_basis = growthClawbackBasis;
     refundRecord.order_progress_applied_at = refundRecord.order_progress_applied_at || '1';
     await reverseBuyerRefundAssetsWithMarker(buyerOpenid, canonicalOrderId, order, refundRecord, isFullRefund);
     refundRecord.buyer_assets_reversed_at = refundRecord.buyer_assets_reversed_at || '1';
 
     await cancelRefundRelatedCommissions(canonicalOrderId, '货款退款');
+    await ensureRefundDevFeeRecord(canonicalOrderId, order, refundRecord);
     await restoreRefundOrderStock(canonicalOrderId, order, refundRecord);
     refundRecord.stock_restored_at = refundRecord.stock_restored_at || '1';
     await rollbackPickupStationPrincipalForOrder(db, order, refundRecord, '退款冲回自提门店进货本金');
@@ -1024,6 +1033,32 @@ function deriveRefundRevertStatus(order = {}) {
                 : (order.paid_at ? 'paid' : 'pending_payment')));
 }
 
+function resolveGrowthClawbackBasis(order = {}) {
+    if (order.growth_earned !== undefined && order.growth_earned !== null && order.growth_earned !== '') {
+        return {
+            amount: Math.max(0, Math.floor(toNumber(order.growth_earned, 0))),
+            basis: 'order_growth_earned'
+        };
+    }
+    return {
+        amount: Math.max(0, Math.floor(resolveOrderPayAmount(order, 0))),
+        basis: 'legacy_pay_amount'
+    };
+}
+
+function resolveRewardPointsClawbackBasis(order = {}) {
+    const totalEarned = Math.max(0, Math.floor(toNumber(order.points_earned, 0)));
+    const status = pickString(order.points_award_status).toLowerCase();
+    const hasReleaseSnapshot = order.reward_points_released_total !== undefined
+        || ['frozen', 'released', 'partially_released', 'cancelled'].includes(status);
+    if (!hasReleaseSnapshot) return totalEarned;
+    return Math.max(0, Math.min(totalEarned, Math.floor(toNumber(order.reward_points_released_total, 0))));
+}
+
+function isRefundCompletionConfirmed(refund = {}) {
+    return refund.refund_completion_confirmed === true || pickString(refund.status) === 'completed';
+}
+
 function buildBuyerRefundReversal(order = {}, refund = {}, isFullRefund = false, currentUser = null) {
     const refundAmount = roundMoney(toNumber(refund.amount ?? refund.refund_amount, 0));
     const userReversal = { updated_at: db.serverDate() };
@@ -1033,7 +1068,7 @@ function buildBuyerRefundReversal(order = {}, refund = {}, isFullRefund = false,
     if (currentUser && typeof currentUser === 'object') {
         if (refundAmount > 0) userReversal.total_spent = Math.max(0, roundMoney(toNumber(currentUser.total_spent, 0) - refundAmount));
         if (isFullRefund) userReversal.order_count = Math.max(0, Math.floor(toNumber(currentUser.order_count, 0) - 1));
-        if (rewardPointsClawback > 0) userReversal.points = Math.max(0, Math.floor(toNumber(currentUser.points, 0) - rewardPointsClawback));
+        if (rewardPointsClawback > 0) userReversal.points = Math.floor(toNumber(currentUser.points, 0) - rewardPointsClawback);
         if (growthClawback > 0) userReversal.growth_value = Math.max(0, Math.floor(toNumber(currentUser.growth_value, 0) - growthClawback));
         return userReversal;
     }
@@ -1068,6 +1103,7 @@ async function reverseBuyerRefundAssets(openid, order = {}, refund = {}, isFullR
 
 async function reverseBuyerRefundAssetsWithMarker(openid, orderId, order = {}, refund = {}, isFullRefund = false) {
     if (refund.buyer_assets_reversed_at) return;
+    if (!isRefundCompletionConfirmed(refund)) return;
     await reverseBuyerRefundAssets(openid, order, refund, isFullRefund);
     try {
         await db.collection('refunds').doc(String(refund._id)).update({
@@ -1085,7 +1121,8 @@ async function applyRefundProgress(orderId, order = {}, refund = {}) {
             refundQuantity: resolveRefundQuantityFromRecord(order, refund),
             refundAmount: roundMoney(toNumber(refund.amount ?? refund.refund_amount, 0)),
             rewardPointsClawback: Math.max(0, toNumber(refund.reward_points_clawback_amount, 0)),
-            growthClawback: Math.max(0, toNumber(refund.growth_clawback_amount, 0))
+            growthClawback: Math.max(0, toNumber(refund.growth_clawback_amount, 0)),
+            growthClawbackBasis: pickString(refund.growth_clawback_basis, 'already_applied')
         };
     }
 
@@ -1106,10 +1143,9 @@ async function applyRefundProgress(orderId, order = {}, refund = {}) {
             refunded_cash_amount: Math.min(item.cash_paid_allocated_amount, roundMoney(item.refunded_cash_amount + toNumber(matched.cash_refund_amount, 0)))
         };
     });
-    const totalPointsEarned = Math.max(0, toNumber(order.points_earned, 0));
-    const totalGrowthEarned = Math.max(0, Math.floor(
-        order.growth_earned != null ? toNumber(order.growth_earned, 0) : resolveOrderPayAmount(order, 0)
-    ));
+    const totalPointsEarned = resolveRewardPointsClawbackBasis(order);
+    const growthBasis = resolveGrowthClawbackBasis(order);
+    const totalGrowthEarned = growthBasis.amount;
     const rewardPointsClawedBefore = Math.max(0, toNumber(order.reward_points_clawback_total, 0));
     const growthClawedBefore = Math.max(0, toNumber(order.growth_clawback_total, 0));
     const rewardPointsClawback = isFullRefund
@@ -1150,6 +1186,7 @@ async function applyRefundProgress(orderId, order = {}, refund = {}) {
             data: {
                 reward_points_clawback_amount: rewardPointsClawback,
                 growth_clawback_amount: growthClawback,
+                growth_clawback_basis: growthBasis.basis,
                 order_progress_applied_at: db.serverDate(),
                 updated_at: db.serverDate()
             }
@@ -1163,7 +1200,7 @@ async function applyRefundProgress(orderId, order = {}, refund = {}) {
         } catch (_) {}
     }
 
-    return { isFullRefund, refundQuantity, refundAmount, rewardPointsClawback, growthClawback };
+    return { isFullRefund, refundQuantity, refundAmount, rewardPointsClawback, growthClawback, growthClawbackBasis: growthBasis.basis };
 }
 
 async function cancelRefundRelatedCommissions(orderId, reason) {
@@ -1174,6 +1211,8 @@ async function cancelRefundRelatedCommissions(orderId, reason) {
                 data: {
                     status: 'cancelled',
                     cancel_reason: reason,
+                    commission_cancel_scope: 'whole_order_on_any_refund',
+                    commission_cancel_policy: 'partial_refund_policy_v1',
                     cancelled_at: db.serverDate(),
                     updated_at: db.serverDate()
                 }
@@ -1186,6 +1225,70 @@ async function cancelRefundRelatedCommissions(orderId, reason) {
             });
         } catch (_) {}
     }
+}
+
+async function resolveRefundDevFeeRecipient(orderId, order = {}) {
+    const commissionRes = await db.collection('commissions')
+        .where({ order_id: orderId, type: 'same_level' })
+        .get()
+        .catch(() => ({ data: [] }));
+    const peerBonus = (commissionRes.data || []).find((row) => (
+        toNumber(row.bonus_role_level || row.level, 0) === 6
+        && pickString(row.openid || row.receiver_openid || row.beneficiary_openid || row.user_id)
+    ));
+    if (!peerBonus) return null;
+    const openid = pickString(peerBonus.openid || peerBonus.receiver_openid || peerBonus.beneficiary_openid || peerBonus.user_id);
+    return {
+        openid,
+        user_id: pickString(peerBonus.user_id || openid),
+        source_commission_id: pickString(peerBonus._id || peerBonus.id),
+        source_commission_amount: roundMoney(toNumber(peerBonus.amount, 0)),
+        from_openid: pickString(order.openid || order.buyer_openid || order.user_id)
+    };
+}
+
+async function ensureRefundDevFeeRecord(orderId, order = {}, refund = {}) {
+    const refundId = pickString(refund._id || refund.id || refund.refund_id);
+    if (!refundId) return { skipped: true, reason: 'missing_refund_id' };
+    const refundAmount = roundMoney(toNumber(refund.amount ?? refund.refund_amount, 0));
+    if (refundAmount <= 0) return { skipped: true, reason: 'non_positive_refund' };
+
+    const existing = await db.collection('commissions')
+        .where({ refund_id: refundId, type: 'refund_dev_fee' })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    if (existing.data && existing.data[0]) return { skipped: true, existing: true, id: existing.data[0]._id };
+
+    const peerBonus = await loadPeerBonusConfig();
+    const pct = Math.max(0, toNumber(peerBonus.refund_dev_fee_pct, DEFAULT_REFUND_DEV_FEE_PCT));
+    const amount = roundMoney(refundAmount * pct / 100);
+    if (amount <= 0) return { skipped: true, reason: 'zero_amount', pct };
+    const recipient = await resolveRefundDevFeeRecipient(orderId, order);
+    if (!recipient) return { skipped: true, reason: 'missing_store_peer_bonus', pct };
+
+    const result = await db.collection('commissions').add({
+        data: {
+            openid: recipient.openid,
+            user_id: recipient.user_id,
+            from_openid: recipient.from_openid || pickString(refund.openid),
+            order_id: orderId,
+            order_no: pickString(order.order_no || refund.order_no),
+            refund_id: refundId,
+            refund_no: pickString(refund.refund_no),
+            amount,
+            type: 'refund_dev_fee',
+            status: 'recorded',
+            refund_amount: refundAmount,
+            refund_dev_fee_pct: pct,
+            source_commission_id: recipient.source_commission_id,
+            source_commission_amount: recipient.source_commission_amount,
+            description: `退款开发费：退款金额${refundAmount.toFixed(2)}元 * ${pct}%`,
+            created_at: db.serverDate(),
+            updated_at: db.serverDate()
+        }
+    });
+    return { created: true, id: result._id, amount, pct };
 }
 
 /**
@@ -1225,7 +1328,6 @@ async function cancelOrder(openid, orderId) {
         await db.collection('users').where({ openid }).update({
             data: {
                 points: _.inc(pointsUsed),
-                growth_value: _.inc(pointsUsed),
                 updated_at: db.serverDate(),
             },
         }).catch((e) => console.error('[OrderLifecycle] 退积分失败:', e.message));
@@ -1302,6 +1404,9 @@ async function reviewOrder(openid, orderId, reviewData) {
     if (orderRes.data.status !== 'completed') {
         throw new Error(`订单状态不允许评价: ${orderRes.data.status}`);
     }
+    if (orderRes.data.reviewed === true || orderRes.data.reviewed_at) {
+        throw new Error('该订单已评价');
+    }
 
     // 检查是否已评价
     const existingReview = await db.collection('reviews')
@@ -1335,17 +1440,29 @@ async function reviewOrder(openid, orderId, reviewData) {
                 created_at: db.serverDate(),
             },
         });
-        reviewResults.push(result._id);
+        const reviewId = result._id || result.id || '';
+        if (reviewId) reviewResults.push(reviewId);
     }
 
-    // 标记订单已评价
-    await db.collection('orders').doc(orderId).update({
+    // 用订单级条件更新认领评价奖励，防止多端并发重复发放积分。
+    const reviewClaim = await db.collection('orders').where({
+        _id: String(orderId),
+        openid,
+        status: 'completed',
+        reviewed: _.neq(true)
+    }).update({
         data: {
             reviewed: true,
             reviewed_at: db.serverDate(),
             updated_at: db.serverDate(),
         },
     });
+    if (!reviewClaim.stats || reviewClaim.stats.updated === 0) {
+        for (const reviewId of reviewResults) {
+            await db.collection('reviews').doc(String(reviewId)).remove().catch(() => null);
+        }
+        throw new Error('该订单已评价');
+    }
 
     if (String(orderRes.data.type || '').trim().toLowerCase() === 'exchange') {
         return { success: true, order_id: orderId, review_ids: reviewResults, bonus_points: 0 };
@@ -1477,59 +1594,7 @@ async function applyRefund(openid, params) {
         console.error('[OrderLifecycle] 佣金冻结失败:', freezeErr.message);
     }
 
-    // 货款支付的“仅退款”可以自动退回货款余额；“退货退款”必须先走审核/退货物流/后台确认。
-    if (paymentMethod === 'goods_fund' && type === 'refund_only') {
-        try {
-            await db.collection('refunds').doc(result._id).update({
-                data: {
-                    status: 'processing',
-                    payment_method: paymentMethod,
-                    refund_channel: refundChannel,
-                    refund_target_text: getRefundTargetText(paymentMethod),
-                    processing_at: db.serverDate(),
-                    updated_at: db.serverDate()
-                }
-            });
-        } catch (e) {
-            console.error('[order-lifecycle] ⚠️ 退款状态更新为processing失败 refundId=%s error=%s', result._id, e.message);
-            try {
-                await db.collection('rollback_error_logs').add({
-                    data: { context: 'applyRefund_processing_status', refund_id: result._id, error: e.message, created_at: db.serverDate() }
-                });
-            } catch (_) {}
-        }
-        try {
-            await completeGoodsFundRefundSettlement(canonicalOrderId, order, {
-                _id: result._id,
-                refund_no: refundNo,
-                amount: refundAmount,
-                refund_amount: refundAmount,
-                type,
-                refund_quantity_effective: refundQuantity,
-                payment_method: paymentMethod,
-                refund_channel: refundChannel,
-                refund_target_text: getRefundTargetText(paymentMethod),
-                processing_at: new Date().toISOString()
-            });
-            return { success: true, id: result._id, refund_id: result._id, refund_no: refundNo, auto_refunded: true };
-        } catch (autoRefundErr) {
-            console.error('[OrderLifecycle] 货款自动退款失败，转人工处理:', autoRefundErr.message);
-            try {
-                await db.collection('refunds').doc(result._id).update({
-                    data: {
-                        status: 'processing',
-                        auto_refund_error: autoRefundErr.message,
-                        auto_refund_partial: true,
-                        auto_refund_failed_at: db.serverDate(),
-                        updated_at: db.serverDate()
-                    }
-                });
-            } catch (e) {
-                console.error('[order-lifecycle] ⚠️ 退款自动退款错误标记写入失败 refundId=%s error=%s', result._id, e.message);
-            }
-            return { success: true, id: result._id, refund_id: result._id, refund_no: refundNo, auto_refund_failed: true, error: autoRefundErr.message };
-        }
-    }
+    // 货款支付也不在用户申请时自动退款，统一等待后台审核/确认后执行结算。
 
     return { success: true, id: result._id, refund_id: result._id, refund_no: refundNo };
 }
@@ -1714,6 +1779,7 @@ module.exports = {
     cancelOrder,
     confirmOrder,
     completeGoodsFundRefundSettlement,
+    ensureRefundDevFeeRecord,
     freezeCommissionsForOrder,
     reviewOrder,
     applyRefund,

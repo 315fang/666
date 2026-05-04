@@ -538,7 +538,6 @@ async function issuePointsReward(openid, record, points, reason) {
     const updateRes = await db.collection('users').where({ openid }).update({
         data: {
             points: _.inc(amount),
-            growth_value: _.inc(amount),
             updated_at: db.serverDate()
         }
     });

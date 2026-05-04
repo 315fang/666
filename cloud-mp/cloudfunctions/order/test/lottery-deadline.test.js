@@ -85,6 +85,113 @@ function createDb() {
     return { db, records, updates };
 }
 
+function createLotteryDrawDb() {
+    const userUpdates = [];
+    const pointLogs = [];
+    const records = [];
+    const command = {
+        inc: (value) => ({ op: 'inc', value }),
+        gte: (value) => ({ op: 'gte', value }),
+        gt: (value) => ({ op: 'gt', value }),
+        in: (values) => ({ op: 'in', values }),
+        or: (values) => ({ op: 'or', values })
+    };
+    const user = {
+        _id: 'user-1',
+        openid: 'buyer-openid',
+        points: 20,
+        growth_value: 99
+    };
+    const applyPatch = (row, data = {}) => {
+        Object.entries(data).forEach(([key, value]) => {
+            if (value && value.op === 'inc') {
+                row[key] = Number(row[key] || 0) + value.value;
+            } else {
+                row[key] = value;
+            }
+        });
+    };
+    const query = (data, { onUpdate } = {}) => ({
+        where: () => query(data, { onUpdate }),
+        orderBy: () => query(data, { onUpdate }),
+        limit: () => query(data, { onUpdate }),
+        count: async () => ({ total: data.length }),
+        get: async () => ({ data }),
+        update: async ({ data: patch } = {}) => {
+            data.forEach((row) => applyPatch(row, patch));
+            if (onUpdate) onUpdate(patch);
+            return { stats: { updated: data.length } };
+        }
+    });
+    const db = {
+        command,
+        serverDate: () => new Date('2026-05-04T00:00:00.000Z'),
+        collection: (name) => {
+            if (name === 'configs') {
+                return query([{
+                    _id: 'lottery-config',
+                    config_key: 'lottery_config',
+                    config_value: { enabled: true, max_daily_draws: 3, cost_points: 0 }
+                }]);
+            }
+            if (name === 'app_configs') return query([]);
+            if (name === 'lottery_records') {
+                return {
+                    ...query(records),
+                    add: async ({ data } = {}) => {
+                        const row = { _id: `record-${records.length + 1}`, ...data };
+                        records.push(row);
+                        return { _id: row._id };
+                    },
+                    doc: (id) => ({
+                        get: async () => ({ data: records.find((row) => row._id === id) || null }),
+                        update: async ({ data } = {}) => {
+                            const row = records.find((item) => item._id === id);
+                            if (row) applyPatch(row, data);
+                            return { stats: { updated: row ? 1 : 0 } };
+                        }
+                    })
+                };
+            }
+            if (name === 'lottery_prizes') {
+                return query([{
+                    _id: 'prize-points',
+                    id: 'prize-points',
+                    name: '积分奖',
+                    type: 'points',
+                    prize_value: 12,
+                    probability: 1,
+                    is_active: true,
+                    stock: -1
+                }]);
+            }
+            if (name === 'users') {
+                return {
+                    where: () => ({
+                        limit: () => ({ get: async () => ({ data: [user] }) }),
+                        get: async () => ({ data: [user] }),
+                        update: async ({ data } = {}) => {
+                            userUpdates.push(data);
+                            applyPatch(user, data);
+                            return { stats: { updated: 1 } };
+                        }
+                    })
+                };
+            }
+            if (name === 'point_logs') {
+                return {
+                    add: async ({ data } = {}) => {
+                        pointLogs.push(data);
+                        return { _id: `point-log-${pointLogs.length}` };
+                    }
+                };
+            }
+            return query([]);
+        }
+    };
+    return { db, user, userUpdates, pointLogs };
+}
+
 test('expired lottery claim records are not submittable and are marked expired', async () => {
     const { db, records, updates } = createDb();
     const lottery = loadLottery(db);
@@ -108,4 +215,18 @@ test('submitting an expired lottery claim is rejected', async () => {
         }),
         /领奖已截止/
     );
+});
+
+test('point lottery rewards do not increase growth value', async () => {
+    const { db, user, userUpdates, pointLogs } = createLotteryDrawDb();
+    const lottery = loadLottery(db);
+
+    const result = await lottery.drawLottery('buyer-openid', { lottery_id: 'default' });
+
+    assert.equal(result.success, true);
+    assert.equal(user.points, 32);
+    assert.equal(user.growth_value, 99);
+    assert.equal(pointLogs[0].amount, 12);
+    assert.ok(userUpdates.some((patch) => patch.points && patch.points.value === 12));
+    assert.equal(userUpdates.some((patch) => patch.growth_value), false);
 });
