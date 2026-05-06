@@ -1,6 +1,8 @@
 .page {
   min-height: 100vh;
   padding: 24rpx;
+  box-sizing: border-box;
+  overflow-x: hidden;
   background: #f4f7fb;
 }
 
@@ -13,6 +15,8 @@
 
 .hero,
 .section {
+  width: 100%;
+  box-sizing: border-box;
   background: #fff;
   border-radius: 16rpx;
   padding: 28rpx;
@@ -75,53 +79,55 @@
 
 .focus-strip {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 14rpx;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12rpx;
   margin-bottom: 20rpx;
 }
 
 .focus-card {
-  padding: 22rpx;
+  padding: 18rpx 16rpx;
   border-radius: 16rpx;
   background: #fff;
-  border-left: 8rpx solid #97a6ba;
+  border-top: 8rpx solid #97a6ba;
   box-shadow: 0 8rpx 22rpx rgba(16, 42, 84, 0.05);
 }
 
 .focus-hot {
-  border-left-color: #2f7d68;
+  border-top-color: #2f7d68;
 }
 
 .focus-warn {
-  border-left-color: #d07a28;
+  border-top-color: #d07a28;
 }
 
 .focus-info {
-  border-left-color: #406a9f;
+  border-top-color: #406a9f;
 }
 
 .focus-calm {
-  border-left-color: #98a8b8;
+  border-top-color: #98a8b8;
 }
 
 .focus-top {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16rpx;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6rpx;
 }
 
 .focus-label {
-  font-size: 26rpx;
+  font-size: 23rpx;
   font-weight: 700;
   color: #17324f;
+  line-height: 1.25;
 }
 
 .focus-value {
   flex-shrink: 0;
-  font-size: 40rpx;
+  font-size: 38rpx;
   font-weight: 800;
   color: #17324f;
+  line-height: 1.05;
 }
 
 .focus-unit {
@@ -138,6 +144,11 @@
   font-size: 22rpx;
   line-height: 1.5;
   color: #7b8da4;
+}
+
+.focus-hint {
+  font-size: 20rpx;
+  line-height: 1.35;
 }
 
 .station-card,
@@ -159,6 +170,15 @@
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
+}
+
+.section-head {
+  align-items: flex-start;
+}
+
+.section-head-main {
+  flex: 1;
+  min-width: 0;
 }
 
 .station-name,
@@ -185,6 +205,20 @@
   flex-shrink: 0;
   font-size: 22rpx;
   color: #8da3c1;
+}
+
+.section-mini-btn {
+  flex-shrink: 0;
+  width: 104rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  margin: 0;
+  padding: 0;
+  border-radius: 999rpx;
+  background: #eef3f7;
+  color: #17324f;
+  font-size: 22rpx;
+  font-weight: 700;
 }
 
 .tag-ok {
@@ -358,6 +392,10 @@
   margin-top: 22rpx;
 }
 
+.procurement-section .section-head {
+  margin-bottom: 8rpx;
+}
+
 .secondary-btn {
   background: #eef3f7;
   color: #17324f;
@@ -368,21 +406,27 @@
   flex-shrink: 0;
   display: flex;
   align-items: center;
+  width: 172rpx;
+  box-sizing: border-box;
   padding: 4rpx;
   border-radius: 999rpx;
   background: #eef3f7;
 }
 
 .segment {
-  width: 76rpx;
+  flex: 1;
+  min-width: 0;
   height: 52rpx;
   line-height: 52rpx;
   margin: 0;
   padding: 0;
+  box-sizing: border-box;
   border-radius: 999rpx;
   background: transparent;
   color: #6d7f95;
   font-size: 22rpx;
+  font-weight: 600;
+  text-align: center;
 }
 
 .segment.active {

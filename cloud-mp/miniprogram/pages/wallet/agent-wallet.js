@@ -93,7 +93,7 @@ Page({
                 });
             }
         } catch (e) {
-            console.error('货款账户加载失败:', e);
+            console.error('货款余额加载失败:', e);
         }
     },
 

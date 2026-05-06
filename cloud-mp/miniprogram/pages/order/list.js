@@ -65,7 +65,7 @@ Page({
         }
         if (status === 'all') status = '';
         if (status) {
-            // 只更新 status，不加载数据 — onShow 会紧接着触发并加载
+            // 只更新 status，不加载数据，onShow 会紧接着触发并加载
             this.setData({ currentStatus: status });
         }
     },

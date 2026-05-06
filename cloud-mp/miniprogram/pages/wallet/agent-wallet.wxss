@@ -536,7 +536,12 @@
   padding: 60rpx 48rpx;
   gap: 16rpx;
 }
-.no-access-icon { font-size: 80rpx; margin-bottom: 8rpx; }
+.no-access-icon {
+  width: 80rpx;
+  height: 80rpx;
+  margin-bottom: 8rpx;
+  opacity: 0.72;
+}
 .no-access-title {
   font-size: 34rpx;
   font-weight: 700;

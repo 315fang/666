@@ -32,9 +32,10 @@
   <scroll-view scroll-y class="scroll-area" wx:if="{{activeTab === 'activities'}}">
     <view class="section-head">
       <view>
-        <text class="section-title">可发起活动</text>
-        <text class="section-subtitle">查看原价、底价和活动规则。</text>
+        <text class="section-title">{{focusApplied ? '当前活动' : '可发起活动'}}</text>
+        <text class="section-subtitle">{{focusApplied ? '已为你定位到活动卡对应的砍价。' : '查看原价、底价和活动规则。'}}</text>
       </view>
+      <view class="section-filter" wx:if="{{focusApplied}}" bindtap="onClearActivityFocus">查看全部</view>
     </view>
 
     <view class="state-loading" wx:if="{{loading && !activities.length}}">

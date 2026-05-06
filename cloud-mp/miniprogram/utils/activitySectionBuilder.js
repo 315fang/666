@@ -2,7 +2,7 @@ const FALLBACK_SECTION_CONFIG = {
     flash_sale: {
         id: 'activity-section-flash-sale',
         key: 'flash_sale',
-        title: '限时秒杀',
+        title: '爆单专区',
         subtitle: '限时抢购，售完即止',
         icon: '/assets/icons/clock.svg',
         pillText: '主推活动',
@@ -28,8 +28,8 @@ const FALLBACK_SECTION_CONFIG = {
     flex_bundle: {
         id: 'activity-section-flex-bundle',
         key: 'flex_bundle',
-        title: '特惠随心选',
-        subtitle: '自由搭配你的专属套装',
+        title: '特惠组合',
+        subtitle: '组合搭配，下单更优惠',
         icon: '/assets/icons/package.svg',
         pillText: '常驻入口',
         tag: '',
@@ -79,7 +79,7 @@ const FALLBACK_SECTION_CONFIG = {
     }
 };
 
-const SECTION_ORDER = ['flex_bundle', 'bundle_zone', 'flash_sale', 'lottery', 'group', 'slash'];
+const SECTION_ORDER = ['flash_sale', 'flex_bundle', 'bundle_zone', 'lottery', 'group', 'slash'];
 
 function normalizeText(value) {
     return typeof value === 'string' ? value.trim() : '';
@@ -103,21 +103,22 @@ function detectSectionKey(item = {}) {
     if (linkType === 'flash_sale') return 'flash_sale';
     if (linkType === 'coupon_center' || linkType === 'bundle_zone') return 'bundle_zone';
     if (linkType === 'page' && linkValue.includes('/pages/activity/flex-bundles')) return 'flex_bundle';
-    if (linkType === 'category' && linkValue === 'bundle-zone') return 'bundle_zone';
+    if (linkType === 'category' && linkValue === 'bundle-zone') return 'flex_bundle';
     if (linkType === 'slash') return 'slash';
     if (linkType === 'group_buy') return 'group';
     if (linkType === 'lottery') return 'lottery';
 
     if (linkValue === '__flash_sale__' || linkValue.includes('/pages/activity/limited-spot')) return 'flash_sale';
-    if (linkValue === '__coupon_center__' || linkValue === 'bundle-zone' || linkValue.includes('/pages/coupon/list')) return 'bundle_zone';
+    if (linkValue === 'bundle-zone') return 'flex_bundle';
+    if (linkValue === '__coupon_center__' || linkValue.includes('/pages/coupon/list')) return 'bundle_zone';
     if (linkValue.includes('/pages/activity/flex-bundles')) return 'flex_bundle';
     if (linkValue.includes('/pages/slash/')) return 'slash';
     if (linkValue.includes('/pages/group/')) return 'group';
     if (linkValue.includes('/pages/lottery/')) return 'lottery';
 
-    if (title.includes('特惠随心选') || title.includes('自由组合') || title.includes('自由选') || title.includes('套餐')) return 'flex_bundle';
+    if (title.includes('特惠组合') || title.includes('组合专区') || title.includes('特惠随心选') || title.includes('自由组合') || title.includes('自由选') || title.includes('套餐')) return 'flex_bundle';
     if (title.includes('秒杀') || title.includes('特惠')) return 'flash_sale';
-    if (title.includes('优惠券') || title.includes('组合') || title.includes('礼遇')) return 'bundle_zone';
+    if (title.includes('优惠券') || title.includes('礼遇')) return 'bundle_zone';
     if (title.includes('砍价')) return 'slash';
     if (title.includes('拼团')) return 'group';
     if (title.includes('抽奖')) return 'lottery';

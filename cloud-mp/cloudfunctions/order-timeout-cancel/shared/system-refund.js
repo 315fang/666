@@ -456,12 +456,16 @@ async function creditInternalBalance(order = {}, method = 'wallet', amount = 0) 
     const nextAccountBalance = roundMoney(previousAccountBalance + amount);
     const userId = user.id || user._legacy_id || user._id || '';
     const accountId = String(account._id || account.id || '');
+    const userCreditPatch = {
+        [userBalanceInfo.field]: _.inc(amount),
+        updated_at: db.serverDate(),
+    };
+    if (method === 'goods_fund') {
+        userCreditPatch.wallet_balance = _.inc(amount);
+    }
 
     await db.collection('users').where({ openid: order.openid }).update({
-        data: {
-            [userBalanceInfo.field]: _.inc(amount),
-            updated_at: db.serverDate(),
-        }
+        data: userCreditPatch
     });
     try {
         await db.collection('wallet_accounts').doc(accountId).update({
@@ -502,12 +506,16 @@ async function creditInternalBalance(order = {}, method = 'wallet', amount = 0) 
     });
 
     return async () => {
+        const userRollbackPatch = {
+            [userBalanceInfo.field]: _.inc(-amount),
+            updated_at: db.serverDate(),
+        };
+        if (method === 'goods_fund') {
+            userRollbackPatch.wallet_balance = _.inc(-amount);
+        }
         try {
             await db.collection('users').where({ openid: order.openid }).update({
-                data: {
-                    [userBalanceInfo.field]: _.inc(-amount),
-                    updated_at: db.serverDate(),
-                }
+                data: userRollbackPatch
             });
         } catch (rollbackErr) {
             console.error('[system-refund] ⚠️ 余额回滚失败(用户) openid=%s field=%s error=%s', order.openid, userBalanceInfo.field, rollbackErr.message);
@@ -574,31 +582,35 @@ function isRefundCompletionConfirmed(refund = {}) {
 }
 
 async function reverseBuyerRefundAssets(openid, order = {}, refund = {}, isFullRefund = false) {
-    try {
-        const userRes = await db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] }));
-        const currentUser = userRes.data && userRes.data[0];
-        if (!currentUser) {
-            console.error('[system-refund] ⚠️ 买家资产冲回跳过，用户不存在 openid=%s', openid);
-            return;
-        }
-        await db.collection('users').where({ openid }).update({
-            data: buildBuyerRefundReversal(order, refund, isFullRefund, currentUser)
-        });
-    } catch (e) {
-        console.error('[system-refund] ⚠️ 买家资产冲回失败 openid=%s error=%s', openid, e.message);
+    const userRes = await db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] }));
+    const currentUser = userRes.data && userRes.data[0];
+    if (!currentUser) {
+        throw new Error(`买家资产冲回失败：用户不存在(${openid})`);
+    }
+    const updateRes = await db.collection('users').where({ openid }).update({
+        data: buildBuyerRefundReversal(order, refund, isFullRefund, currentUser)
+    });
+    if (!updateRes.stats || updateRes.stats.updated === 0) {
+        throw new Error(`买家资产冲回失败：用户未更新(${openid})`);
     }
 }
 
 async function reverseBuyerRefundAssetsWithMarker(openid, orderId, order = {}, refund = {}, isFullRefund = false) {
     if (refund.buyer_assets_reversed_at) return;
     if (!isRefundCompletionConfirmed(refund)) return;
-    await reverseBuyerRefundAssets(openid, order, refund, isFullRefund);
     try {
+        await reverseBuyerRefundAssets(openid, order, refund, isFullRefund);
         await db.collection('refunds').doc(String(refund._id)).update({
             data: { buyer_assets_reversed_at: db.serverDate(), updated_at: db.serverDate() }
         });
     } catch (e) {
-        console.error('[system-refund] ⚠️ 退款冲回标记写入失败 refundId=%s error=%s', refund._id, e.message);
+        console.error('[system-refund] ⚠️ 退款冲回失败 refundId=%s error=%s', refund._id, e.message);
+        try {
+            await db.collection('rollback_error_logs').add({
+                data: { context: 'systemRefund_reverseBuyerRefundAssets', order_id: orderId, refund_id: refund._id || '', openid, error: e.message, created_at: db.serverDate() }
+            });
+        } catch (_) {}
+        throw e;
     }
 }
 

@@ -54,7 +54,7 @@ function buildCouponView(c = {}) {
         ...c,
         id: c.id || c._id || c.coupon_id,
         user_coupon_id: c.user_coupon_id || c._id || c.id || '',
-        coupon_name: c.coupon_name || c.name || '优惠券',
+        coupon_name: c.coupon_name || c.name || '券包',
         coupon_type: c.coupon_type || c.type || 'fixed',
         coupon_value: c.coupon_value != null ? c.coupon_value : (c.value || 0),
         min_purchase: c.min_purchase != null ? c.min_purchase : 0,
@@ -228,13 +228,13 @@ Page({
         const id = e.currentTarget.dataset.id;
         const index = Number(e.currentTarget.dataset.index);
         if (!id || !Number.isFinite(index)) {
-            wx.showToast({ title: '优惠券信息异常', icon: 'none' });
+            wx.showToast({ title: '券包信息异常', icon: 'none' });
             return;
         }
 
         wx.showModal({
-            title: '删除优惠券',
-            content: '删除后该优惠券将不再显示。',
+            title: '删除券包',
+            content: '删除后该券包将不再显示。',
             confirmText: '删除',
             confirmColor: '#dc2626',
             success: (res) => {

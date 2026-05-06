@@ -87,7 +87,7 @@ function stockLogTypeMeta(type = '') {
         release: { text: '释放预占', className: 'tag-info' },
         pickup_consume: { text: '核销消耗', className: 'tag-danger' },
         refund_restore: { text: '退货恢复', className: 'tag-ok' },
-        manual_adjust: { text: '后台调整', className: 'tag-info' }
+        manual_adjust: { text: '平台调整', className: 'tag-info' }
     };
     return map[type] || { text: '库存变动', className: 'tag-info' };
 }
@@ -101,7 +101,7 @@ function signedQuantityText(value) {
 function buildInventoryEmptyText(inventory = [], procurements = []) {
     if (inventory.length) return '当前筛选下没有库存预警。';
     if (procurements.some((item) => item.status === 'pending_receive')) {
-        return '已有采购通过审批，等待后台确认入库后会形成门店库存。';
+        return '已有采购通过审批，等待平台确认入库后会形成门店库存。';
     }
     if (procurements.some((item) => item.status === 'pending_approval')) {
         return '已有采购申请待审批，审批并确认入库后会形成门店库存。';
@@ -206,6 +206,7 @@ Page({
         workbench: null,
         inventoryFilter: 'all',
         inventoryFilterLabel: '全部库存',
+        showProcurementForm: false,
         products: [],
         skuOptions: [],
         procurementSubmitting: false,
@@ -293,6 +294,12 @@ Page({
             inventoryFilter: filter,
             inventoryFilterLabel: filter === 'low' ? '只看预警' : '全部库存',
             workbench
+        });
+    },
+
+    toggleProcurementForm() {
+        this.setData({
+            showProcurementForm: !this.data.showProcurementForm
         });
     },
 
@@ -456,7 +463,8 @@ Page({
                     cost_price: '',
                     ...receiveSnapshot
                 },
-                skuOptions: []
+                skuOptions: [],
+                showProcurementForm: false
             });
             this.loadWorkbench();
         } catch (e) {

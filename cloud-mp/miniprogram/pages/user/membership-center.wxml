@@ -54,26 +54,19 @@
       </view>
     </view>
 
-    <view class="quick-panel card-enter delay-1">
-      <view class="quick-item ripple" bindtap="goPoints">
-        <image class="quick-icon" src="/assets/icons/star.svg" mode="aspectFit"></image>
-        <text class="quick-title">积分中心</text>
-        <text class="quick-sub">任务与流水</text>
+    <view class="coupon-claim-card card-enter delay-1 ripple" bindtap="goCouponCenter">
+      <view class="coupon-claim-icon-wrap">
+        <image class="coupon-claim-icon" src="/assets/icons/tag.svg" mode="aspectFit"></image>
       </view>
-      <view class="quick-item ripple" bindtap="goCouponList">
-        <image class="quick-icon" src="/assets/icons/tag.svg" mode="aspectFit"></image>
-        <text class="quick-title">我的券</text>
-        <text class="quick-sub">查看可用券</text>
+      <view class="coupon-claim-copy">
+        <text class="coupon-claim-kicker">权益可用</text>
+        <text class="coupon-claim-title">领券中心</text>
+        <text class="coupon-claim-desc">领取优惠券，下单时直接抵扣</text>
       </view>
-      <view class="quick-item ripple" bindtap="goCouponCenter">
-        <image class="quick-icon" src="/assets/icons/gift.svg" mode="aspectFit"></image>
-        <text class="quick-title">领券</text>
-        <text class="quick-sub">活动优惠</text>
-      </view>
-      <view class="quick-item ripple" bindtap="goLottery">
-        <image class="quick-icon" src="/assets/icons/sparkles.svg" mode="aspectFit"></image>
-        <text class="quick-title">抽奖</text>
-        <text class="quick-sub">积分消耗</text>
+      <view class="coupon-claim-action">
+        <text class="coupon-claim-count">{{couponCount}}</text>
+        <text class="coupon-claim-unit">可用券</text>
+        <text class="coupon-claim-arrow">›</text>
       </view>
     </view>
 
@@ -125,14 +118,9 @@
           <view class="agent-path-track">
             <view class="agent-path-fill" style="width: {{agentUpgradeProgress.bestPercent}}%;"></view>
           </view>
-          <view class="requirement-list">
-            <view class="requirement-row {{req.done ? 'requirement-row-done' : ''}}" wx:for="{{agentUpgradeProgress.recommended_path.requirements}}" wx:key="key" wx:for-item="req">
-              <view class="requirement-copy">
-                <text class="requirement-label">{{req.label}}</text>
-                <text class="requirement-value">{{req.value_text}}</text>
-              </view>
-              <text class="requirement-gap">{{req.done ? '已满足' : req.remaining_text}}</text>
-            </view>
+          <view class="agent-path-action ripple" bindtap="goMemberPrivileges">
+            <text>查看完整门槛</text>
+            <text class="agent-path-action-arrow">›</text>
           </view>
         </view>
       </view>
@@ -144,57 +132,15 @@
       </view>
     </view>
 
-    <view class="section detail-section card-enter delay-3">
-      <view class="section-head compact-head">
-        <view>
-          <text class="section-title">成长值权益说明</text>
-          <text class="section-sub">成长值是进度，不是第二套会员身份</text>
-        </view>
+    <view class="privilege-guide card-enter delay-3 ripple" bindtap="goMemberPrivileges">
+      <view class="privilege-guide-copy">
+        <text class="privilege-guide-kicker">等级权益手册</text>
+        <text class="privilege-guide-title">查看完整等级特权和升级门槛</text>
+        <text class="privilege-guide-desc">当前页只保留你的会员状态，完整规则单独查看</text>
       </view>
-
-      <view class="tier-list">
-        <view
-          wx:for="{{growthTiers}}"
-          wx:key="min"
-          class="tier-row {{item.active ? 'tier-active' : ''}} {{item.passed ? 'tier-passed' : ''}} {{item.isNext ? 'tier-next' : ''}}"
-        >
-          <view class="tier-head">
-            <text class="tier-name">{{item.name || '档位'}}</text>
-            <text wx:if="{{item.active}}" class="tier-tag">当前</text>
-            <text wx:elif="{{item.passed}}" class="tier-tag tier-tag-muted">已达成</text>
-            <text wx:elif="{{item.isNext}}" class="tier-tag tier-tag-next">下一档</text>
-          </view>
-          <text class="tier-meta">成长值 >= {{item.min}}</text>
-          <text class="tier-desc" wx:if="{{item.desc}}">{{item.desc}}</text>
-        </view>
-      </view>
-    </view>
-
-    <view class="section detail-section card-enter delay-4" wx:if="{{memberLevels.length}}">
-      <view class="section-head compact-head">
-        <view>
-          <text class="section-title">身份权益说明</text>
-          <text class="section-sub">当前身份决定积分倍率、团队权益与经营入口</text>
-        </view>
-      </view>
-
-      <view class="tier-list">
-        <view
-          wx:for="{{memberLevels}}"
-          wx:key="level"
-          class="tier-row {{item.level === currentRoleLevel ? 'tier-active' : ''}}"
-        >
-          <view class="tier-head">
-            <text class="tier-name">{{item.name}}</text>
-            <text class="tier-tag tier-tag-muted">Lv.{{item.level}}</text>
-            <text wx:if="{{item.level === currentRoleLevel}}" class="tier-tag">当前</text>
-          </view>
-          <text class="tier-meta">享受对应积分与团队权益</text>
-          <view class="perks" wx:if="{{item.perks && item.perks.length}}">
-            <text class="perk" wx:for="{{item.perks}}" wx:key="*this" wx:for-item="p">{{p}}</text>
-          </view>
-          <text class="tier-desc" wx:if="{{item.desc}}">{{item.desc}}</text>
-        </view>
+      <view class="privilege-guide-action">
+        <image class="privilege-guide-icon" src="/assets/icons/crown.svg" mode="aspectFit"></image>
+        <text class="privilege-guide-arrow">›</text>
       </view>
     </view>
 

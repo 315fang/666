@@ -56,15 +56,15 @@
         </view>
       </view>
 
-      <view class="detail-section">
+      <view class="detail-section" wx:for="{{detailGroups}}" wx:key="key" wx:for-item="group">
         <view class="section-head">
-          <text class="section-title">详细信息</text>
-          <text class="section-sub">这里只展示你当前可查看的团队成员信息</text>
+          <text class="section-title">{{group.title}}</text>
+          <text class="section-sub">{{group.sub}}</text>
         </view>
         <view class="detail-grid">
-          <view class="detail-card" wx:for="{{detailItems}}" wx:key="label">
-            <text class="detail-label">{{item.label}}</text>
-            <text class="detail-value">{{item.value}}</text>
+          <view class="detail-card" wx:for="{{group.items}}" wx:key="label" wx:for-item="detail">
+            <text class="detail-label">{{detail.label}}</text>
+            <text class="detail-value">{{detail.value}}</text>
           </view>
         </view>
       </view>
@@ -76,10 +76,10 @@
         </view>
         <text class="action-arrow">›</text>
       </view>
-      <view class="action-card" wx:if="{{member.can_apply_goods_fund_transfer}}" bindtap="onCreateGoodsFundTransfer">
+      <view class="action-card finance-action-card" wx:if="{{member.can_apply_goods_fund_transfer}}" bindtap="onCreateGoodsFundTransfer">
         <view>
           <text class="action-title">申请货款划拨</text>
-          <text class="action-sub">仅支持直属下级；每一笔都需后台审核后才会真正到账</text>
+          <text class="action-sub">仅支持直属下级；每一笔都需平台审核后才会真正到账</text>
         </view>
         <text class="action-arrow">›</text>
       </view>

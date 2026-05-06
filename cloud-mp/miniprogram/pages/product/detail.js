@@ -8,6 +8,7 @@ const { requireLogin, ensureLogin, getLoginState } = require('../../utils/auth')
 const { fetchLimitedSpotContext, normalizeLimitedSpotMode } = require('../../utils/limitedSpot');
 const { getMiniProgramConfig } = require('../../utils/miniProgramConfig');
 const { loadProduct, resolveDetailImageList, resolvePayableUnitPrice, buildSkuText, PRODUCT_PLACEHOLDER } = require('./productDetailData');
+const { resolveRenderableImageUrl } = require('../../utils/cloudAssetRuntime');
 const { refreshFavoriteState, toggleFavorite } = require('./productDetailFavorite');
 const {
     normalizeProductLaunchOptions,
@@ -25,6 +26,7 @@ const {
     addToCart
 } = require('./productDetailActions');
 const app = getApp();
+const PRODUCT_IMAGE_MAX_RETRY = 2;
 
 function normalizeUserMessage(message, fallback) {
     const text = message ? String(message).trim() : '';
@@ -1387,10 +1389,32 @@ Page({
         });
     },
 
-    onGalleryImageError(e) {
+    async onGalleryImageError(e) {
         const index = Number(e.currentTarget.dataset.index || 0);
         const product = this.data.product || {};
         const originalImages = Array.isArray(product.images) ? product.images : [];
+        const currentImage = originalImages[index] || '';
+        this._galleryImageRetryCounts = this._galleryImageRetryCounts || {};
+        const retryKey = `gallery:${index}:${currentImage}`;
+        const retryCount = Number(this._galleryImageRetryCounts[retryKey] || 0);
+
+        if (currentImage && currentImage !== PRODUCT_PLACEHOLDER && retryCount < PRODUCT_IMAGE_MAX_RETRY) {
+            this._galleryImageRetryCounts[retryKey] = retryCount + 1;
+            const sources = Array.isArray(product.gallery_image_sources) ? product.gallery_image_sources : [];
+            const orderedSources = [sources[index], ...sources].filter(Boolean);
+            for (let i = 0; i < orderedSources.length; i += 1) {
+                const nextImage = await resolveRenderableImageUrl(orderedSources[i], '', { forceRefresh: true }).catch(() => '');
+                if (!nextImage || nextImage === PRODUCT_PLACEHOLDER || nextImage === currentImage) continue;
+                const images = originalImages.slice();
+                images[index] = nextImage;
+                this.setData({
+                    'product.images': images,
+                    imageCount: images.length || 0
+                });
+                return;
+            }
+        }
+
         if (originalImages[index] !== PRODUCT_PLACEHOLDER && originalImages.length <= 1) {
             this.setData({
                 'product.images': [PRODUCT_PLACEHOLDER],
@@ -1409,8 +1433,28 @@ Page({
         });
     },
 
-    onDetailImageError(e) {
+    async onDetailImageError(e) {
         const index = Number(e.currentTarget.dataset.index || 0);
+        const currentImages = Array.isArray(this.data.detailImageList) ? this.data.detailImageList : [];
+        const currentImage = currentImages[index] || '';
+        this._detailImageRetryCounts = this._detailImageRetryCounts || {};
+        const retryKey = `detail:${index}:${currentImage}`;
+        const retryCount = Number(this._detailImageRetryCounts[retryKey] || 0);
+
+        if (currentImage && retryCount < PRODUCT_IMAGE_MAX_RETRY) {
+            this._detailImageRetryCounts[retryKey] = retryCount + 1;
+            const sources = Array.isArray(this.data.detailImageSourceList) ? this.data.detailImageSourceList : [];
+            const orderedSources = [sources[index], ...sources].filter(Boolean);
+            for (let i = 0; i < orderedSources.length; i += 1) {
+                const nextImage = await resolveRenderableImageUrl(orderedSources[i], '', { forceRefresh: true }).catch(() => '');
+                if (!nextImage || nextImage === PRODUCT_PLACEHOLDER || nextImage === currentImage) continue;
+                const detailImageList = currentImages.slice();
+                detailImageList[index] = nextImage;
+                this.setData({ detailImageList });
+                return;
+            }
+        }
+
         const images = Array.isArray(this.data.detailImageList)
             ? this.data.detailImageList.filter((_, i) => i !== index)
             : [];

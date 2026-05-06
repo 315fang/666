@@ -282,6 +282,82 @@ test('ensurePointsAwarded writes completion marker only after user update and po
     assert.equal(completePatch.reward_points_released_total, 0);
 });
 
+test('ensurePointsAwarded does not grant reward points for flex bundle orders', async () => {
+    const { db, calls } = createDbMock();
+    const paymentCallback = loadPaymentCallback(db);
+
+    const result = await paymentCallback._test.ensurePointsAwarded('order-1', {
+        _id: 'order-1',
+        openid: 'buyer-openid',
+        pay_amount: 100,
+        total_amount: 100,
+        bundle_id: 'bundle-1',
+        bundle_meta: {
+            scene_type: 'flex_bundle'
+        }
+    });
+
+    assert.equal(result.awarded, 0);
+    assert.equal(result.growth, 100);
+    assert.equal(calls.some((call) => call.type === 'point_logs.add'), false);
+    const userPatch = calls.find((call) => call.type === 'users.update').data;
+    assert.equal(userPatch.growth_value.value, 100);
+    const completePatch = calls.find((call) => call.type === 'orders.doc.update' && call.data.points_awarded_at).data;
+    assert.equal(completePatch.points_earned, 0);
+    assert.equal(completePatch.growth_earned, 100);
+    assert.equal(completePatch.points_award_status, 'no_points');
+});
+
+test('ensurePointsAwarded gives growth but no reward points for limited sale orders', async () => {
+    const { db, calls } = createDbMock();
+    const paymentCallback = loadPaymentCallback(db);
+
+    const result = await paymentCallback._test.ensurePointsAwarded('order-1', {
+        _id: 'order-1',
+        openid: 'buyer-openid',
+        pay_amount: 100,
+        total_amount: 100,
+        type: 'limited_sale',
+        limited_sale_slot_id: 'slot-1',
+        limited_sale_item_id: 'item-1'
+    });
+
+    assert.equal(result.awarded, 0);
+    assert.equal(result.growth, 100);
+    assert.equal(calls.some((call) => call.type === 'point_logs.add'), false);
+    const userPatch = calls.find((call) => call.type === 'users.update').data;
+    assert.equal(userPatch.points, undefined);
+    assert.equal(userPatch.growth_value.value, 100);
+    const completePatch = calls.find((call) => call.type === 'orders.doc.update' && call.data.points_awarded_at).data;
+    assert.equal(completePatch.points_earned, 0);
+    assert.equal(completePatch.growth_earned, 100);
+    assert.equal(completePatch.points_award_status, 'no_points');
+});
+
+test('ensurePointsAwarded gives growth but no reward points for explosive products', async () => {
+    const { db, calls } = createDbMock();
+    const paymentCallback = loadPaymentCallback(db);
+
+    const result = await paymentCallback._test.ensurePointsAwarded('order-1', {
+        _id: 'order-1',
+        openid: 'buyer-openid',
+        pay_amount: 100,
+        total_amount: 100,
+        items: [{ product_id: 'product-1', is_explosive: 1 }]
+    });
+
+    assert.equal(result.awarded, 0);
+    assert.equal(result.growth, 100);
+    assert.equal(calls.some((call) => call.type === 'point_logs.add'), false);
+    const userPatch = calls.find((call) => call.type === 'users.update').data;
+    assert.equal(userPatch.points, undefined);
+    assert.equal(userPatch.growth_value.value, 100);
+    const completePatch = calls.find((call) => call.type === 'orders.doc.update' && call.data.points_awarded_at).data;
+    assert.equal(completePatch.points_earned, 0);
+    assert.equal(completePatch.growth_earned, 100);
+    assert.equal(completePatch.points_award_status, 'no_points');
+});
+
 test('ensurePointsAwarded clears processing lock without completion marker when user update fails', async () => {
     const { db, calls } = createDbMock({ failUserUpdate: true });
     const paymentCallback = loadPaymentCallback(db);

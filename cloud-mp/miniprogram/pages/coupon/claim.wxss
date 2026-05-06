@@ -1,4 +1,4 @@
-/* 优惠券领取 */
+/* 扫码领券 */
 page { background: #f8f7f4; min-height: 100vh; }
 
 .claim-page {
@@ -15,7 +15,11 @@ page { background: #f8f7f4; min-height: 100vh; }
 .loading-text { font-size: 28rpx; color: #6b7280; }
 
 .error-wrap { display: flex; flex-direction: column; align-items: center; margin-top: 100rpx; gap: 24rpx; }
-.status-emoji { font-size: 96rpx; }
+.status-icon {
+  width: 96rpx;
+  height: 96rpx;
+  opacity: 0.58;
+}
 .status-title { font-size: 32rpx; color: #1f2937; font-weight: 600; }
 
 .coupon-card {

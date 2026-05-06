@@ -89,23 +89,35 @@ async function decreaseGoodsFundLedger(openid, amount, refId, remark) {
         }
     });
 
-    await db.collection('wallet_logs').add({
-        data: {
-            user_id: user.id || user._legacy_id || user._id || '',
-            account_id: account.id || account._id || '',
-            change_type: 'deduct',
-            amount,
-            balance_before: before,
-            balance_after: after,
-            ref_type: 'order_payment',
-            ref_id: refId,
-            remark,
-            created_at: db.serverDate(),
-            updated_at: db.serverDate()
-        }
-    });
+    try {
+        await db.collection('wallet_logs').add({
+            data: {
+                user_id: user.id || user._legacy_id || user._id || '',
+                account_id: account.id || account._id || '',
+                change_type: 'deduct',
+                amount,
+                balance_before: before,
+                balance_after: after,
+                ref_type: 'order_payment',
+                ref_id: refId,
+                remark,
+                created_at: db.serverDate(),
+                updated_at: db.serverDate()
+            }
+        });
+    } catch (err) {
+        await db.collection('wallet_accounts').doc(String(account._id)).update({
+            data: {
+                balance: _.inc(amount),
+                updated_at: db.serverDate()
+            }
+        }).catch((rollbackErr) => {
+            console.error('[prepay] ⚠️ 货款账本日志失败后账户回滚失败 account=%s error=%s', account._id, rollbackErr.message);
+        });
+        throw err;
+    }
 
-    return true;
+    return { deducted: true, account_id: account._id || account.id };
 }
 
 async function rollbackGoodsFundLedger(openid, amount, refId, remark) {
@@ -147,12 +159,14 @@ async function rollbackGoodsFundLedger(openid, amount, refId, remark) {
  * 适用于：从订单详情页发起的货款支付
  */
 async function payByWalletBalance(openid, orderId, order, payAmount) {
+    let ledgerDeducted = false;
     // 原子扣减：余额必须 >= payAmount
     const deductRes = await db.collection('users')
         .where({ openid, agent_wallet_balance: _.gte(payAmount) })
         .update({
             data: {
                 agent_wallet_balance: _.inc(-payAmount),
+                wallet_balance: _.inc(-payAmount),
                 goods_fund_total_spent: _.inc(payAmount),
                 updated_at: db.serverDate()
             }
@@ -170,7 +184,8 @@ async function payByWalletBalance(openid, orderId, order, payAmount) {
     }
     try {
         const postPayStatus = resolvePostPayStatus(order);
-        await decreaseGoodsFundLedger(openid, payAmount, order.order_no || orderId, `货款余额支付订单 ${order.order_no || orderId}`);
+        const ledgerResult = await decreaseGoodsFundLedger(openid, payAmount, order.order_no || orderId, `货款余额支付订单 ${order.order_no || orderId}`);
+        ledgerDeducted = !!ledgerResult?.deducted;
         // 订单标为已付款
         await db.collection('orders').doc(orderId).update({
             data: buildPaymentWritePatch('goods_fund', payAmount, {
@@ -199,6 +214,7 @@ async function payByWalletBalance(openid, orderId, order, payAmount) {
                 .update({
                     data: {
                         agent_wallet_balance: _.inc(payAmount),
+                        wallet_balance: _.inc(payAmount),
                         goods_fund_total_spent: _.inc(-payAmount),
                         updated_at: db.serverDate()
                     }
@@ -207,9 +223,11 @@ async function payByWalletBalance(openid, orderId, order, payAmount) {
             console.error('[prepay] ⚠️ 货款余额回滚失败 openid=%s amount=%s error=%s', openid, payAmount, rollbackErr.message);
             try { await db.collection('rollback_error_logs').add({ data: { module: 'prepay', operation: 'goods_fund_balance_rollback', openid, order_id: orderId, error: rollbackErr.message, created_at: db.serverDate() } }); } catch (_) {}
         }
-        await rollbackGoodsFundLedger(openid, payAmount, order.order_no || orderId, `货款支付回滚 ${order.order_no || orderId}`).catch((rollbackErr) => {
-            console.error('[prepay] 货款账本回滚失败:', rollbackErr.message);
-        });
+        if (ledgerDeducted) {
+            await rollbackGoodsFundLedger(openid, payAmount, order.order_no || orderId, `货款支付回滚 ${order.order_no || orderId}`).catch((rollbackErr) => {
+                console.error('[prepay] 货款账本回滚失败:', rollbackErr.message);
+            });
+        }
         try {
             await db.collection('orders').doc(orderId).update({
                 data: buildPaymentWritePatch('', payAmount, {

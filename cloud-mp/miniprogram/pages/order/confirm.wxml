@@ -30,52 +30,6 @@
   </view>
   <block wx:else>
 
-  <view class="section benefit-preview-section" wx:if="{{expectedCommissionAmount > 0 || expectedPoints > 0}}">
-    <view class="section-head-row benefit-preview-head">
-      <text class="section-title-text">本单权益预估</text>
-      <text class="benefit-preview-note">支付后结算</text>
-    </view>
-    <view class="benefit-preview-grid">
-      <view class="benefit-preview-item" wx:if="{{expectedCommissionAmount > 0}}">
-        <text class="benefit-preview-label">自购预计佣金</text>
-        <text class="benefit-preview-value">¥{{expectedCommission}}</text>
-      </view>
-      <view class="benefit-preview-item {{expectedCommissionAmount > 0 ? 'benefit-preview-item-split' : ''}}" wx:if="{{expectedPoints > 0}}">
-        <text class="benefit-preview-label">积分奖励</text>
-        <text class="benefit-preview-value">预计可得{{expectedPoints}}积分</text>
-      </view>
-    </view>
-    <text class="benefit-preview-tip">以订单实际支付成功后的结果为准</text>
-  </view>
-
-  <view class="section growth-preview-section" wx:if="{{growthPreview && growthPreview.visible}}">
-    <view class="growth-preview-head">
-      <view class="growth-preview-title-col">
-        <text class="growth-preview-title">本单成长值</text>
-        <text class="growth-preview-summary">{{growthPreview.summary}}</text>
-      </view>
-      <view class="growth-preview-gain">+{{growthPreview.expected_growth}}</view>
-    </view>
-    <view class="growth-progress-track" wx:if="{{growthPreview.next_tier_name}}">
-      <view class="growth-progress-fill" style="width: {{growthPreview.progress_percent}}%;"></view>
-    </view>
-    <view class="growth-preview-metrics" wx:if="{{growthPreview.has_meta}}">
-      <view class="growth-preview-metric">
-        <text class="growth-preview-label">当前</text>
-        <text class="growth-preview-value">{{growthPreview.current_growth}}</text>
-      </view>
-      <view class="growth-preview-metric">
-        <text class="growth-preview-label">支付后</text>
-        <text class="growth-preview-value">{{growthPreview.projected_growth}}</text>
-      </view>
-      <view class="growth-preview-metric" wx:if="{{growthPreview.next_tier_name}}">
-        <text class="growth-preview-label">下一档 {{growthPreview.next_tier_name}}</text>
-        <text class="growth-preview-value">{{growthPreview.remaining_text}}</text>
-      </view>
-    </view>
-    <text class="growth-preview-tip">成长值以订单支付成功后的实际结算为准</text>
-  </view>
-
   <!-- 配送方式：始终展示；商品均未开启自提时「到店自提」为禁用态 -->
   <view class="section delivery-section">
     <view class="section-head-row">
@@ -204,7 +158,7 @@
     </view>
     <view class="pickup-empty-card" wx:else bindtap="onChoosePickupStation">
       <view class="pickup-empty-main">
-        <text class="pickup-empty-title">请选择自提门店</text>
+        <text class="pickup-empty-title">请选择门店</text>
         <text class="pickup-empty-desc">进入门店列表后按名称、城市或地址查找，再选择本次自提门店。</text>
       </view>
       <text class="arrow">›</text>
@@ -214,7 +168,7 @@
   <view class="section goods-section">
     <view class="section-head-row" wx:if="{{bundleOrder && bundleMeta}}">
       <text class="section-title-text">组合信息</text>
-      <text class="section-meta-text">固定组合价 ¥{{bundlePrice}}</text>
+      <text class="section-meta-text">特惠优选价 ¥{{bundlePrice}}</text>
     </view>
     <view class="bundle-summary-card" wx:if="{{bundleOrder && bundleMeta}}">
       <text class="bundle-summary-title">{{bundleMeta.title}}</text>
@@ -238,6 +192,52 @@
     </view>
   </view>
 
+  <view class="section benefit-preview-section" wx:if="{{expectedCommissionAmount > 0 || expectedPoints > 0}}">
+    <view class="section-head-row benefit-preview-head">
+      <text class="section-title-text">本单权益预估</text>
+      <text class="benefit-preview-note">支付后结算</text>
+    </view>
+    <view class="benefit-preview-grid">
+      <view class="benefit-preview-item" wx:if="{{expectedCommissionAmount > 0}}">
+        <text class="benefit-preview-label">自购预计佣金</text>
+        <text class="benefit-preview-value">¥{{expectedCommission}}</text>
+      </view>
+      <view class="benefit-preview-item {{expectedCommissionAmount > 0 ? 'benefit-preview-item-split' : ''}}" wx:if="{{expectedPoints > 0}}">
+        <text class="benefit-preview-label">积分奖励</text>
+        <text class="benefit-preview-value">预计可得{{expectedPoints}}积分</text>
+      </view>
+    </view>
+    <text class="benefit-preview-tip">以订单实际支付成功后的结果为准</text>
+  </view>
+
+  <view class="section growth-preview-section" wx:if="{{growthPreview && growthPreview.visible}}">
+    <view class="growth-preview-head">
+      <view class="growth-preview-title-col">
+        <text class="growth-preview-title">本单成长值</text>
+        <text class="growth-preview-summary">{{growthPreview.summary}}</text>
+      </view>
+      <view class="growth-preview-gain">+{{growthPreview.expected_growth}}</view>
+    </view>
+    <view class="growth-progress-track" wx:if="{{growthPreview.next_tier_name}}">
+      <view class="growth-progress-fill" style="width: {{growthPreview.progress_percent}}%;"></view>
+    </view>
+    <view class="growth-preview-metrics" wx:if="{{growthPreview.has_meta}}">
+      <view class="growth-preview-metric">
+        <text class="growth-preview-label">当前</text>
+        <text class="growth-preview-value">{{growthPreview.current_growth}}</text>
+      </view>
+      <view class="growth-preview-metric">
+        <text class="growth-preview-label">支付后</text>
+        <text class="growth-preview-value">{{growthPreview.projected_growth}}</text>
+      </view>
+      <view class="growth-preview-metric" wx:if="{{growthPreview.next_tier_name}}">
+        <text class="growth-preview-label">下一档 {{growthPreview.next_tier_name}}</text>
+        <text class="growth-preview-value">{{growthPreview.remaining_text}}</text>
+      </view>
+    </view>
+    <text class="growth-preview-tip">成长值以订单支付成功后的实际结算为准</text>
+  </view>
+
   <view class="section coupon-section" wx:if="{{exchangeMode}}">
     <view class="coupon-top">
       <text class="coupon-label">兑换券订单</text>
@@ -245,7 +245,7 @@
         <text class="coupon-selected">0 元兑换</text>
       </view>
     </view>
-    <text class="coupon-tip coupon-tip-active">{{exchangeCouponTitle || '该订单使用兑换券结算，不参与普通优惠券、积分或货款支付。'}}</text>
+    <text class="coupon-tip coupon-tip-active">{{exchangeCouponTitle || '该订单使用兑换券结算，不叠加券包、积分或货款支付。'}}</text>
   </view>
 
   <view class="section coupon-section" wx:if="{{limitedSpotOrder}}">
@@ -256,7 +256,7 @@
         <text class="coupon-selected" wx:else>活动价 ¥{{limitedSpotMoneyPrice}}</text>
       </view>
     </view>
-    <text class="coupon-tip coupon-tip-active">{{limitedSpotTitle || '该订单按活动价结算，不参与优惠券、积分抵扣和货款支付。'}}</text>
+    <text class="coupon-tip coupon-tip-active">{{limitedSpotTitle || '该订单按活动价结算，不叠加券包、积分抵扣和货款支付。'}}</text>
   </view>
 
   <view class="section remark-section">
@@ -265,33 +265,33 @@
   </view>
 
   <view class="section inline-state-section" wx:if="{{!exchangeMode && !limitedSpotOrder && !bundleOrder && allowCoupon !== false && couponLoadStatus === 'loading'}}">
-    <text class="inline-state-title">优惠券加载中</text>
-    <text class="inline-state-desc">正在获取可用优惠券，请稍候。</text>
+    <text class="inline-state-title">券包加载</text>
+    <text class="inline-state-desc">正在获取可用券包，请稍候。</text>
   </view>
   <view class="section inline-state-section" wx:elif="{{!exchangeMode && !limitedSpotOrder && !bundleOrder && allowCoupon !== false && couponLoadStatus === 'error'}}">
-    <text class="inline-state-title">优惠券暂不可用</text>
+    <text class="inline-state-title">券包不可用</text>
     <text class="inline-state-desc">{{couponLoadError || '请稍后重试。'}}</text>
-    <view class="inline-state-btn" bindtap="onRetryCouponLoad">重试优惠券</view>
+    <view class="inline-state-btn" bindtap="onRetryCouponLoad">重试券包</view>
   </view>
   <view class="section coupon-section" wx:if="{{!exchangeMode && !limitedSpotOrder && !bundleOrder && allowCoupon !== false && couponLoadStatus !== 'loading' && couponLoadStatus !== 'error'}}">
     <view class="coupon-top" bindtap="onCouponTap">
       <view class="coupon-label-row">
-        <text class="coupon-label">礼遇与优惠</text>
+        <text class="coupon-label">订单优惠</text>
         <text class="coupon-help-chip" catchtap="onCouponHelpTap">说明</text>
       </view>
       <view class="coupon-right">
         <text class="coupon-selected" wx:if="{{selectedCoupon}}">-¥{{couponDiscount}}（{{selectedCoupon.coupon_name}}）</text>
         <text class="coupon-none" wx:elif="{{availableCoupons.length > 0}}">{{availableCoupons.length}}张可用</text>
-        <text class="coupon-none" wx:else>暂无可用优惠券</text>
+        <text class="coupon-none" wx:else>暂无券包</text>
         <text class="arrow" wx:if="{{availableCoupons.length > 0}}">›</text>
       </view>
     </view>
-    <text class="coupon-tip coupon-tip-active" wx:if="{{!selectedCoupon && availableCoupons.length > 0}}">本单可用优惠券 {{availableCoupons.length}} 张，点击选择</text>
-    <text class="coupon-tip" wx:elif="{{!selectedCoupon && unusedCouponCount > 0}}">{{unusedCouponCount}} 张优惠券不适用于本单</text>
+    <text class="coupon-tip coupon-tip-active" wx:if="{{!selectedCoupon && availableCoupons.length > 0}}">本单有 {{availableCoupons.length}} 张券包可用，点击选择</text>
+    <text class="coupon-tip" wx:elif="{{!selectedCoupon && unusedCouponCount > 0}}">{{unusedCouponCount}} 张券包不适用于本单</text>
   </view>
   <view class="section coupon-section coupon-disabled" wx:if="{{!exchangeMode && !limitedSpotOrder && !bundleOrder && allowCoupon === false}}">
-    <text class="coupon-label">礼遇与优惠</text>
-    <text class="coupon-none">{{bundleOrder ? '该订单不参与优惠券' : '该商品不参与优惠券'}}</text>
+    <text class="coupon-label">订单优惠</text>
+    <text class="coupon-none">{{bundleOrder ? '该订单不叠加券包' : '该商品不叠加券包'}}</text>
   </view>
 
   <view class="section inline-state-section" wx:if="{{!exchangeMode && !limitedSpotOrder && !bundleOrder && pointsLoadStatus === 'error'}}">
@@ -349,9 +349,9 @@
   <view class="coupon-picker {{showCouponPicker ? 'show' : ''}}" wx:if="{{showCouponPicker}}">
     <view class="coupon-picker-mask" bindtap="onCloseCouponPicker"></view>
     <view class="coupon-picker-panel">
-      <view class="coupon-picker-title">选择优惠券</view>
+      <view class="coupon-picker-title">选择券包</view>
       <scroll-view scroll-y class="coupon-picker-scroll" show-scrollbar="{{true}}">
-        <view class="coupon-picker-empty" wx:if="{{availableCoupons.length === 0}}">暂无可用优惠券</view>
+        <view class="coupon-picker-empty" wx:if="{{availableCoupons.length === 0}}">暂无券包</view>
         <view class="coupon-list" wx:else>
           <view
             class="coupon-card {{selectedCoupon && selectedCoupon.id === item.id ? 'active' : ''}}"
@@ -373,7 +373,7 @@
             </view>
             <view class="coupon-check" wx:if="{{selectedCoupon && selectedCoupon.id === item.id}}">✓</view>
           </view>
-          <view class="coupon-no-use" wx:if="{{selectedCoupon}}" bindtap="onClearCoupon">不使用优惠券</view>
+          <view class="coupon-no-use" wx:if="{{selectedCoupon}}" bindtap="onClearCoupon">不用券包</view>
         </view>
       </scroll-view>
     </view>
@@ -387,7 +387,7 @@
           <text class="shipping-amount">{{deliveryType === 'pickup' ? '到店自提' : (shippingFee > 0 ? '¥' + shippingFee : '免运费')}}</text>
         </view>
         <view class="total-row" wx:if="{{selectedCoupon}}">
-          <text class="discount-label">优惠券：</text>
+          <text class="discount-label">券包：</text>
           <text class="discount-amount">-¥{{couponDiscount}}</text>
         </view>
         <view class="total-row" wx:if="{{usePoints && pointsDeduction > 0}}">

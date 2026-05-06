@@ -47,6 +47,17 @@ function getPagedList(res) {
     return [];
 }
 
+function normalizeActivityId(value) {
+    return value == null ? '' : String(value).trim();
+}
+
+function applyActivityFocus(list = [], activityId = '') {
+    const focusId = normalizeActivityId(activityId);
+    if (!focusId) return { list, focused: false };
+    const matched = list.filter((item) => normalizeActivityId(item.id || item._id) === focusId);
+    return matched.length ? { list: matched, focused: true } : { list, focused: false };
+}
+
 function buildGroupBuyInfo(activity = {}) {
     const product = activity.product || {};
     const price = parseFloat(activity.group_price || activity.price || product.retail_price || product.price || 0);
@@ -98,6 +109,8 @@ Page({
         navTopPadding: 20,
         navBarHeight: 44,
         tab: 'activities',
+        focusActivityId: '',
+        focusApplied: false,
         activities: [],
         myGroups: [],
         loading: true
@@ -105,11 +118,13 @@ Page({
 
     onLoad(options = {}) {
         const initialTab = options.tab === 'my' ? 'my' : 'activities';
+        const focusActivityId = normalizeActivityId(options.activity_id);
         this.setData({
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
             navBarHeight: app.globalData.navBarHeight || 44,
-            tab: initialTab
+            tab: initialTab,
+            focusActivityId
         });
         this.loadData(initialTab);
     },
@@ -128,7 +143,9 @@ Page({
             try {
                 const res = await get('/group/activities');
                 const raw = getActivityList(res);
-                this.setData({ activities: raw.map(enrichGroupActivity), loading: false });
+                const enriched = raw.map(enrichGroupActivity);
+                const focused = applyActivityFocus(enriched, this.data.focusActivityId);
+                this.setData({ activities: focused.list, focusApplied: focused.focused, loading: false });
             } catch { this.setData({ loading: false }); }
         } else {
             if (!app.globalData.isLoggedIn) return this.setData({ myGroups: [], loading: false });
@@ -187,6 +204,11 @@ Page({
 
     onGoActivities() {
         this.setData({ tab: 'activities', loading: true });
+        this.loadData('activities');
+    },
+
+    onClearActivityFocus() {
+        this.setData({ focusActivityId: '', focusApplied: false, tab: 'activities', loading: true });
         this.loadData('activities');
     },
 

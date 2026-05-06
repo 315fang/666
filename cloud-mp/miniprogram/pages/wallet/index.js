@@ -256,7 +256,7 @@ Page({
     onWithdrawTap() {
         const avail = parseFloat(this.data.balance);
         if (avail <= 0) {
-            wx.showToast({ title: '暂无可提现佣金', icon: 'none' });
+            wx.showToast({ title: '暂无可提佣金', icon: 'none' });
             return;
         }
         this.setData({ showWithdraw: true, withdrawAmount: '', withdrawFee: '0.00', withdrawActual: '0.00' });

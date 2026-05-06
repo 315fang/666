@@ -18,6 +18,7 @@
         "pages/user/portal-password",
         "pages/user/customer-service",
         "pages/user/membership-center",
+        "pages/user/member-privileges",
         "pages/user/deposit-orders",
         "pages/privacy/privacy"
     ],

@@ -16,7 +16,7 @@
       :closable="false"
       show-icon
       class="form-alert"
-      title="候选商品从“组合商品库”选择；规格、同款多件、停用候选等少见规则在每个候选的“高级”里设置。"
+      title="候选商品从“特惠随心选”选择；规格、同款多件、停用候选等少见规则在每个候选的“高级”里设置。"
     />
 
     <div v-if="groups.length === 0" class="groups-empty">暂无选择步骤，请先新增至少一个步骤。</div>
@@ -89,7 +89,7 @@
             reserve-keyword
             clearable
             :remote-method="searchProductOptions"
-            placeholder="搜索组合商品库"
+            placeholder="搜索特惠随心选"
             class="option-product-select"
             @change="(value) => onOptionProductChange(groupIndex, optionIndex, value)"
           >
@@ -101,13 +101,13 @@
             >
               <div class="bundle-product-select-option">
                 <span>{{ item.label }}</span>
-                <el-tag v-if="item.bundleProductId" size="small" type="success" effect="plain">组合商品库</el-tag>
+                <el-tag v-if="item.bundleProductId" size="small" type="success" effect="plain">特惠随心选</el-tag>
               </div>
             </el-option>
           </el-select>
           <div class="option-summary">
             <span>{{ option.product_name || '未选商品' }}</span>
-            <el-tag v-if="option.bundle_product_id" size="small" type="success" effect="plain" class="option-library-tag">组合商品库</el-tag>
+            <el-tag v-if="option.bundle_product_id" size="small" type="success" effect="plain" class="option-library-tag">特惠随心选</el-tag>
             <span v-if="optionSkuDisplay(option)"> / {{ optionSkuDisplay(option) }}</span>
             <span class="option-rule-text">{{ optionRuleText(option) }}</span>
           </div>

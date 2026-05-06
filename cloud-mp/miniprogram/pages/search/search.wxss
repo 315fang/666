@@ -1,4 +1,4 @@
-/* pages/search/search.wxss - 问兰镜像搜索页样式重塑 */
+/* pages/search/search.wxss - 商品搜索 */
 
 .container {
   min-height: 100vh;
@@ -86,7 +86,7 @@
   font-size: 32rpx;
   font-weight: 700;
   color: #1A1A1A;
-  letter-spacing: 2rpx;
+  letter-spacing: 0;
 }
 
 .icon-delete {

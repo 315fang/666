@@ -16,11 +16,13 @@ const {
     normalizeAssetUrl,
     createEmptyBrandZone
 } = require('./indexHomeLoader');
+const { resolveRenderableImageUrl } = require('../../utils/cloudAssetRuntime');
 const app = getApp();
 
 const INDEX_USER_INFO_TTL = 15 * 1000;
 const HOME_PAGE_ASSET_TTL = 4 * 60 * 60 * 1000;
 const HOME_PAGE_ASSET_RETRY_COOLDOWN = 30 * 1000;
+const PRODUCT_IMAGE_MAX_RETRY = 2;
 
 function parseScene(scene) {
     const result = {};
@@ -73,6 +75,34 @@ function collectFeaturedImageCandidates(product = {}) {
         ...parseImages(product.image),
         ...parseImages(product.cover_image)
     ]);
+}
+
+function collectFeaturedImageRecoverySources(product = {}) {
+    const sources = [];
+    const push = (value) => {
+        if (!value) return;
+        if (Array.isArray(value)) {
+            value.forEach(push);
+            return;
+        }
+        sources.push(value);
+    };
+
+    push(product.image_ref || product.imageRef || product.file_id || product.fileId);
+    push({
+        file_id: product.image_ref || product.imageRef || product.file_id || product.fileId || '',
+        image: '',
+        image_url: '',
+        cover_image: '',
+        preview_images: product.preview_images || product.previewImages || '',
+        images: product.images || ''
+    });
+    push(product.image_sources);
+    push(product.preview_images || product.previewImages);
+    push(product.images);
+    push(product.cardImage || product.firstImage || product.image || product.cover_image || product.image_url);
+
+    return sources;
 }
 
 function findNextCandidateIndex(candidates = [], currentImage = '', currentIndex = -1) {
@@ -631,6 +661,30 @@ onReady() {
         if (!item) return;
 
         const currentImage = normalizeAssetUrl(item.cover_image || item.image || (Array.isArray(item.images) ? item.images[0] : ''));
+        this._featuredImageRetryCounts = this._featuredImageRetryCounts || {};
+        const retryKey = `featured:${item.id || item._id || index}`;
+        const retryCount = Number(this._featuredImageRetryCounts[retryKey] || 0);
+        if (retryCount < PRODUCT_IMAGE_MAX_RETRY) {
+            this._featuredImageRetryCounts[retryKey] = retryCount + 1;
+            const sources = collectFeaturedImageRecoverySources(item);
+            for (let i = 0; i < sources.length; i += 1) {
+                const nextImage = await resolveRenderableImageUrl(sources[i], '', { forceRefresh: true }).catch(() => '');
+                if (!nextImage || nextImage === currentImage) continue;
+                featuredProducts[index] = {
+                    ...item,
+                    display_image: nextImage,
+                    cover_image: nextImage,
+                    image: nextImage,
+                    firstImage: nextImage,
+                    cardImage: nextImage,
+                    hasCardImage: true,
+                    image_missing: false
+                };
+                this._setHomeData({ featuredProducts });
+                return;
+            }
+        }
+
         const candidates = collectFeaturedImageCandidates(item);
         const currentIndex = Math.max(
             Number.isFinite(Number(item.image_candidate_index)) ? Number(item.image_candidate_index) : -1,

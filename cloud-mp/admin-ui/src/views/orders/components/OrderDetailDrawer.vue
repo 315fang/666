@@ -35,6 +35,20 @@
         <el-descriptions-item v-if="detailData.display_refund_error" label="退款异常" :span="2">
           {{ detailData.display_refund_error }}
         </el-descriptions-item>
+        <template v-if="detailData.latest_refund?.type === 'return_refund'">
+          <el-descriptions-item label="退货物流">
+            {{ [detailData.latest_refund.return_company, detailData.latest_refund.return_tracking_no].filter(Boolean).join(' / ') || '待买家填写' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="退货状态">
+            {{ detailData.latest_refund.return_received_at ? '已确认收回' : (detailData.latest_refund.return_tracking_no ? '买家已寄回' : '待买家填写') }}
+          </el-descriptions-item>
+          <el-descriptions-item v-if="detailData.latest_refund.return_address_text" label="寄回地址" :span="2">
+            <span class="pre-line">{{ detailData.latest_refund.return_address_text }}</span>
+          </el-descriptions-item>
+          <el-descriptions-item v-if="detailData.latest_refund.return_received_at" label="确认收回" :span="2">
+            {{ fmtDateTime(detailData.latest_refund.return_received_at) }}
+          </el-descriptions-item>
+        </template>
         <el-descriptions-item label="配送方式">{{ deliveryTypeText(detailData.delivery_type) }}</el-descriptions-item>
         <el-descriptions-item label="下单时间">{{ fmtDateTime(detailData.created_at) }}</el-descriptions-item>
         <el-descriptions-item label="支付时间">{{ fmtDateTime(detailData.paid_at) }}</el-descriptions-item>
@@ -284,6 +298,10 @@ const emit = defineEmits(['update:modelValue', 'viewLogistics'])
 .buyer-remark-block--legacy {
   background: #f4f4f5;
   color: #909399;
+}
+
+.pre-line {
+  white-space: pre-line;
 }
 
 .detail-inline-actions {

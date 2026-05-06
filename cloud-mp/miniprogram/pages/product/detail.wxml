@@ -33,23 +33,6 @@
     </view>
   </view>
 
-  <view
-    class="share-coupon-float share-coupon-status-{{shareCouponBar.status}}"
-    wx:if="{{shareCouponBar}}"
-    style="top: {{navTopPadding + navBarHeight + 10}}px;"
-  >
-    <view class="share-coupon-float-copy">
-      <text class="share-coupon-float-kicker">扫码福利</text>
-      <text class="share-coupon-float-title">{{shareCouponBar.valueText}} · {{shareCouponBar.display_desc}}</text>
-    </view>
-    <view
-      class="share-coupon-float-btn {{shareCouponBar.button_disabled ? 'share-coupon-btn-disabled' : ''}}"
-      bindtap="onClaimShareCoupon"
-    >
-      {{shareCouponBar.button_text}}
-    </view>
-  </view>
-
   <view class="gallery-section">
     <view class="gallery-aspect-wrap">
       <view class="gallery-aspect-inner">
@@ -264,12 +247,6 @@
       <view class="tag {{item.tagClass}}" wx:for="{{servicePledges}}" wx:key="id">
         <image class="tag-icon" src="{{item.icon}}" mode="aspectFit"></image>
         <text>{{item.title}}</text>
-      </view>
-    </view>
-    <view class="pledges-detail-card">
-      <view class="pledge-detail-block" wx:for="{{servicePledges}}" wx:key="id">
-        <text class="pledge-detail-name">{{item.title}}</text>
-        <text class="pledge-detail-copy" wx:if="{{item.desc}}">{{item.desc}}</text>
       </view>
     </view>
   </view>

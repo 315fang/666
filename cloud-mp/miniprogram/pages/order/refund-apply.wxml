@@ -1,25 +1,8 @@
-<!--pages/order/refund-apply.wxml - 申请退货/退款-->
+<!--pages/order/refund-apply.wxml - 申请退款-->
 <view class="container">
-  <view class="section-title">退款类型</view>
-  <radio-group bindchange="onTypeChange" class="type-group">
-    <label class="type-item {{type === 'refund_only' ? 'active' : ''}}">
-      <radio value="refund_only" checked="{{type === 'refund_only'}}" color="#0F172A" />
-      <view class="type-info">
-        <text class="type-name">仅退款</text>
-        <text class="type-desc">无需退货，审核通过后退款</text>
-      </view>
-    </label>
-    <label class="type-item {{type === 'return_refund' ? 'active' : ''}}">
-      <radio value="return_refund" checked="{{type === 'return_refund'}}" color="#0F172A" />
-      <view class="type-info">
-        <text class="type-name">退货退款</text>
-        <text class="type-desc">需要寄回商品后退款</text>
-      </view>
-    </label>
-  </radio-group>
-
   <!-- 订单信息 -->
   <view class="order-card" wx:if="{{order}}">
+    <view class="section-title section-title-inline">订单商品</view>
     <view class="order-summary">
       <text class="product-price">订单合计 ¥{{order.display_pay_amount}} / 共 {{order.quantity}} 件</text>
       <text class="product-price">已退 ¥{{order.display_refunded_cash_total || '0.00'}} / 剩余可退 ¥{{order.display_remaining_refundable_cash || order.display_pay_amount}}</text>
@@ -53,6 +36,32 @@
     </view>
   </view>
 
+  <!-- 退款金额 -->
+  <view class="section-title">退款金额</view>
+  <view class="amount-row">
+    <text class="amount-symbol">¥</text>
+    <text class="amount-value">{{amount || '0.00'}}</text>
+    <text class="amount-max">按现金实付退回</text>
+  </view>
+
+  <view class="section-title">退款类型</view>
+  <radio-group bindchange="onTypeChange" class="type-group">
+    <label class="type-item {{type === 'refund_only' ? 'active' : ''}}">
+      <radio value="refund_only" checked="{{type === 'refund_only'}}" color="#0F172A" />
+      <view class="type-info">
+        <text class="type-name">仅退款</text>
+        <text class="type-desc">无需退货，审核通过后退款</text>
+      </view>
+    </label>
+    <label class="type-item {{type === 'return_refund' ? 'active' : ''}}">
+      <radio value="return_refund" checked="{{type === 'return_refund'}}" color="#0F172A" />
+      <view class="type-info">
+        <text class="type-name">退货退款</text>
+        <text class="type-desc">需要寄回商品后退款</text>
+      </view>
+    </label>
+  </radio-group>
+
   <!-- 退款原因 -->
   <view class="section-title">退款原因</view>
   <picker mode="selector" range="{{reasons}}" range-key="label" value="{{reasonIndex}}" bindchange="onReasonChange">
@@ -64,16 +73,8 @@
   </picker>
 
   <!-- 退款说明 -->
-  <view class="section-title">补充说明（选填）</view>
+  <view class="section-title">补充说明</view>
   <textarea class="desc-input" placeholder="请简要说明问题" bindinput="onDescInput" value="{{description}}" maxlength="200"></textarea>
-
-  <!-- 退款金额 -->
-  <view class="section-title">退款金额（系统计算）</view>
-  <view class="amount-row">
-    <text class="amount-symbol">¥</text>
-    <text class="amount-value">{{amount || '0.00'}}</text>
-    <text class="amount-max">仅退现金，优惠券和积分不返还</text>
-  </view>
 
   <!-- 退货数量提示（仅退货退款显示） -->
   <view wx:if="{{type === 'return_refund'}}">

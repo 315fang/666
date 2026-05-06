@@ -110,7 +110,9 @@ Page({
         try {
             const res = await put(`/refunds/${refund.id}/return-shipping`, {
                 return_tracking_no: trackingNo,
-                return_company: company || undefined
+                return_company: company || undefined,
+                tracking_no: trackingNo,
+                company: company || undefined
             });
             const updatedRefund = normalizeRefundConsumer({
                 ...refund,

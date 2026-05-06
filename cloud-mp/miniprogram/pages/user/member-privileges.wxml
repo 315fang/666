@@ -1,0 +1,120 @@
+<!-- pages/user/member-privileges.wxml - 会员等级权益说明 -->
+<view class="page">
+  <view class="state-wrap" wx:if="{{loading}}">
+    <view class="loading-spinner"></view>
+    <text class="state-text">加载中...</text>
+  </view>
+
+  <view class="state-wrap" wx:elif="{{loadError}}">
+    <view class="state-mark">!</view>
+    <text class="state-text">加载失败</text>
+    <view class="retry-btn ripple" bindtap="onRetry">重试</view>
+  </view>
+
+  <scroll-view scroll-y class="scroll" wx:else>
+    <view class="hero">
+      <view class="hero-copy">
+        <text class="hero-kicker">会员等级权益</text>
+        <text class="hero-title">{{currentRoleName}}</text>
+        <text class="hero-sub">{{nextSummary}}</text>
+      </view>
+      <view class="hero-meter">
+        <text class="hero-meter-num">{{growthValue}}</text>
+        <text class="hero-meter-label">当前成长值</text>
+      </view>
+    </view>
+
+    <scroll-view scroll-x class="level-tabs" show-scrollbar="{{false}}">
+      <view class="level-tabs-inner">
+        <view
+          wx:for="{{levels}}"
+          wx:key="level"
+          data-index="{{index}}"
+          bindtap="onLevelTap"
+          class="level-tab {{index === selectedIndex ? 'level-tab-active' : ''}} {{item.isCurrent ? 'level-tab-current' : ''}}"
+        >
+          <text class="level-tab-name">{{item.name}}</text>
+          <text class="level-tab-meta">Lv.{{item.level}}</text>
+        </view>
+      </view>
+    </scroll-view>
+
+    <swiper
+      class="level-swiper"
+      current="{{selectedIndex}}"
+      duration="260"
+      bindchange="onSwiperChange"
+    >
+      <swiper-item wx:for="{{levels}}" wx:key="level">
+        <scroll-view scroll-y class="level-pane">
+          <view class="level-panel">
+            <view class="level-panel-head">
+              <view>
+                <text class="level-label">Lv.{{item.level}}</text>
+                <text class="level-title">{{item.name}}</text>
+              </view>
+              <text class="status-pill {{item.statusClass}}">{{item.statusText}}</text>
+            </view>
+            <text class="level-brief">{{item.brief}}</text>
+
+            <view class="section-block">
+              <view class="section-head">
+                <image class="section-icon" src="/assets/icons/crown.svg" mode="aspectFit"></image>
+                <text class="section-title">特权概览</text>
+              </view>
+              <view class="privilege-grid">
+                <view class="privilege-item" wx:for="{{item.privileges}}" wx:key="*this" wx:for-item="privilege">
+                  <view class="privilege-dot"></view>
+                  <text class="privilege-text">{{privilege}}</text>
+                </view>
+              </view>
+            </view>
+
+            <view class="team-note ripple" wx:if="{{item.isAgentLevel}}" bindtap="goTeamCenter">
+              <image class="team-note-icon" src="/assets/icons/users.svg" mode="aspectFit"></image>
+              <view class="team-note-copy">
+                <text class="team-note-title">经营明细在团队中心</text>
+                <text class="team-note-desc">团队、佣金、货款和经营数据不在本页展开</text>
+              </view>
+              <text class="team-note-arrow">›</text>
+            </view>
+          </view>
+        </scroll-view>
+      </swiper-item>
+    </swiper>
+
+    <view class="route-section">
+      <view class="route-head">
+        <text class="route-title">完整升级路线</text>
+        <text class="route-sub">从左到右依次解锁身份</text>
+      </view>
+      <scroll-view scroll-x show-scrollbar="{{false}}" class="route-scroll">
+        <view class="route-line">
+          <view
+            wx:for="{{levels}}"
+            wx:key="level"
+            class="route-node {{item.isPassed ? 'route-node-passed' : ''}} {{item.isCurrent ? 'route-node-current' : ''}}"
+          >
+            <text class="route-node-level">Lv.{{item.level}}</text>
+            <text class="route-node-name">{{item.name}}</text>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+
+    <view class="faq-section">
+      <view class="route-head">
+        <text class="route-title">常见问题</text>
+        <text class="route-sub">只保留最容易混淆的规则</text>
+      </view>
+      <view class="faq-list">
+        <view class="faq-item" wx:for="{{faqList}}" wx:key="title">
+          <text class="faq-title">{{item.title}}</text>
+          <text class="faq-body">{{item.body}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="bottom-space"></view>
+  </scroll-view>
+</view>

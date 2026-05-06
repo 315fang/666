@@ -110,10 +110,10 @@ function registerProductBundleRoutes(app, deps) {
         const bundleProductLookup = raw.bundle_product_id || raw.bundleProductId;
         const bundleProduct = bundleProductLookup ? pickBundleProduct(bundleProductLookup) : null;
         if (bundleProductLookup && !bundleProduct) {
-            throw new Error('候选商品不在组合商品库中');
+            throw new Error('候选商品不在特惠随心选中');
         }
         if (bundleProduct && !isEnabledRow(bundleProduct)) {
-            throw new Error(`组合商品库「${pickString(bundleProduct.name || bundleProduct.display_name || bundleProductLookup)}」已停用`);
+            throw new Error(`特惠随心选「${pickString(bundleProduct.name || bundleProduct.display_name || bundleProductLookup)}」已停用`);
         }
 
         const productLookup = bundleProduct
@@ -310,7 +310,7 @@ function registerProductBundleRoutes(app, deps) {
                     source_product_name: pickString(product?.name || product?.title || ''),
                     bundle_product_name: pickString(bundleProduct?.name || bundleProduct?.display_name || ''),
                     bundle_category_name: pickString(bundleProduct?.category_name || ''),
-                    library_label: bundleProduct ? '组合商品库' : '普通商品',
+                    library_label: bundleProduct ? '特惠随心选' : '普通商品',
                     product_image: resolveProductImage(product),
                     sku_name: pickString(sku?.name || ''),
                     sku_spec: buildSkuSpecText(sku),

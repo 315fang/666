@@ -16,9 +16,17 @@
 }
 
 .header-title {
+  display: block;
   font-size: 34rpx;
   font-weight: 700;
   color: #1A1A1A;
+}
+
+.header-subtitle {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #64748B;
 }
 
 .loading-state {
@@ -221,6 +229,22 @@
   font-size: 28rpx;
   color: #999999;
   margin-top: 16rpx;
+}
+
+.empty-action {
+  margin-top: 24rpx;
+  min-width: 176rpx;
+  height: 64rpx;
+  padding: 0 28rpx;
+  border-radius: 999rpx;
+  background: #1E4A6D;
+  color: #FFFFFF;
+  font-size: 26rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .recommend-title {

@@ -1,4 +1,4 @@
-<!--pages/search/search.wxml - 问兰镜像搜索页 -->
+<!--pages/search/search.wxml - 商品搜索 -->
 <view class="container">
   <!-- 1. 顶部搜索栏 (极简设计) -->
   <view class="search-header">
@@ -68,13 +68,19 @@
               wx:key="id"
               bindtap="onProductTap" 
               data-item="{{item}}">
-          <image class="prod-img" src="{{item.image || (item.images && item.images[0]) || '/assets/images/placeholder.svg'}}" mode="aspectFill"></image>
+          <image
+            class="prod-img"
+            src="{{item.cardImage || item.image || (item.images && item.images[0]) || '/assets/images/placeholder.svg'}}"
+            mode="aspectFill"
+            binderror="onProductImageError"
+            data-index="{{index}}"
+          ></image>
           <view class="prod-info">
             <text class="prod-name">{{item.name}}</text>
             <view class="prod-price-row">
               <text class="price-unit">¥</text>
-              <text class="price-val">{{item.retail_price}}</text>
-              <text class="sales-val" wx:if="{{item.sales_count > 0}}">月销{{item.sales_count}}+</text>
+              <text class="price-val">{{item.displayPrice || item.price || item.retail_price || 0}}</text>
+              <text class="sales-val" wx:if="{{item.sales_label || item.sales_count > 0}}">{{item.sales_label || ('月销' + item.sales_count + '+')}}</text>
             </view>
           </view>
         </view>

@@ -1,4 +1,4 @@
-/* 我的优惠券 */
+/* 我的券包 */
 page {
   height: 100%;
   overflow: hidden;
@@ -122,7 +122,12 @@ page {
   padding: 100rpx 40rpx; gap: 14rpx;
   width: 100%; box-sizing: border-box; overflow-x: hidden;
 }
-.empty-emoji { font-size: 80rpx; margin-bottom: 8rpx; }
+.empty-icon {
+  width: 80rpx;
+  height: 80rpx;
+  margin-bottom: 8rpx;
+  opacity: 0.62;
+}
 .empty-text { font-size: 28rpx; color: #1f2937; text-align: center; font-weight: 600; }
 .empty-sub { font-size: 24rpx; color: #6b7280; text-align: center; }
 .empty-btn {
@@ -197,17 +202,17 @@ page {
 .coupon-card.unused.coupon-expired { border-color: #e5e7eb; background: #f9fafb; }
 
 .coupon-left {
-  padding: 28rpx 12rpx 28rpx 20rpx; display: flex; flex-direction: column;
+  padding: 28rpx 16rpx; display: flex; flex-direction: column;
   align-items: center; justify-content: center; min-width: 0;
   box-sizing: border-box; background: #fef2f2;
 }
 .coupon-value-wrap {
-  min-height: 74rpx; display: flex; align-items: flex-start; justify-content: center;
+  min-height: 76rpx; display: flex; align-items: flex-end; justify-content: center;
   color: #dc2626; gap: 4rpx; width: 100%;
 }
-.coupon-exchange-badge { font-size: 26rpx; font-weight: 700; color: #dc2626; }
-.coupon-currency { font-size: 28rpx; font-weight: 700; line-height: 1; padding-top: 8rpx; }
-.coupon-value { font-size: 60rpx; font-weight: 800; line-height: 1; text-align: center; font-variant-numeric: tabular-nums; }
+.coupon-exchange-badge { font-size: 26rpx; font-weight: 700; color: #dc2626; margin-bottom: 8rpx; flex-shrink: 0; }
+.coupon-currency { font-size: 28rpx; font-weight: 700; line-height: 1; margin-bottom: 8rpx; flex-shrink: 0; }
+.coupon-value { display: block; font-size: 60rpx; font-weight: 800; line-height: 1; text-align: center; font-variant-numeric: tabular-nums; }
 .coupon-min { font-size: 22rpx; color: #991b1b; margin-top: 10rpx; text-align: center; line-height: 1.35; }
 
 .coupon-divider { display: flex; flex-direction: column; align-items: center; justify-content: space-between; width: 2rpx; position: relative; }

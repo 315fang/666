@@ -52,7 +52,7 @@ Page({
         const couponId = String(options.id || parsed.id || parsed.cid || options.coupon_id || '');
         console.log('[coupon-claim] parsed scene:', rawScene, '→', parsed, '→ couponId:', couponId, 'ticketId:', ticketId);
         if (!couponId && !ticketId) {
-            this.setData({ loading: false, claimStatus: 'error', claimMsg: '无效的优惠券链接' });
+            this.setData({ loading: false, claimStatus: 'error', claimMsg: '券包链接无效' });
             return;
         }
         this.setData({ couponId, ticketId });
@@ -70,7 +70,7 @@ Page({
             const claimStatus = String(res && res.claim_status || '').trim();
             const claimMessage = String(res && res.claim_message || '').trim();
             if (!found || !coupon) {
-                this.setData({ loading: false, claimStatus: 'error', claimMsg: '优惠券不存在或已下架' });
+                this.setData({ loading: false, claimStatus: 'error', claimMsg: '券包已下架' });
                 return;
             }
             const valueText = couponValueText(coupon);
@@ -176,8 +176,11 @@ Page({
     },
 
     goToCouponList() {
-        wx.switchTab({ url: '/pages/user/user' }).catch(() => {
-            wx.navigateTo({ url: '/pages/coupon/list' });
+        wx.switchTab({
+            url: '/pages/user/user',
+            fail: () => {
+                wx.navigateTo({ url: '/pages/coupon/list' });
+            }
         });
     },
 
@@ -188,7 +191,7 @@ Page({
     onShareAppMessage() {
         const { coupon, couponId, ticketId } = this.data;
         return {
-            title: coupon ? `${coupon.name} — 限时领取！` : '领取优惠券',
+            title: coupon ? `${coupon.name} - 限时领取` : '扫码领券',
             path: ticketId ? `/pages/coupon/claim?ticket=${ticketId}` : `/pages/coupon/claim?id=${couponId}`
         };
     }

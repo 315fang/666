@@ -1,0 +1,380 @@
+[
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-001.png",
+    "Source": "material",
+    "Name": "主图04",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774188183879_279ed7522c243d8e.png",
+    "Bytes": 218057
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-002.jpg",
+    "Source": "material",
+    "Name": "955094ea4976b4bda98ff397979da0a2",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1774767923815_dc6e31ff743275ba.jpg",
+    "Bytes": 121551
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-003.png",
+    "Source": "material",
+    "Name": "主图01",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775013321299_9076d97661b913ff.png",
+    "Bytes": 532466
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-004.png",
+    "Source": "product",
+    "Name": "问兰护肤尊享礼盒",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775013338189_57a28ea1867aa2f8.png",
+    "Bytes": 558691
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-005.png",
+    "Source": "product",
+    "Name": "问兰护肤尊享礼盒",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775013345557_fca55086b2d4176c.png",
+    "Bytes": 237225
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-006.png",
+    "Source": "material",
+    "Name": "详情页00",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775013363041_1a43e5020c2494d4.png",
+    "Bytes": 3259980
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-007.jpg",
+    "Source": "material",
+    "Name": "202506281058219dc5e6297",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775015767948_c941fdd88150f2f2.jpg",
+    "Bytes": 171432
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-008.png",
+    "Source": "material",
+    "Name": "c4d49007-ed35-4e98-98cb-8a2fc86d5b51",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775015902443_d02ca95a69562f5d.png",
+    "Bytes": 171754
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-009.png",
+    "Source": "product",
+    "Name": "小极光焕彩面霜",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775015990761_d4ff613fd1e9a53b.png",
+    "Bytes": 607526
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-010.png",
+    "Source": "material",
+    "Name": "主图02",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775015995214_2ae8abecf8b99125.png",
+    "Bytes": 484407
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-011.png",
+    "Source": "material",
+    "Name": "主图01",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775015999498_0c680ab51adb1c91.png",
+    "Bytes": 243315
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-012.png",
+    "Source": "product",
+    "Name": "小极光焕彩面霜",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016004460_187ebf5a2880161c.png",
+    "Bytes": 3321976
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-013.png",
+    "Source": "product",
+    "Name": "绿魔方抗皱焕颜霜/",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016049176_e1c6dbbd71f96879.png",
+    "Bytes": 304887
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-014.png",
+    "Source": "product",
+    "Name": "绿魔方抗皱焕颜霜/",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016052617_6402058c1a37a891.png",
+    "Bytes": 418304
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-015.png",
+    "Source": "product",
+    "Name": "绿魔方抗皱焕颜霜/",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016055634_976f64f5298df86e.png",
+    "Bytes": 460354
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-016.png",
+    "Source": "product",
+    "Name": "绿魔方抗皱焕颜霜/",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016064737_b4322a528a820ad4.png",
+    "Bytes": 3373060
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-017.png",
+    "Source": "product",
+    "Name": "问兰燕窝精萃露",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016119797_16bff5e657e0f1a4.png",
+    "Bytes": 648307
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-018.png",
+    "Source": "product",
+    "Name": "问兰燕窝精萃露",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016128608_422eafcde0f1d017.png",
+    "Bytes": 768321
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-019.png",
+    "Source": "product",
+    "Name": "问兰燕窝精萃露",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016133076_495a911604dbb3ab.png",
+    "Bytes": 295545
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-020.png",
+    "Source": "product",
+    "Name": "问兰燕窝精萃露",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016137563_b18f4aff630ec286.png",
+    "Bytes": 3823194
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-021.png",
+    "Source": "product",
+    "Name": "问兰氨基酸洁面慕斯",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016185150_647fd6d7fadb2f1d.png",
+    "Bytes": 135387
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-022.png",
+    "Source": "material",
+    "Name": "主图02",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016189591_87171939f6ef5f4b.png",
+    "Bytes": 248127
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-023.png",
+    "Source": "material",
+    "Name": "主图03",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016192857_afa77531b583a5e1.png",
+    "Bytes": 521387
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-024.png",
+    "Source": "material",
+    "Name": "产品详情页01",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775016199942_dddf0eef5b8d7014.png",
+    "Bytes": 2487696
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-025.png",
+    "Source": "product",
+    "Name": "玻色因紧致面霜",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775267022149_87d1c87b2545e176.png",
+    "Bytes": 355598
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-026.png",
+    "Source": "material",
+    "Name": "主图04",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775267033677_e2bcf7f8c30075d0.png",
+    "Bytes": 122862
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-027.png",
+    "Source": "material",
+    "Name": "主图02",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775267038934_7cd11499daad8944.png",
+    "Bytes": 318399
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-028.png",
+    "Source": "material",
+    "Name": "主图03",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775267043243_39b5786717a8efb6.png",
+    "Bytes": 386870
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-029.png",
+    "Source": "product",
+    "Name": "玻色因紧致面霜",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775267056975_6d2efb7b60dadae8.png",
+    "Bytes": 3757032
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-030.png",
+    "Source": "material",
+    "Name": "详情页00",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775267110325_1f843d22fc3b46a7.png",
+    "Bytes": 3281279
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-031.png",
+    "Source": "material",
+    "Name": "05",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775278204947_b26a5229f13da3aa.png",
+    "Bytes": 45295
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-032.jpg",
+    "Source": "material",
+    "Name": "反-",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/materials/1775278311865_638f0c58f2f44df5.jpg",
+    "Bytes": 66909
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-033.jpg",
+    "Source": "material",
+    "Name": "03d5a4dd2a5aa273d918fc2bdb2be155",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1773442002338_e2c0135b1b16e32e.jpg",
+    "Bytes": 242400
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-034.png",
+    "Source": "product",
+    "Name": "问兰灯塔皮脂膜精华乳 ",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1773887249237_39ce3afec6386c20.png",
+    "Bytes": 200786
+  },
+  {
+    "File": "",
+    "Source": "product",
+    "Name": "镜像案例库特惠/皮脂膜精华液+抗皱保湿精华液+燕窝精萃露",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774074009052_d9731bb253058045.jpg",
+    "Error": "Exception calling \"DownloadFile\" with \"2\" argument(s): \"The remote server returned an error: (404) Not Found.\""
+  },
+  {
+    "File": "",
+    "Source": "product",
+    "Name": "镜像案例库奢护/体验理套装+赠瞬间抗皱神器",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774074019910_9231dd64d8335181.jpg",
+    "Error": "Exception calling \"DownloadFile\" with \"2\" argument(s): \"The remote server returned an error: (404) Not Found.\""
+  },
+  {
+    "File": "",
+    "Source": "banner",
+    "Name": "问兰燕窝邂逅试用礼",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774074340036_7d9c82195f9c1d1b.jpg",
+    "Error": "Exception calling \"DownloadFile\" with \"2\" argument(s): \"The remote server returned an error: (404) Not Found.\""
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-035.png",
+    "Source": "material",
+    "Name": "04",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774075734170_06e1b686b485a29a.png",
+    "Bytes": 67242
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-036.png",
+    "Source": "material",
+    "Name": "03",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774768914813_651da84fd0b30edd.png",
+    "Bytes": 101571
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-037.png",
+    "Source": "material",
+    "Name": "05",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774777266827_01cdc89b5213d9a3.png",
+    "Bytes": 130464
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-038.png",
+    "Source": "material",
+    "Name": "è½®çªå¾",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774779111061_71efc96d09c81509.png",
+    "Bytes": 225270
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-039.png",
+    "Source": "material",
+    "Name": "ç ä»·",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774779854975_d897326deaf635b7.png",
+    "Bytes": 81448
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-040.png",
+    "Source": "material",
+    "Name": "æ¼å¢",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774779907505_f11b35a16d10cb15.png",
+    "Bytes": 133267
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-041.jpg",
+    "Source": "material",
+    "Name": "8a4e85a56b320b75f61938cac38844b1",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774781331806_5742e69a574a8558.jpg",
+    "Bytes": 282025
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-042.jpg",
+    "Source": "material",
+    "Name": "f44d8569c72741ee29ca4e942c85d77a",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774781349552_7619f0853f526de3.jpg",
+    "Bytes": 271145
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-043.jpg",
+    "Source": "material",
+    "Name": "ee6c0e0d1d0472c5929817d32b7fce07",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774781355857_7a496d598a882558.jpg",
+    "Bytes": 132451
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-044.jpg",
+    "Source": "material",
+    "Name": "6a883ecbdc07a5930b0842bc22266a86",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1774781688910_a885d9e2d5a8edd0.jpg",
+    "Bytes": 339098
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-045.png",
+    "Source": "material",
+    "Name": "18",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1775014721563_121f4600378b3f7e.png",
+    "Bytes": 137433
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-046.png",
+    "Source": "product",
+    "Name": "问兰灯塔皮脂膜精华乳 ",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1775015408934_18fcc6e02c8e8526.png",
+    "Bytes": 45782
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-047.png",
+    "Source": "product",
+    "Name": "问兰灯塔皮脂膜精华乳 ",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1775015467907_6a61e38ba210903f.png",
+    "Bytes": 506904
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-048.png",
+    "Source": "product",
+    "Name": "问兰灯塔皮脂膜精华乳 ",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1775015536586_88ec61cd98cf473d.png",
+    "Bytes": 411412
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-049.png",
+    "Source": "material",
+    "Name": "è¯¦æ\u0085é¡µ01",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1775015602274_e4f2e84855fb0edb.png",
+    "Bytes": 410399
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-050.png",
+    "Source": "material",
+    "Name": "è¯¦æ\u0085é¡µ03",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1775015656140_4cd388539bc6a8aa.png",
+    "Bytes": 411412
+  },
+  {
+    "File": "C:\\Users\\21963\\WeChatProjects\\zz\\cloud-mp\\outputs\\imagegen\\product-assets\\asset-051.png",
+    "Source": "banner",
+    "Name": "问兰灯塔皮脂膜精华乳",
+    "Url": "https://oss-1357612648.cos.ap-shanghai.myqcloud.com/products/1775016272809_79c3d51d689a3b93.png",
+    "Bytes": 411412
+  }
+]

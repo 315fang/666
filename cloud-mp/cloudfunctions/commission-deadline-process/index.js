@@ -108,6 +108,7 @@ async function releaseFrozenPointLog(log = {}, order = {}) {
     if (!logId) return { released: 0, cancelled: 0 };
     const locked = await lockPointLog(logId);
     if (!locked) return { released: 0, cancelled: 0, skipped: true };
+    let userCredited = false;
 
     try {
         if (releaseAmount <= 0) {
@@ -146,6 +147,7 @@ async function releaseFrozenPointLog(log = {}, order = {}) {
         if (!userUpdate.stats || userUpdate.stats.updated === 0) {
             throw new Error('point reward user update failed');
         }
+        userCredited = true;
 
         await db.collection('point_logs').doc(logId).update({
             data: {
@@ -171,13 +173,37 @@ async function releaseFrozenPointLog(log = {}, order = {}) {
         }
         return { released: releaseAmount, cancelled: cancelledAmount };
     } catch (err) {
-        await db.collection('point_logs').doc(logId).update({
-            data: {
-                release_error: err.message || String(err),
-                releasing_at: _.remove(),
-                updated_at: db.serverDate()
-            }
-        }).catch(() => null);
+        let rollbackFailed = false;
+        if (userCredited && releaseAmount > 0) {
+            const rollbackRes = await db.collection('users')
+                .where({ openid: log.openid })
+                .update({
+                    data: {
+                        points: _.inc(-releaseAmount),
+                        updated_at: db.serverDate()
+                    }
+                })
+                .catch((rollbackErr) => {
+                    rollbackFailed = true;
+                    console.error('[CommissionDeadlineProcess] point reward rollback failed:', rollbackErr.message);
+                    return { stats: { updated: 0 } };
+                });
+            if (!rollbackRes.stats || rollbackRes.stats.updated === 0) rollbackFailed = true;
+        }
+
+        const errorPatch = {
+            release_error: err.message || String(err),
+            updated_at: db.serverDate()
+        };
+        if (rollbackFailed) {
+            errorPatch.release_recovery_required = true;
+            errorPatch.release_recovery_amount = releaseAmount;
+        } else {
+            errorPatch.releasing_at = _.remove();
+            errorPatch.release_recovery_required = _.remove();
+            errorPatch.release_recovery_amount = _.remove();
+        }
+        await db.collection('point_logs').doc(logId).update({ data: errorPatch }).catch(() => null);
         throw err;
     }
 }

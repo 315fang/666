@@ -125,7 +125,7 @@ test('creating bundle product stores a separate combo-library row', async () => 
     assert.equal(response.body.data.product_id, '1');
     assert.equal(response.body.data.name, 'Combo Library Product');
     assert.equal(response.body.data.product_name, 'Normal Product');
-    assert.equal(response.body.data.library_label, '组合商品库');
+    assert.equal(response.body.data.library_label, '特惠随心选');
 });
 
 test('deleting bundle product fails when it is used by a product bundle', async () => {

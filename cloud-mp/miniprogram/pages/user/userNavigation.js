@@ -11,8 +11,12 @@ function navigateIfLoggedIn(url) {
     return true;
 }
 
-function goTeamCenter() {
+function goTeamCenter(page) {
     if (!requireLogin()) return;
+    if (page && page.data && !page.data.showBusinessCenter && !page.data.isStoreManager && !page.data.showPickupVerify) {
+        wx.showToast({ title: '当前身份暂未开放团队中心', icon: 'none' });
+        return;
+    }
     wx.navigateTo({ url: '/pages/distribution/business-center' });
 }
 

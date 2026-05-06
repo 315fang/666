@@ -1,4 +1,4 @@
-<!--pages/coupon/list.wxml - 我的优惠券-->
+<!--pages/coupon/list.wxml - 我的券包-->
 <view class="container">
   <!-- 导航 -->
   <view class="nav-bar" style="padding-top: {{navTopPadding}}px;">
@@ -7,7 +7,7 @@
         <image class="nav-icon" src="/assets/icons/arrow-left.svg" mode="aspectFit"/>
       </view>
       <view class="nav-title">
-        <text class="nav-title-text">我的优惠券</text>
+        <text class="nav-title-text">我的券包</text>
       </view>
       <view class="nav-placeholder"></view>
     </view>
@@ -16,11 +16,11 @@
   <!-- Tab 切换 -->
   <view class="tab-row">
     <view class="tab-item {{activeTab === 'unused' ? 'active' : ''}}" bindtap="switchTab" data-tab="unused">
-      未使用
+      可用券包
       <text class="tab-count" wx:if="{{unusedCount > 0}}">{{unusedCount}}</text>
     </view>
-    <view class="tab-item {{activeTab === 'used' ? 'active' : ''}}" bindtap="switchTab" data-tab="used">已使用</view>
-    <view class="tab-item {{activeTab === 'expired' ? 'active' : ''}}" bindtap="switchTab" data-tab="expired">已过期</view>
+    <view class="tab-item {{activeTab === 'used' ? 'active' : ''}}" bindtap="switchTab" data-tab="used">已用券包</view>
+    <view class="tab-item {{activeTab === 'expired' ? 'active' : ''}}" bindtap="switchTab" data-tab="expired">过期券包</view>
     <!-- 滑动指示器 -->
     <view class="tab-indicator-track">
       <view class="tab-indicator" style="transform:translateX({{activeTab === 'unused' ? '0%' : activeTab === 'used' ? '100%' : '200%'}});"></view>
@@ -32,10 +32,10 @@
 
     <!-- 未登录提示 -->
     <view class="empty-wrap card-enter" wx:if="{{notLoggedIn}}">
-      <text class="empty-emoji">🔐</text>
+      <image class="empty-icon" src="/assets/icons/shield.svg" mode="aspectFit"></image>
       <text class="empty-text">请先登录</text>
-      <text class="empty-sub">登录后查看您的专属优惠券</text>
-      <view class="empty-btn ripple" bindtap="onGoLogin">去登录</view>
+      <text class="empty-sub">登录后查看已领取券包</text>
+      <view class="empty-btn ripple" bindtap="onGoLogin">立即登录</view>
     </view>
 
     <!-- 骨架屏 loading -->
@@ -52,12 +52,12 @@
 
     <!-- 空状态 -->
     <view class="empty-wrap card-enter" wx:elif="{{!coupons.length}}">
-      <text class="empty-emoji">{{activeTab === 'unused' ? '🎫' : activeTab === 'used' ? '✅' : '⏰'}}</text>
-      <text class="empty-text" wx:if="{{activeTab === 'unused'}}">暂无可用优惠券</text>
+      <image class="empty-icon" src="{{activeTab === 'unused' ? '/assets/icons/tag.svg' : activeTab === 'used' ? '/assets/icons/check-circle.svg' : '/assets/icons/clock.svg'}}" mode="aspectFit"></image>
+      <text class="empty-text" wx:if="{{activeTab === 'unused'}}">暂无券包</text>
       <text class="empty-sub" wx:if="{{activeTab === 'unused'}}">快去参与活动领券吧</text>
-      <view class="empty-btn ripple" wx:if="{{activeTab === 'unused'}}" bindtap="onOpenCouponCenter">前往优惠券中心</view>
-      <text class="empty-text" wx:elif="{{activeTab === 'used'}}">暂无已使用记录</text>
-      <text class="empty-text" wx:else>暂无已过期记录</text>
+      <view class="empty-btn ripple" wx:if="{{activeTab === 'unused'}}" bindtap="onOpenCouponCenter">领券中心</view>
+      <text class="empty-text" wx:elif="{{activeTab === 'used'}}">暂无记录</text>
+      <text class="empty-text" wx:else>暂无记录</text>
     </view>
 
     <!-- 真实券列表 -->

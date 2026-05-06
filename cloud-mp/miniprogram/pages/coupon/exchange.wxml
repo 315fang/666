@@ -1,12 +1,12 @@
 <view class="container">
   <view class="nav-bar glass-dark">
     <view class="nav-back ripple" bindtap="onBack">‹</view>
-    <text class="nav-title">兑换专区</text>
+    <text class="nav-title">兑换商品</text>
     <view class="nav-placeholder"></view>
   </view>
 
   <view class="hero-card card-enter" wx:if="{{coupon}}">
-    <text class="hero-title">🎁 {{coupon.exchange_meta.title || coupon.coupon_name}}</text>
+    <text class="hero-title">{{coupon.exchange_meta.title || coupon.coupon_name}}</text>
     <text class="hero-sub">请选择要兑换的商品，提交后将生成 0 元兑换订单。</text>
   </view>
 
@@ -16,7 +16,7 @@
   </view>
 
   <view class="empty-wrap card-enter" wx:elif="{{!products.length}}">
-    <text class="empty-emoji">📦</text>
+    <image class="empty-icon" src="/assets/icons/package.svg" mode="aspectFit"></image>
     <text class="empty-text">{{emptyText || '暂无可兑换商品'}}</text>
   </view>
 
@@ -28,7 +28,7 @@
       <view class="product-copy">
         <text class="product-name">{{item.name}}</text>
         <text class="product-desc">{{item.description}}</text>
-        <text class="product-action">去兑换 ›</text>
+        <text class="product-action">立即兑换 ›</text>
       </view>
     </view>
   </view>

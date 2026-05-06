@@ -28,12 +28,35 @@
           <text class="balance-sub">代理订货与发货结算资金</text>
         </view>
         <view class="hero-balance-card {{showGoodsWallet ? '' : 'full'}}" bindtap="onPurseWalletTap">
-          <text class="balance-label">佣金钱包</text>
+          <text class="balance-label">可提佣金</text>
           <text class="balance-amount">¥{{purseBalanceDisplay}}</text>
-          <text class="balance-sub">可提现佣金与佣金明细</text>
+          <text class="balance-sub">可提佣金与佣金明细</text>
         </view>
       </view>
 
+    </view>
+
+    <view class="workbench-panel" wx:if="{{isStoreManager || showPickupVerify}}">
+      <view class="workbench-head">
+        <view>
+          <text class="workbench-title">今日待处理</text>
+          <text class="workbench-sub">{{storeManagerStationName || '门店与自提任务'}}</text>
+        </view>
+      </view>
+      <view class="workbench-actions">
+        <view class="workbench-action" wx:if="{{isStoreManager}}" bindtap="goMyStation">
+          <text class="workbench-action-title">店长工作台</text>
+          <text class="workbench-action-desc">库存、采购、门店资料</text>
+        </view>
+        <view class="workbench-action" wx:if="{{showPickupVerify}}" bindtap="goPickupVerify">
+          <text class="workbench-action-title">扫码核销</text>
+          <text class="workbench-action-desc">输入核销码或扫码完成自提</text>
+        </view>
+        <view class="workbench-action" wx:if="{{showPickupVerify}}" bindtap="goPickupOrders">
+          <text class="workbench-action-title">待核销订单</text>
+          <text class="workbench-action-desc">查看待处理自提订单</text>
+        </view>
+      </view>
     </view>
 
     <view class="stats-panel">
@@ -57,7 +80,7 @@
           <text class="stats-sub-value">¥{{totalEarnings}}</text>
         </view>
         <view class="stats-sub-item">
-          <text class="stats-sub-label">可提现佣金</text>
+          <text class="stats-sub-label">可提佣金</text>
           <text class="stats-sub-value">¥{{availableAmount}}</text>
         </view>
         <view class="stats-sub-item">
@@ -79,8 +102,8 @@
           <text class="quick-desc">查看余额、流水与货款明细</text>
         </view>
         <view class="quick-card" wx:if="{{!showGoodsWallet}}" bindtap="onPurseWalletTap">
-          <text class="quick-title">钱包明细</text>
-          <text class="quick-desc">购物余额、充值和消费记录</text>
+          <text class="quick-title">可提佣金</text>
+          <text class="quick-desc">查看可提佣金与佣金明细</text>
         </view>
         <view class="quick-card" wx:if="{{canDirectedInvite}}" bindtap="goDirectedInvites">
           <text class="quick-title">推广合伙人邀约</text>
@@ -91,7 +114,7 @@
           <text class="quick-desc">查看累计收益、可提现与结算记录</text>
         </view>
         <view class="quick-card" bindtap="goFundPool">
-          <text class="quick-title">我的基金池</text>
+          <text class="quick-title">基金贡献</text>
           <text class="quick-desc">查看个人贡献与四个池子当前余额</text>
         </view>
       </view>

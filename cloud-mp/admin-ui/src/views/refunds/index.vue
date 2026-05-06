@@ -25,7 +25,7 @@
       <!-- 搜索栏 -->
       <el-form :inline="true" :model="searchForm" class="search-form">
         <el-form-item label="用户搜索">
-          <el-input v-model="searchForm.keyword" placeholder="昵称/手机号/会员码/订单号" clearable style="width: 220px" @keyup.enter="handleSearch" />
+          <el-input v-model="searchForm.keyword" placeholder="昵称/手机号/订单号/退货单号" clearable style="width: 260px" @keyup.enter="handleSearch" />
         </el-form-item>
         <el-form-item label="状态">
           <el-select v-model="searchForm.status" placeholder="全部状态" clearable style="width: 130px">
@@ -100,6 +100,19 @@
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="getStatusType(row.status)">{{ row.display_status_text }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="退货物流" width="180" class-name="hide-mobile">
+          <template #default="{ row }">
+            <div v-if="isReturnRefund(row)" class="return-logistics-cell">
+              <el-tag :type="getReturnLogisticsTagType(row)" effect="plain" size="small">
+                {{ getReturnLogisticsStatusText(row) }}
+              </el-tag>
+              <div v-if="returnTrackingText(row) !== '-'" class="return-logistics-tracking">
+                {{ returnTrackingText(row) }}
+              </div>
+            </div>
+            <span v-else class="text-gray">不需退货</span>
           </template>
         </el-table-column>
         <el-table-column label="申请时间" width="170" class-name="hide-mobile">
@@ -256,7 +269,7 @@ const selectedRows = ref([])
 
 /**
  * 售后搜索字段说明：
- *  keyword - 后端模糊匹配买家昵称 / 手机号 / 会员码 / 订单号 / 退款单 ID / 商品名
+ *  keyword - 后端模糊匹配买家昵称 / 手机号 / 会员码 / 订单号 / 退款单号 / 退货物流 / 商品名
  *  status  - 售后单状态精确筛选（pending/approved/processing/rejected/completed）
  */
 const searchForm = reactive({
@@ -331,6 +344,21 @@ const refundTargetText = (row = {}) => (
 const refundStatusText = (row = {}) => row.status_text || getStatusText(row.status)
 const isReturnRefund = (row = {}) => String(row.type || '').trim() === 'return_refund'
 const returnTrackingText = (row = {}) => [row.return_company, row.return_tracking_no].filter(Boolean).join(' ') || '-'
+const getReturnLogisticsStatusText = (row = {}) => {
+  if (!isReturnRefund(row)) return '不需退货'
+  if (row.return_received_at) return '已确认收回'
+  if (row.return_tracking_no) return '买家已寄回'
+  if (['approved', 'processing'].includes(row.status)) return '待买家填写'
+  if (row.status === 'pending') return '待审核'
+  return '未填写'
+}
+const getReturnLogisticsTagType = (row = {}) => {
+  if (!isReturnRefund(row)) return 'info'
+  if (row.return_received_at) return 'success'
+  if (row.return_tracking_no) return 'primary'
+  if (['approved', 'processing'].includes(row.status)) return 'warning'
+  return 'info'
+}
 
 const fetchRefunds = async () => {
   loading.value = true
@@ -641,5 +669,22 @@ const getStatusText = (status) => {
 
 .pre-line {
   white-space: pre-line;
+}
+
+.return-logistics-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.return-logistics-tracking {
+  max-width: 150px;
+  color: #606266;
+  font-size: 12px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

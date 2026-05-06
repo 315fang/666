@@ -544,23 +544,113 @@ async function issuePointsReward(openid, record, points, reason) {
     if (!updateRes.stats || updateRes.stats.updated === 0) {
         throw new Error('积分奖励发放失败：用户不存在');
     }
-    const logRes = await db.collection('point_logs').add({
-        data: {
-            openid,
-            type: 'earn',
-            amount,
-            source: 'lottery',
-            lottery_record_id: record.id,
-            prize_id: pickString(record.prize_id),
-            description: reason,
-            created_at: db.serverDate()
-        }
-    });
+    let logRes;
+    try {
+        logRes = await db.collection('point_logs').add({
+            data: {
+                openid,
+                type: 'earn',
+                amount,
+                source: 'lottery',
+                lottery_record_id: record.id,
+                prize_id: pickString(record.prize_id),
+                description: reason,
+                created_at: db.serverDate()
+            }
+        });
+    } catch (error) {
+        await db.collection('users').where({ openid }).update({
+            data: {
+                points: _.inc(-amount),
+                updated_at: db.serverDate()
+            }
+        }).catch((rollbackError) => {
+            console.error('[lottery] 积分奖励日志失败后回滚积分失败:', rollbackError.message || rollbackError);
+        });
+        throw error;
+    }
     return {
         reward_actual_type: 'points',
         reward_ref_type: 'point_log',
         reward_ref_id: logRes._id || ''
     };
+}
+
+async function deductLotteryDrawCost(openid, points) {
+    const amount = Math.max(0, Math.floor(toNumber(points, 0)));
+    if (amount <= 0) return false;
+    const deductRes = await db.collection('users')
+        .where({ openid, points: _.gte(amount) })
+        .update({
+            data: {
+                points: _.inc(-amount),
+                updated_at: db.serverDate()
+            }
+        })
+        .catch(() => ({ stats: { updated: 0 } }));
+    if (!deductRes.stats || deductRes.stats.updated === 0) {
+        throw new Error(`积分不足，当前抽奖需要 ${amount} 积分`);
+    }
+    try {
+        await db.collection('point_logs').add({
+            data: {
+                openid,
+                type: 'spend',
+                amount,
+                source: 'lottery_draw',
+                description: `抽奖消耗 ${amount} 积分`,
+                created_at: db.serverDate()
+            }
+        });
+    } catch (error) {
+        await db.collection('users').where({ openid }).update({
+            data: {
+                points: _.inc(amount),
+                updated_at: db.serverDate()
+            }
+        }).catch((rollbackError) => {
+            console.error('[lottery] 抽奖扣积分日志失败后回滚积分失败:', rollbackError.message || rollbackError);
+        });
+        throw error;
+    }
+    return true;
+}
+
+async function refundLotteryDrawCost(openid, points, recordId = '', reason = '抽奖失败退回积分') {
+    const amount = Math.max(0, Math.floor(toNumber(points, 0)));
+    if (amount <= 0) return false;
+    const refundRes = await db.collection('users').where({ openid }).update({
+        data: {
+            points: _.inc(amount),
+            updated_at: db.serverDate()
+        }
+    });
+    if (!refundRes.stats || refundRes.stats.updated === 0) {
+        throw new Error('抽奖消耗积分退回失败：用户不存在');
+    }
+    await db.collection('point_logs').add({
+        data: {
+            openid,
+            type: 'earn',
+            amount,
+            source: 'lottery_draw_refund',
+            lottery_record_id: recordId,
+            description: reason,
+            created_at: db.serverDate()
+        }
+    }).catch((error) => {
+        console.error('[lottery] 抽奖积分退回日志写入失败:', error.message || error);
+    });
+    if (recordId) {
+        await db.collection('lottery_records').doc(String(recordId)).update({
+            data: {
+                cost_points_refunded_at: db.serverDate(),
+                cost_points_refund_reason: reason,
+                updated_at: db.serverDate()
+            }
+        }).catch(() => null);
+    }
+    return true;
 }
 
 async function issueCouponReward(openid, user, record, snapshot) {
@@ -617,31 +707,79 @@ async function issueGoodsFundReward(openid, user, record, snapshot) {
         throw new Error('货款奖励发放失败：无法初始化货款账户');
     }
 
-    await db.collection('wallet_accounts').doc(String(account._id || account.id)).update({
-        data: {
-            balance: _.inc(amount),
-            updated_at: db.serverDate()
+    const accountId = String(account._id || account.id);
+    let accountCredited = false;
+    let userCredited = false;
+    try {
+        await db.collection('wallet_accounts').doc(accountId).update({
+            data: {
+                balance: _.inc(amount),
+                updated_at: db.serverDate()
+            }
+        });
+        accountCredited = true;
+        const userUpdateRes = await db.collection('users').where({ openid }).update({
+            data: {
+                agent_wallet_balance: _.inc(amount),
+                wallet_balance: _.inc(amount),
+                updated_at: db.serverDate()
+            }
+        });
+        if (!userUpdateRes.stats || userUpdateRes.stats.updated === 0) {
+            throw new Error('货款奖励发放失败：用户余额未更新');
         }
-    });
-    await db.collection('users').where({ openid }).update({
-        data: {
-            agent_wallet_balance: _.inc(amount),
-            wallet_balance: _.inc(amount),
-            updated_at: db.serverDate()
+        userCredited = true;
+    } catch (error) {
+        if (accountCredited) {
+            await db.collection('wallet_accounts').doc(accountId).update({
+                data: {
+                    balance: _.inc(-amount),
+                    updated_at: db.serverDate()
+                }
+            }).catch((rollbackError) => {
+                console.error('[lottery] 货款奖励失败后钱包账户回滚失败:', rollbackError.message || rollbackError);
+            });
         }
-    }).catch((err) => { console.error('[lottery] 更新用户货款余额失败:', err.message || err); });
-    const logRes = await db.collection('goods_fund_logs').add({
-        data: {
-            openid,
-            user_id: user && (user.id || user._id || user._legacy_id) ? (user.id || user._id || user._legacy_id) : openid,
-            type: 'lottery_reward',
-            amount,
-            lottery_record_id: record.id,
-            prize_id: pickString(record.prize_id),
-            remark: `抽奖获得货款 ¥${amount.toFixed(2)}`,
-            created_at: db.serverDate()
+        throw error;
+    }
+    let logRes;
+    try {
+        logRes = await db.collection('goods_fund_logs').add({
+            data: {
+                openid,
+                user_id: user && (user.id || user._id || user._legacy_id) ? (user.id || user._id || user._legacy_id) : openid,
+                type: 'lottery_reward',
+                amount,
+                lottery_record_id: record.id,
+                prize_id: pickString(record.prize_id),
+                remark: `抽奖获得货款 ¥${amount.toFixed(2)}`,
+                created_at: db.serverDate()
+            }
+        });
+    } catch (error) {
+        if (userCredited) {
+            await db.collection('users').where({ openid }).update({
+                data: {
+                    agent_wallet_balance: _.inc(-amount),
+                    wallet_balance: _.inc(-amount),
+                    updated_at: db.serverDate()
+                }
+            }).catch((rollbackError) => {
+                console.error('[lottery] 货款奖励流水失败后用户余额回滚失败:', rollbackError.message || rollbackError);
+            });
         }
-    });
+        if (accountCredited) {
+            await db.collection('wallet_accounts').doc(accountId).update({
+                data: {
+                    balance: _.inc(-amount),
+                    updated_at: db.serverDate()
+                }
+            }).catch((rollbackError) => {
+                console.error('[lottery] 货款奖励流水失败后钱包账户回滚失败:', rollbackError.message || rollbackError);
+            });
+        }
+        throw error;
+    }
     return {
         reward_actual_type: 'goods_fund',
         reward_ref_type: 'goods_fund_log',
@@ -658,6 +796,25 @@ async function persistIssuedRecord(recordId, patch = {}) {
     });
 }
 
+async function acquireLotteryFulfillmentLock(recordId) {
+    const lockRes = await db.collection('lottery_records')
+        .where({
+            _id: String(recordId),
+            fulfillment_status: _.in(['pending', 'failed']),
+            reward_ref_id: ''
+        })
+        .update({
+            data: {
+                fulfillment_status: 'issuing',
+                issuing_at: db.serverDate(),
+                failure_reason: '',
+                updated_at: db.serverDate()
+            }
+        })
+        .catch(() => ({ stats: { updated: 0 } }));
+    return !!(lockRes.stats && lockRes.stats.updated > 0);
+}
+
 async function fulfillLotteryRecord(record, user = null) {
     const normalized = normalizeLegacyRecord(record);
     if (!AUTO_REWARD_TYPES.has(normalized.reward_actual_type || normalized.prize_type)) {
@@ -665,6 +822,13 @@ async function fulfillLotteryRecord(record, user = null) {
     }
     if (pickString(normalized.reward_ref_id)) {
         return normalized;
+    }
+    const locked = await acquireLotteryFulfillmentLock(normalized.id);
+    if (!locked) {
+        const latest = await findOneByAnyId('lottery_records', normalized.id);
+        const latestRecord = latest ? normalizeLegacyRecord(latest) : null;
+        if (latestRecord && pickString(latestRecord.reward_ref_id)) return latestRecord;
+        throw new Error('奖品正在发放中，请稍后重试');
     }
 
     const snapshot = normalized.reward_snapshot || {};
@@ -945,33 +1109,10 @@ async function drawLottery(openid, params = {}) {
     }
     if (!prizes.length) throw new Error('暂无奖品');
     const drawCostPoints = Math.max(0, Math.floor(toNumber(prizes[0].cost_points || config.cost_points, 0)));
-    if (drawCostPoints > 0) {
-        const deductRes = await db.collection('users')
-            .where({ openid, points: _.gte(drawCostPoints) })
-            .update({
-                data: {
-                    points: _.inc(-drawCostPoints),
-                    updated_at: db.serverDate()
-                }
-            })
-            .catch(() => ({ stats: { updated: 0 } }));
-        if (!deductRes.stats || deductRes.stats.updated === 0) {
-            throw new Error(`积分不足，当前抽奖需要 ${drawCostPoints} 积分`);
-        }
-        await db.collection('point_logs').add({
-            data: {
-                openid,
-                type: 'spend',
-                amount: drawCostPoints,
-                source: 'lottery_draw',
-                description: `抽奖消耗 ${drawCostPoints} 积分`,
-                created_at: db.serverDate()
-            }
-        }).catch(() => null);
-    }
 
     const totalWeight = prizes.reduce((sum, item) => sum + Math.max(0, toNumber(item.probability, 0)), 0);
     if (totalWeight <= 0) throw new Error('奖池概率配置异常');
+    const costDeducted = await deductLotteryDrawCost(openid, drawCostPoints);
 
     let selectedPrize = prizes[prizes.length - 1];
     let random = Math.random() * totalWeight;
@@ -1031,7 +1172,17 @@ async function drawLottery(openid, params = {}) {
         updated_at: db.serverDate()
     };
 
-    const result = await db.collection('lottery_records').add({ data: recordDoc });
+    let result;
+    try {
+        result = await db.collection('lottery_records').add({ data: recordDoc });
+    } catch (error) {
+        if (costDeducted) {
+            await refundLotteryDrawCost(openid, drawCostPoints, '', `抽奖记录创建失败退回 ${drawCostPoints} 积分`).catch((refundError) => {
+                console.error('[lottery] 抽奖记录创建失败后退积分失败:', refundError.message || refundError);
+            });
+        }
+        throw error;
+    }
     let issuedRecord = normalizeLegacyRecord({
         ...recordDoc,
         _id: result._id,
@@ -1056,6 +1207,11 @@ async function drawLottery(openid, params = {}) {
             fulfillment_status: AUTO_REWARD_TYPES.has(rewardType) ? 'failed' : initialFulfillmentStatus,
             failure_reason: error.message || '发奖失败'
         }).catch(() => null);
+        if (costDeducted) {
+            await refundLotteryDrawCost(openid, drawCostPoints, issuedRecord.id, `抽奖发奖失败退回 ${drawCostPoints} 积分`).catch((refundError) => {
+                console.error('[lottery] 抽奖发奖失败后退积分失败:', refundError.message || refundError);
+            });
+        }
         issuedRecord.fulfillment_status = AUTO_REWARD_TYPES.has(rewardType) ? 'failed' : initialFulfillmentStatus;
         issuedRecord.failure_reason = error.message || '发奖失败';
     }

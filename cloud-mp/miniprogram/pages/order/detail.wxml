@@ -88,10 +88,6 @@
       <text class="info-label">退款类型</text>
       <text class="info-value">{{activeRefund.type === 'return_refund' ? '退货退款' : '仅退款'}}</text>
     </view>
-    <view class="info-row">
-      <text class="info-label">退款规则</text>
-      <text class="info-value">仅退现金，优惠券和积分不返还</text>
-    </view>
     <view class="refund-action" bindtap="onViewRefund">
       <text class="refund-link">查看退款详情 ›</text>
     </view>
@@ -135,7 +131,7 @@
     <view class="bundle-order-head" wx:if="{{order.bundle_meta}}">
       <text class="bundle-order-title">{{order.bundle_meta.title}}</text>
       <text class="bundle-order-subtitle" wx:if="{{order.bundle_meta.subtitle}}">{{order.bundle_meta.subtitle}}</text>
-      <text class="bundle-order-price">组合价 ¥{{order.display_pay_amount}}</text>
+      <text class="bundle-order-price">优选价 ¥{{order.display_pay_amount}}</text>
     </view>
     <view class="bundle-order-items" wx:if="{{order.bundle_meta && order.items && order.items.length > 0}}">
       <view class="bundle-order-item" wx:for="{{order.items}}" wx:key="refund_item_key">
@@ -208,7 +204,7 @@
       <text class="info-value">¥{{order.display_original_amount}}</text>
     </view>
     <view class="info-row" wx:if="{{order.coupon_discount > 0}}">
-      <text class="info-label">优惠券抵扣</text>
+      <text class="info-label">券包抵扣</text>
       <text class="info-value">-¥{{order.display_coupon_discount}}</text>
     </view>
     <view class="info-row" wx:if="{{order.points_discount > 0}}">
@@ -244,7 +240,7 @@
         <text wx:elif="{{order.payment_method === 'wallet'}}" class="payment-tag payment-tag-wallet">{{order.display_payment_method_text || '余额支付'}}</text>
         <text wx:else class="payment-tag payment-tag-wechat">{{order.display_payment_method_text || '微信支付'}}</text>
         <text wx:if="{{order.points_used > 0}}" class="payment-tag payment-tag-points">+积分抵扣</text>
-        <text wx:if="{{order.coupon_discount > 0}}" class="payment-tag payment-tag-coupon">+优惠券</text>
+        <text wx:if="{{order.coupon_discount > 0}}" class="payment-tag payment-tag-coupon">+券包</text>
       </view>
     </view>
     <view class="info-row" wx:if="{{order.status !== 'pending' && order.status !== 'cancelled' && order.display_refund_target_text}}">
@@ -279,7 +275,7 @@
   <!-- 佣金结算提示 -->
   <view class="card settlement-card" wx:if="{{order.status === 'completed' && order.settlement_at}}">
     <view class="settlement-info">
-      <text class="settlement-icon">⏱</text>
+      <image class="settlement-icon-img" src="/assets/icons/clock.svg" mode="aspectFit"></image>
       <text class="settlement-text" wx:if="{{!order.commission_settled}}">佣金将在 {{order.settlement_at}} 后结算</text>
       <text class="settlement-text" wx:else>佣金已结算</text>
     </view>

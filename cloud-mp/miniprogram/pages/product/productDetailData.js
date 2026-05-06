@@ -191,6 +191,7 @@ async function loadProduct(page, id) {
         const res = await get(`/products/${id}`);
         const product = res.data || {};
         const gallerySources = collectProductGallerySources(product);
+        product.gallery_image_sources = gallerySources;
 
         product.images = await resolveRenderableImageList(
             gallerySources.length ? gallerySources : resolveProductImage(product, PRODUCT_PLACEHOLDER),

@@ -796,6 +796,70 @@ async function getOwnedCouponCount(identity, couponIdCandidates = []) {
     return rows.length;
 }
 
+async function getOwnedCouponCountWithDb(conn, identity, couponIdCandidates = []) {
+    const candidates = uniqueValues(couponIdCandidates);
+    if (!identity || !identity.openids || !identity.openids.length || candidates.length === 0) return 0;
+
+    const queries = [
+        conn.collection('user_coupons')
+            .where({ openid: _.in(identity.openids), coupon_id: _.in(candidates) })
+            .get()
+            .catch(() => ({ data: [] }))
+    ];
+
+    if (identity.userIds.length) {
+        identity.userIds.forEach((userId) => {
+            queries.push(
+                conn.collection('user_coupons')
+                    .where({ user_id: userId, coupon_id: _.in(candidates) })
+                    .get()
+                    .catch(() => ({ data: [] }))
+            );
+        });
+    }
+
+    const seen = {};
+    (await Promise.all(queries)).forEach((result) => {
+        (result.data || []).forEach((coupon) => {
+            seen[couponKey(coupon)] = true;
+        });
+    });
+    return Object.keys(seen).length;
+}
+
+async function getLatestCouponTemplateForClaim(conn, couponData = {}) {
+    const templateDocId = couponData && couponData._id ? String(couponData._id) : '';
+    if (!templateDocId) return null;
+
+    const latest = await conn.collection('coupons')
+        .doc(templateDocId)
+        .get()
+        .catch(() => ({ data: null }));
+    if (!latest.data) return null;
+    return {
+        ...latest.data,
+        _id: latest.data._id || templateDocId
+    };
+}
+
+function buildClaimedUserCouponDoc(openid, identity, couponData, availability, fallbackCouponId) {
+    return {
+        openid,
+        user_id: identity.user && (identity.user.id || identity.user._id) ? (identity.user.id || identity.user._id) : openid,
+        coupon_id: couponData.id != null ? couponData.id : (couponData._id || fallbackCouponId),
+        coupon_name: couponData.name,
+        coupon_type: couponData.type === 'percent' ? 'percent' : (couponData.type || couponData.coupon_type || 'fixed'),
+        coupon_value: toNumber(couponData.value != null ? couponData.value : couponData.coupon_value, 0),
+        min_purchase: toNumber(couponData.min_purchase, 0),
+        scope: couponData.scope || 'all',
+        scope_ids: Array.isArray(couponData.scope_ids) ? couponData.scope_ids : [],
+        status: 'unused',
+        created_at: db.serverDate(),
+        claim_day_key: availability.dayKey,
+        expire_at: db.serverDate({ offset: (couponData.valid_days || 30) * 24 * 60 * 60 * 1000 })
+    };
+}
+
 function statusMatches(coupon, status) {
     if (!status) return true;
     const wanted = String(status).toLowerCase();
@@ -951,42 +1015,65 @@ async function claimCoupon(openid, couponId) {
         return { success: false, message: availability.message || '当前不可领取' };
     }
 
-    const userCouponDoc = {
-        openid,
-        user_id: identity.user && (identity.user.id || identity.user._id) ? (identity.user.id || identity.user._id) : openid,
-        coupon_id: couponData.id != null ? couponData.id : (couponData._id || cid),
-        coupon_name: couponData.name,
-        coupon_type: couponData.type === 'percent' ? 'percent' : (couponData.type || couponData.coupon_type || 'fixed'),
-        coupon_value: toNumber(couponData.value != null ? couponData.value : couponData.coupon_value, 0),
-        min_purchase: toNumber(couponData.min_purchase, 0),
-        scope: couponData.scope || 'all',
-        scope_ids: Array.isArray(couponData.scope_ids) ? couponData.scope_ids : [],
-        status: 'unused',
-        created_at: db.serverDate(),
-        claim_day_key: availability.dayKey,
-        expire_at: db.serverDate({ offset: (couponData.valid_days || 30) * 24 * 60 * 60 * 1000 })
-    };
-    let result;
-    if (availability.perUserLimit <= 1) {
-        const docId = buildSingleUserCouponDocId(identity, couponData, cid);
-        // doc().set 的 data 内不能带 _id（与 doc 路径冲突会报 -501007 invalid parameters）
-        await db.collection('user_coupons').doc(docId).set({ data: userCouponDoc });
-        result = { _id: docId };
-    } else {
-        result = await db.collection('user_coupons').add({ data: userCouponDoc });
-    }
-    if (couponData._id) {
-        await db.collection('coupons').doc(String(couponData._id)).update({
-            data: {
-                issued_count: _.inc(1),
-                claim_day_key: availability.dayKey,
-                claimed_today_count: availability.claimedTodayCount + 1,
-                updated_at: db.serverDate()
-            }
-        }).catch(() => null);
+    if (typeof db.runTransaction !== 'function') {
+        return { success: false, message: '系统暂不支持安全领券，请稍后再试' };
     }
 
-    return { success: true, id: result._id };
+    try {
+        return await db.runTransaction(async (conn) => {
+            const latestCoupon = await getLatestCouponTemplateForClaim(conn, couponData);
+            if (!latestCoupon) {
+                return { success: false, message: '优惠券不存在或已下架' };
+            }
+
+            const latestCandidates = getCouponIdentityCandidates(latestCoupon, cid);
+            const latestOwnedCount = await getOwnedCouponCountWithDb(conn, identity, latestCandidates);
+            const latestAvailability = resolveTemplateClaimAvailability(latestCoupon, { ownedCount: latestOwnedCount });
+            if (!latestAvailability.canClaim) {
+                return { success: false, message: latestAvailability.message || '当前不可领取' };
+            }
+
+            const userCouponDoc = buildClaimedUserCouponDoc(openid, identity, latestCoupon, latestAvailability, cid);
+            let result;
+            if (latestAvailability.perUserLimit <= 1) {
+                const docId = buildSingleUserCouponDocId(identity, latestCoupon, cid);
+                const existing = await conn.collection('user_coupons')
+                    .doc(docId)
+                    .get()
+                    .catch(() => ({ data: null }));
+                if (existing.data) {
+                    return { success: false, message: '你已领取过这张券' };
+                }
+
+                await conn.collection('coupons').doc(String(latestCoupon._id)).update({
+                    data: {
+                        issued_count: _.inc(1),
+                        claim_day_key: latestAvailability.dayKey,
+                        claimed_today_count: latestAvailability.claimedTodayCount + 1,
+                        updated_at: db.serverDate()
+                    }
+                });
+                // doc().set 的 data 内不能带 _id（与 doc 路径冲突会报 -501007 invalid parameters）
+                await conn.collection('user_coupons').doc(docId).set({ data: userCouponDoc });
+                result = { _id: docId };
+            } else {
+                await conn.collection('coupons').doc(String(latestCoupon._id)).update({
+                    data: {
+                        issued_count: _.inc(1),
+                        claim_day_key: latestAvailability.dayKey,
+                        claimed_today_count: latestAvailability.claimedTodayCount + 1,
+                        updated_at: db.serverDate()
+                    }
+                });
+                result = await conn.collection('user_coupons').add({ data: userCouponDoc });
+            }
+
+            return { success: true, id: result._id };
+        });
+    } catch (err) {
+        console.error('[user-coupons] 优惠券事务领取失败:', err.message || err);
+        return { success: false, message: '领券人数较多，请稍后重试' };
+    }
 }
 
 /**
@@ -999,48 +1086,30 @@ async function claimWelcomeCoupons(openid) {
         if (!templates.length) return 0;
 
         let claimedCount = 0;
+        let transientFailure = false;
         for (const tpl of templates) {
             const cid = tpl.id != null ? String(tpl.id) : tpl._id;
             if (await hasOwnedCoupon(identity, cid)) continue;
 
-            // 检查库存
-            if (tpl.stock > 0) {
-                const totalClaimed = await db.collection('user_coupons')
-                    .where({ coupon_id: cid })
-                    .count().catch(() => ({ total: 0 }));
-                if (totalClaimed.total >= tpl.stock) continue;
+            const result = await claimCoupon(openid, cid);
+            if (result && result.success) {
+                claimedCount += 1;
+                continue;
             }
-
-            const validDays = toNumber(tpl.valid_days, 30);
-            const templateType = tpl.type || tpl.coupon_type || 'fixed';
-            const templateValue = tpl.value != null ? tpl.value : tpl.coupon_value;
-            await db.collection('user_coupons').add({
-                data: {
-                    openid,
-                    user_id: identity.user && (identity.user.id || identity.user._id) ? (identity.user.id || identity.user._id) : openid,
-                    coupon_id: cid,
-                    coupon_name: tpl.name || tpl.coupon_name || '优惠券',
-                    coupon_type: templateType === 'percent' ? 'percent' : (templateType === 'exchange' ? 'exchange' : 'fixed'),
-                    coupon_value: toNumber(templateValue, 0),
-                    min_purchase: toNumber(tpl.min_purchase, 0),
-                    scope: tpl.scope || 'all',
-                    scope_ids: Array.isArray(tpl.scope_ids) ? tpl.scope_ids : [],
-                    status: 'unused',
-                    created_at: db.serverDate(),
-                    // CloudBase serverDate offset 使用毫秒，这里必须按“天 -> 毫秒”换算。
-                    expire_at: db.serverDate({ offset: couponExpireOffsetMs(validDays) })
-                }
-            });
-            claimedCount += 1;
+            const message = result && result.message ? String(result.message) : '';
+            if (message.includes('稍后重试') || message.includes('暂不支持安全领券')) {
+                transientFailure = true;
+            }
         }
 
-        // 标记已发放
-        try {
-            await db.collection('users').where({ openid }).update({
-                data: { register_coupons_issued: true, updated_at: db.serverDate() }
-            });
-        } catch (err) {
-            console.error('[user-coupons] 标记注册优惠券已发放失败:', err);
+        if (!transientFailure) {
+            try {
+                await db.collection('users').where({ openid }).update({
+                    data: { register_coupons_issued: true, updated_at: db.serverDate() }
+                });
+            } catch (err) {
+                console.error('[user-coupons] 标记注册优惠券已发放失败:', err);
+            }
         }
 
         return claimedCount;

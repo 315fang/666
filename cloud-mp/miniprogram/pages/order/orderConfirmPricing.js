@@ -196,7 +196,7 @@ async function loadAvailableCoupons(page) {
             selectedCoupon: null,
             couponDiscount: '0.00',
             couponLoadStatus: 'error',
-            couponLoadError: '优惠券服务暂不可用'
+            couponLoadError: '券包服务暂不可用'
         });
         recalcFinal(page);
         return {

@@ -3,7 +3,7 @@
     <view class="vault-card">
       <view class="vault-head">
         <view>
-          <text class="vault-title">我的存款</text>
+          <text class="vault-title">奖励存款</text>
         </view>
       </view>
 
@@ -51,7 +51,7 @@
 
       <view class="vault-metrics">
         <view class="vault-metric">
-          <text class="metric-label">可提取转佣金</text>
+          <text class="metric-label">可转佣金</text>
           <text class="metric-value metric-value-gold">¥{{summary.claimable_amount_text}}</text>
         </view>
         <view class="vault-metric">
@@ -63,7 +63,7 @@
 
     <view class="rule-strip {{depositGuideExpanded ? 'rule-strip-expanded' : ''}}" bindtap="onToggleDepositGuide">
       <view class="rule-main">
-        <text class="rule-label">存款提取规则</text>
+        <text class="rule-label">奖励规则</text>
         <view class="rule-copy-wrap" wx:if="{{depositGuideExpanded}}">
           <view class="rule-detail-list">
             <view class="rule-detail-item" wx:for="{{depositRuleDetails}}" wx:key="no">
@@ -79,7 +79,7 @@
     <view class="records-panel">
       <view class="records-head">
         <view>
-          <text class="records-title">存款明细</text>
+          <text class="records-title">奖励明细</text>
         </view>
       </view>
 
@@ -128,7 +128,7 @@
 
       <view class="empty-state" wx:if="{{!loading && filteredLogs.length === 0}}">
         <image src="/assets/icons/dollar-sign.svg" mode="aspectFit" class="empty-icon"></image>
-        <text class="empty-title">暂无存款明细</text>
+        <text class="empty-title">暂无奖励明细</text>
         <text class="empty-desc">升级奖励产生后，会先放进存钱罐</text>
       </view>
     </view>

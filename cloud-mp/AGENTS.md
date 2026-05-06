@@ -26,11 +26,14 @@ Run from repo root unless noted:
 - Shared module sync: `npm run sync:shared`
 - Verify shared sync only: `npm run check:shared`
 - Foundation checks: `npm run check:foundation`
+- Baseline gate: `npm run check:baseline`
 - Production gate: `npm run check:production`
 - Release gate alias: `npm run release:check`
 - Admin API tests: `npm run test:admin-api`
 - All cloudfunction tests: `npm run test:cloudfunctions`
 - Route audit: `npm run audit:miniprogram-routes`
+- Cloudfunction config audit: `npm run audit:cloudfunction-config`
+- Cloudfunction config audit (strict): `npm run audit:cloudfunction-config:strict`
 - Runtime smoke: `npm run runtime:smoke`
 - Payment readiness: `npm run payment:ready`
 - Import prep: `npm run import:prep`
@@ -50,9 +53,7 @@ Admin UI commands run from `admin-ui/`:
 - Admin changes: inspect route -> `admin-ui/src/api/**` -> target view -> `cloudfunctions/admin-api/src/app.js`.
 - Release or environment work: start with `docs/CLOUDBASE_RELEASE_RUNBOOK.md` and `docs/CLOUD_MP_DEVELOPMENT_GUIDE.md`.
 - Before release-facing work, prefer this baseline:
-  - `npm run check:foundation`
-  - `npm run audit:miniprogram-routes`
-  - `npm run test:admin-api`
+  - `npm run check:baseline`
   - `cd admin-ui && npm run build`
 
 ## Notes

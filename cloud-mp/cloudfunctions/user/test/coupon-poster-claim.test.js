@@ -58,7 +58,7 @@ function applyPatch(row, patch = {}) {
     });
 }
 
-function createFakeDb(initial = {}) {
+function createFakeDb(initial = {}, options = {}) {
     const collections = clone(initial);
     const db = {
         command: {
@@ -122,6 +122,9 @@ function createFakeDb(initial = {}) {
         },
         _collections: collections
     };
+    if (options.withTransaction) {
+        db.runTransaction = async (work) => work(db);
+    }
     return db;
 }
 
@@ -203,6 +206,72 @@ test('direct coupon claim treats string, numeric and document template ids as th
         assert.match(byDocId.message, /已领取/);
 
         assert.equal(db._collections.user_coupons.length, 1);
+    } finally {
+        restore();
+    }
+});
+
+test('direct coupon claim reserves template counters inside a transaction', async () => {
+    const db = createFakeDb({
+        users: [{ _id: 'user-doc-9', id: 9, openid: 'openid-9' }],
+        coupons: [{
+            _id: 'coupon-doc-7',
+            id: 7,
+            name: '库存券',
+            type: 'fixed',
+            value: 5,
+            valid_days: 7,
+            is_active: 1,
+            stock: 1,
+            total_claim_limit: 1,
+            daily_claim_limit: 1,
+            per_user_limit: 1,
+            issued_count: 0,
+            claimed_today_count: 0
+        }],
+        user_coupons: []
+    }, { withTransaction: true });
+    const { module, restore } = loadCouponModule(db);
+
+    try {
+        const result = await module.claimCoupon('openid-9', '7');
+
+        assert.equal(result.success, true);
+        assert.equal(db._collections.coupons[0].issued_count, 1);
+        assert.equal(db._collections.coupons[0].claimed_today_count, 1);
+        assert.equal(db._collections.user_coupons.length, 1);
+        assert.equal(db._collections.user_coupons[0].coupon_id, 7);
+    } finally {
+        restore();
+    }
+});
+
+test('direct coupon claim fails closed when transactions are unavailable', async () => {
+    const db = createFakeDb({
+        users: [{ _id: 'user-doc-10', id: 10, openid: 'openid-10' }],
+        coupons: [{
+            _id: 'coupon-doc-8',
+            id: 8,
+            name: '安全券',
+            type: 'fixed',
+            value: 5,
+            valid_days: 7,
+            is_active: 1,
+            per_user_limit: 1,
+            issued_count: 0,
+            claimed_today_count: 0
+        }],
+        user_coupons: []
+    });
+    const { module, restore } = loadCouponModule(db);
+
+    try {
+        const result = await module.claimCoupon('openid-10', '8');
+
+        assert.equal(result.success, false);
+        assert.match(result.message, /安全领券/);
+        assert.equal(db._collections.coupons[0].issued_count, 0);
+        assert.equal(db._collections.user_coupons.length, 0);
     } finally {
         restore();
     }

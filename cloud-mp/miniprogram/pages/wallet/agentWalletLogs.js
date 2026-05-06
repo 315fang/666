@@ -27,9 +27,9 @@ const CHANGE_COPY = {
     recharge: { label: '货款充值到账', detail: '微信充值已进入货款余额', refLabel: '充值单号' },
     recharge_pending: { label: '货款充值处理中', detail: '充值支付处理中，到账后会更新余额', refLabel: '充值单号' },
     wx_recharge: { label: '微信充值到账', detail: '微信支付充值已进入货款余额', refLabel: '充值单号' },
-    manual_recharge: { label: '后台补充货款', detail: '后台为账户增加货款余额', refLabel: '关联单号' },
-    manual_deduct: { label: '后台扣减货款', detail: '后台从账户扣减货款余额', refLabel: '关联单号' },
-    admin_adjustment: { label: '后台调整货款', detail: '后台调整了货款余额', refLabel: '关联单号' },
+    manual_recharge: { label: '平台补充货款', detail: '平台为账户增加货款余额', refLabel: '关联单号' },
+    manual_deduct: { label: '平台扣减货款', detail: '平台从账户扣减货款余额', refLabel: '关联单号' },
+    admin_adjustment: { label: '平台调整货款', detail: '平台调整了货款余额', refLabel: '关联单号' },
     adjust: { label: '货款余额调整', detail: '货款余额发生人工调整', refLabel: '关联单号' },
     spend: { label: '订单货款支付', detail: '使用货款余额支付订单', refLabel: '订单号' },
     deduct: { label: '订单货款支付', detail: '使用货款余额支付订单', refLabel: '订单号' },
@@ -37,9 +37,9 @@ const CHANGE_COPY = {
     refund: { label: '订单退款返还', detail: '订单退款已退回货款余额', refLabel: '订单号' },
     refund_reopen_reversal: { label: '退款重开扣回', detail: '退款被重开或撤回，已从货款余额扣回', refLabel: '订单号' },
     station_procurement: { label: '门店备货扣款', detail: '门店采购备货扣减货款余额', refLabel: '采购单号' },
-    pickup_principal_return: { label: '进货价补偿到账', detail: '自提订单进货价补偿已返还', refLabel: '订单号' },
-    pickup_principal_reversal: { label: '进货价补偿扣回', detail: '进货价补偿被撤回，已扣回货款余额', refLabel: '订单号' },
-    commission_transfer: { label: '佣金转入货款', detail: '可提现佣金已转入货款余额', refLabel: '关联单号' },
+    pickup_principal_return: { label: '货款返还到账', detail: '自提订单货款返还已到账', refLabel: '订单号' },
+    pickup_principal_reversal: { label: '货款返还扣回', detail: '货款返还被撤回，已扣回货款余额', refLabel: '订单号' },
+    commission_transfer: { label: '佣金转入货款', detail: '可提佣金已转入货款余额', refLabel: '关联单号' },
     n_allocate_in: { label: '货款划拨转入', detail: '上级或系统划拨货款转入账户', refLabel: '划拨单号' },
     n_allocate_out: { label: '货款划拨转出', detail: '货款余额划拨给下级或其他账户', refLabel: '划拨单号' },
     n_separation_bonus: { label: '脱离奖励到账', detail: '团队脱离奖励已进入货款余额', refLabel: '关联单号' },
@@ -217,8 +217,8 @@ function getChangeCopy(type, item = {}, isOut = false) {
     if (eventKind === 'order_refund') return CHANGE_COPY.refund;
     if (normalized === 'adjust') {
         return isOut
-            ? { label: '货款余额调减', detail: '后台调减了货款余额', refLabel: '关联单号' }
-            : { label: '货款余额调增', detail: '后台调增了货款余额', refLabel: '关联单号' };
+            ? { label: '货款余额调减', detail: '平台调减了货款余额', refLabel: '关联单号' }
+            : { label: '货款余额调增', detail: '平台调增了货款余额', refLabel: '关联单号' };
     }
     return CHANGE_COPY[normalized] || { label: '货款余额变动', detail: pickString(item.remark) || '货款余额发生变动', refLabel: '关联单号' };
 }

@@ -22,7 +22,7 @@
 
     <view class="section">
       <view class="section-head">
-        <view>
+        <view class="section-head-main">
           <text class="section-title">今日处理</text>
           <text class="section-sub">先看订单和库存，历史明细放在后面。</text>
         </view>
@@ -30,8 +30,8 @@
       <view class="action-grid">
         <button class="action-btn primary-btn" bindtap="goPickupVerify">进入自提核销</button>
         <button class="action-btn secondary-btn" bindtap="goPendingOrders">待核销订单</button>
+        <button class="action-btn secondary-btn" bindtap="toggleProcurementForm">{{showProcurementForm ? '收起采购申请' : '发起采购申请'}}</button>
         <button class="action-btn secondary-btn" bindtap="goCommissionLogs">服务费明细</button>
-        <button class="action-btn secondary-btn" bindtap="goAgentWallet">进货价补偿</button>
       </view>
       <view class="simple-list compact-list" wx:if="{{workbench.pending_orders.length > 0}}">
         <view class="simple-card" wx:for="{{workbench.pending_orders}}" wx:key="id">
@@ -40,20 +40,20 @@
             <text class="simple-tag tag-warn">待核销</text>
           </view>
           <text class="simple-line">{{item.pickup_station_name || '门店'}} · {{item.product_name}}{{item.product_spec ? (' / ' + item.product_spec) : ''}} · {{item.quantity}} 件</text>
-          <text class="simple-line text-money">服务费 ¥{{item.service_fee_amount_text}} · 进货价补偿 ¥{{item.principal_return_amount_text}}</text>
+          <text class="simple-line text-money">服务费 ¥{{item.service_fee_amount_text}} · 货款返还 ¥{{item.principal_return_amount_text}}</text>
         </view>
       </view>
     </view>
 
     <view class="section">
       <view class="section-head">
-        <view>
+        <view class="section-head-main">
           <text class="section-title">门店库存</text>
           <text class="section-sub">{{workbench.summary.inventory_sku_count || 0}} 个库存项 · 可售 {{workbench.summary.inventory_available_qty || 0}} · 预占 {{workbench.summary.inventory_reserved_qty || 0}}</text>
         </view>
         <view class="segmented">
-          <button class="segment {{inventoryFilter === 'all' ? 'active' : ''}}" data-filter="all" bindtap="toggleInventoryFilter">全部</button>
-          <button class="segment {{inventoryFilter === 'low' ? 'active' : ''}}" data-filter="low" bindtap="toggleInventoryFilter">预警</button>
+          <view class="segment {{inventoryFilter === 'all' ? 'active' : ''}}" data-filter="all" bindtap="toggleInventoryFilter">全部</view>
+          <view class="segment {{inventoryFilter === 'low' ? 'active' : ''}}" data-filter="low" bindtap="toggleInventoryFilter">预警</view>
         </view>
       </view>
       <view class="inventory-list" wx:if="{{workbench.visible_inventory.length > 0}}">
@@ -103,8 +103,14 @@
       </view>
     </view>
 
-    <view class="section">
-      <text class="section-title">发起采购申请</text>
+    <view class="section procurement-section" wx:if="{{showProcurementForm}}">
+      <view class="section-head">
+        <view class="section-head-main">
+          <text class="section-title">发起采购申请</text>
+          <text class="section-sub">补货申请需要业务密码验证，提交后等待平台审核。</text>
+        </view>
+        <button class="section-mini-btn" bindtap="toggleProcurementForm">收起</button>
+      </view>
       <view class="field">
         <text class="field-label">门店</text>
         <picker mode="selector" range="{{scope.stations}}" range-key="name" bindchange="onStationChange">
@@ -159,19 +165,19 @@
 
     <view class="section">
       <view class="section-head">
-        <view>
+        <view class="section-head-main">
           <text class="section-title">最近记录</text>
           <text class="section-sub">采购和核销历史收在这里，避免挤占首屏。</text>
         </view>
       </view>
       <view class="finance-row">
-        <view class="finance-stat">
+        <view class="finance-stat ripple" bindtap="goCommissionLogs">
           <text class="finance-value">¥{{workbench.summary.service_fee_total_text}}</text>
           <text class="finance-label">服务费累计</text>
         </view>
-        <view class="finance-stat">
+        <view class="finance-stat ripple" bindtap="goAgentWallet">
           <text class="finance-value">¥{{workbench.summary.principal_return_total_text}}</text>
-          <text class="finance-label">进货价补偿累计</text>
+          <text class="finance-label">货款返还</text>
         </view>
       </view>
       <text class="subsection-title">采购申请</text>
@@ -201,7 +207,7 @@
           <text class="simple-line">{{item.product_name}}{{item.product_spec ? (' / ' + item.product_spec) : ''}} · {{item.quantity}} 件</text>
           <text class="simple-line">门店 {{item.pickup_station_name || '—'}} · 核销员 {{item.pickup_verified_by_name || item.pickup_verified_by || '—'}}</text>
           <text class="simple-line">核销时间 {{item.pickup_verified_at_text || '—'}}</text>
-          <text class="simple-line text-money">服务费 ¥{{item.service_fee_amount_text}} · 进货价补偿 ¥{{item.principal_return_amount_text}}</text>
+          <text class="simple-line text-money">服务费 ¥{{item.service_fee_amount_text}} · 货款返还 ¥{{item.principal_return_amount_text}}</text>
           <text class="simple-line" wx:if="{{item.principal_reversal_amount > 0}}">已冲回 ¥{{item.principal_reversal_amount_text}}</text>
         </view>
       </view>
@@ -213,7 +219,7 @@
       <view class="station-card" wx:for="{{workbench.stations}}" wx:key="id">
         <view class="station-top">
           <text class="station-name">{{item.name}}</text>
-          <text class="station-tag">后台指派</text>
+          <text class="station-tag">平台指派</text>
         </view>
         <text class="station-line">我的角色：店长</text>
         <text class="station-line">当前结算人：{{item.claimant.nick_name || item.claimant.nickname || '未设置'}}</text>
@@ -240,7 +246,7 @@
 
   <view class="empty" wx:else>
     <text class="empty-title">当前账号未被指派为店长</text>
-    <text class="empty-desc">店长与门店绑定由后台完成，绑定后这里会显示你的门店工作台。</text>
+    <text class="empty-desc">店长与门店绑定由平台完成，绑定后这里会显示你的门店工作台。</text>
   </view>
   <portal-password-dialog id="portalPasswordDialog" />
 </view>

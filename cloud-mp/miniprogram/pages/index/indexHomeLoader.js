@@ -10,6 +10,7 @@ const {
 } = require('../../utils/dataFormatter');
 const { getApiBaseUrl } = require('../../config/env');
 const { getConfigSection } = require('../../utils/miniProgramConfig');
+const { warmRenderableImageUrls, resolveRenderableImageUrl } = require('../../utils/cloudAssetRuntime');
 
 const HOME_COUPON_PREVIEW_LIMIT = 4;
 
@@ -234,6 +235,17 @@ function pickImageSource(record = {}) {
     return normalizeAssetUrl(fileId || '');
 }
 
+function collectProductImageSources(product = {}) {
+    return {
+        file_id: product.image_ref || product.imageRef || product.file_id || product.fileId || '',
+        image: product.display_image || product.displayImage || product.image || '',
+        image_url: product.image_url || product.imageUrl || '',
+        cover_image: product.cover_image || product.coverImage || '',
+        preview_images: product.preview_images || product.previewImages || '',
+        images: product.images || ''
+    };
+}
+
 function pickDisplayName(record = {}) {
     return record.nickName || record.nickname || '';
 }
@@ -357,15 +369,20 @@ async function loadFeaturedProducts(page, options = {}) {
         }
 
         const roleLevel = app.globalData.userInfo && app.globalData.userInfo.role_level || 0;
-        const products = list.map((product) => {
+        const productImageSources = list.map((product) => collectProductImageSources(product));
+        await warmRenderableImageUrls(productImageSources).catch(() => null);
+
+        const products = await Promise.all(list.map(async (product, index) => {
             const processed = processProduct(product, roleLevel);
             const displayPrice = Number(resolveProductDisplayPrice(product, roleLevel) || 0);
             const marketPrice = Number(normalizePriceValue(product.market_price ?? product.original_price) || 0);
-            const coverImage = normalizeAssetUrl(product.display_image || product.image_url || product.image_ref)
+            const fallbackCoverImage = normalizeAssetUrl(product.display_image || product.image_url || product.image_ref)
                 || normalizeAssetUrl(resolveProductImage(product))
                 || normalizeAssetUrl(processed.firstImage)
                 || pickImageSource(product)
                 || '/assets/images/placeholder.svg';
+            const coverImage = await resolveRenderableImageUrl(productImageSources[index], fallbackCoverImage)
+                .catch(() => fallbackCoverImage);
             const discountLabel = (marketPrice > displayPrice && displayPrice > 0)
                 ? (Math.round(displayPrice / marketPrice * 10)) + '折'
                 : '';
@@ -376,6 +393,7 @@ async function loadFeaturedProducts(page, options = {}) {
                 image: coverImage,
                 cardImage: coverImage,
                 hasCardImage: !!coverImage,
+                image_sources: productImageSources[index],
                 soldOut: Number(product.stock) === 0 || Number(processed.stock) === 0,
                 retail_price: displayPrice,
                 price: displayPrice,
@@ -383,7 +401,7 @@ async function loadFeaturedProducts(page, options = {}) {
                 discount_label: discountLabel,
                 heat_label: heatLabel
             };
-        });
+        }));
         setHomePageData(page, { featuredProducts: products });
         if (typeof page._setupScrollReveal === 'function') {
             wx.nextTick(() => page._setupScrollReveal());

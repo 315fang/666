@@ -145,7 +145,7 @@ async function withDbTransaction(work) {
     if (typeof db.runTransaction === 'function') {
         return db.runTransaction(work);
     }
-    return work(db);
+    return { success: false, message: '系统暂不支持安全领券，请稍后再试' };
 }
 
 async function getClaimTicketInfo(ticketId) {

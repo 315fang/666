@@ -1910,7 +1910,7 @@ function registerMarketingRoutes(app, deps) {
         await ensureFreshCollections(['group_activities', 'slash_activities', 'lottery_prizes', 'products', 'limited_sale_slots']);
         const products = getCollection('products');
         const staticOptions = [
-            { key: 'flash_sale:current', link_type: 'flash_sale', link_value: '', title: '当前有效限时商品', badge: '固定入口' },
+            { key: 'flash_sale:current', link_type: 'flash_sale', link_value: '', title: '爆单专区', badge: '固定入口' },
             { key: 'coupon_center:default', link_type: 'coupon_center', link_value: '__coupon_center__', title: '优惠券中心入口', badge: '固定入口' }
         ];
         const limitedSaleOptions = (await Promise.all(
@@ -2302,11 +2302,16 @@ function registerMarketingRoutes(app, deps) {
             if (amountValue <= 0) continue;
             totalDistributed += amountValue;
             distributedCount += 1;
+            const currentCommissionBalance = toNumber(
+                users[userIndex].commission_balance != null
+                    ? users[userIndex].commission_balance
+                    : users[userIndex].balance,
+                0
+            );
             users[userIndex] = {
                 ...users[userIndex],
-                commission_balance: toNumber(users[userIndex].commission_balance, 0) + amountValue,
-                wallet_balance: toNumber(users[userIndex].wallet_balance ?? users[userIndex].balance, 0) + amountValue,
-                balance: toNumber(users[userIndex].balance ?? users[userIndex].wallet_balance, 0) + amountValue,
+                commission_balance: currentCommissionBalance + amountValue,
+                balance: currentCommissionBalance + amountValue,
                 total_earned: toNumber(users[userIndex].total_earned, 0) + amountValue,
                 updated_at: nowIso()
             };

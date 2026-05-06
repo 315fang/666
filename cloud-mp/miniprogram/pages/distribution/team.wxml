@@ -39,7 +39,7 @@
     <view class="toolbar-left">
       <image class="toolbar-icon" src="/assets/icons/list.svg" mode="aspectFit"></image>
       <view class="toolbar-copy">
-        <text class="toolbar-title">钱包明细</text>
+        <text class="toolbar-title">佣金明细</text>
         <text class="toolbar-sub">查看佣金入账与提现记录</text>
       </view>
     </view>

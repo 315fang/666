@@ -46,6 +46,12 @@ function roundMoney(value) {
     return Math.round(toNumber(value, 0) * 100) / 100;
 }
 
+function normalizeReturnShippingInput(shippingData = {}) {
+    const company = pickString(shippingData.return_company || shippingData.company);
+    const trackingNo = pickString(shippingData.return_tracking_no || shippingData.tracking_no);
+    return { company, trackingNo };
+}
+
 function parseConfigValue(row, fallback) {
     if (!row) return fallback;
     const value = row.config_value !== undefined ? row.config_value : row.value;
@@ -580,6 +586,7 @@ async function ensureGoodsFundRefundCredited(openid, order = {}, refund = {}, am
         await db.collection('users').where({ openid }).update({
             data: {
                 agent_wallet_balance: _.inc(amount),
+                wallet_balance: _.inc(amount),
                 updated_at: db.serverDate()
             }
         });
@@ -646,6 +653,7 @@ async function ensureGoodsFundRefundCredited(openid, order = {}, refund = {}, am
             await db.collection('users').where({ openid }).update({
                 data: {
                     agent_wallet_balance: _.inc(-amount),
+                    wallet_balance: _.inc(-amount),
                     updated_at: db.serverDate()
                 }
             });
@@ -1081,36 +1089,35 @@ function buildBuyerRefundReversal(order = {}, refund = {}, isFullRefund = false,
 }
 
 async function reverseBuyerRefundAssets(openid, order = {}, refund = {}, isFullRefund = false) {
-    try {
-        const userRes = await db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] }));
-        const currentUser = userRes.data && userRes.data[0];
-        if (!currentUser) {
-            console.error('[order-lifecycle] ⚠️ 买家退款资产冲减跳过，用户不存在 openid=%s', openid);
-            return;
-        }
-        await db.collection('users').where({ openid }).update({
-            data: buildBuyerRefundReversal(order, refund, isFullRefund, currentUser)
-        });
-    } catch (e) {
-        console.error('[order-lifecycle] ⚠️ 买家退款资产冲减失败 openid=%s error=%s', openid, e.message);
-        try {
-            await db.collection('rollback_error_logs').add({
-                data: { context: 'reverseBuyerRefundAssets', openid, error: e.message, created_at: db.serverDate() }
-            });
-        } catch (_) {}
+    const userRes = await db.collection('users').where({ openid }).limit(1).get().catch(() => ({ data: [] }));
+    const currentUser = userRes.data && userRes.data[0];
+    if (!currentUser) {
+        throw new Error(`买家退款资产冲减失败：用户不存在(${openid})`);
+    }
+    const updateRes = await db.collection('users').where({ openid }).update({
+        data: buildBuyerRefundReversal(order, refund, isFullRefund, currentUser)
+    });
+    if (!updateRes.stats || updateRes.stats.updated === 0) {
+        throw new Error(`买家退款资产冲减失败：用户未更新(${openid})`);
     }
 }
 
 async function reverseBuyerRefundAssetsWithMarker(openid, orderId, order = {}, refund = {}, isFullRefund = false) {
     if (refund.buyer_assets_reversed_at) return;
     if (!isRefundCompletionConfirmed(refund)) return;
-    await reverseBuyerRefundAssets(openid, order, refund, isFullRefund);
     try {
+        await reverseBuyerRefundAssets(openid, order, refund, isFullRefund);
         await db.collection('refunds').doc(String(refund._id)).update({
             data: { buyer_assets_reversed_at: db.serverDate(), updated_at: db.serverDate() }
         });
     } catch (e) {
-        console.error('[order-lifecycle] ⚠️ 退款买家资产冲减标记写入失败 refundId=%s error=%s', refund._id, e.message);
+        console.error('[order-lifecycle] ⚠️ 退款买家资产冲减失败 refundId=%s error=%s', refund._id, e.message);
+        try {
+            await db.collection('rollback_error_logs').add({
+                data: { context: 'reverseBuyerRefundAssets', order_id: orderId, refund_id: refund._id || '', openid, error: e.message, created_at: db.serverDate() }
+            });
+        } catch (_) {}
+        throw e;
     }
 }
 
@@ -1323,20 +1330,30 @@ async function cancelOrder(openid, orderId) {
     }
 
     // 状态已锁定为 cancelled，安全退还资产
+    const assetRollbackErrors = [];
     const pointsUsed = toNumber(order.points_used, 0);
     if (pointsUsed > 0) {
-        await db.collection('users').where({ openid }).update({
-            data: {
-                points: _.inc(pointsUsed),
-                updated_at: db.serverDate(),
-            },
-        }).catch((e) => console.error('[OrderLifecycle] 退积分失败:', e.message));
+        try {
+            const pointsRes = await db.collection('users').where({ openid }).update({
+                data: {
+                    points: _.inc(pointsUsed),
+                    updated_at: db.serverDate(),
+                },
+            });
+            if (!pointsRes.stats || pointsRes.stats.updated === 0) {
+                throw new Error('用户积分未更新');
+            }
+        } catch (e) {
+            console.error('[OrderLifecycle] 退积分失败:', e.message);
+            assetRollbackErrors.push(`退积分失败: ${e.message}`);
+        }
     }
 
     try {
         await restoreUsedCoupon(order);
     } catch (e) {
         console.error('[order-lifecycle] ⚠️ 取消订单恢复优惠券失败 orderId=%s error=%s', orderId, e.message);
+        assetRollbackErrors.push(`恢复优惠券失败: ${e.message}`);
     }
 
     try {
@@ -1358,6 +1375,31 @@ async function cancelOrder(openid, orderId) {
 
     await restoreOrderStock(orderId, order).catch((stockErr) => {
         console.error('[OrderLifecycle] 取消订单恢复库存失败:', stockErr.message);
+    });
+
+    if (assetRollbackErrors.length) {
+        const assetError = assetRollbackErrors.join('; ');
+        await db.collection('orders').doc(String(orderId)).update({
+            data: {
+                asset_reversal_status: 'failed',
+                asset_reversal_error: assetError,
+                asset_reversal_failed_at: db.serverDate(),
+                updated_at: db.serverDate()
+            }
+        }).catch((e) => {
+            console.error('[order-lifecycle] ⚠️ 取消订单资产失败标记写入失败 orderId=%s error=%s', orderId, e.message);
+        });
+        throw new Error(`订单已取消，但资产退回失败：${assetError}`);
+    }
+
+    await db.collection('orders').doc(String(orderId)).update({
+        data: {
+            asset_reversal_status: 'completed',
+            asset_reversed_at: db.serverDate(),
+            updated_at: db.serverDate()
+        }
+    }).catch((e) => {
+        console.error('[order-lifecycle] ⚠️ 取消订单资产完成标记写入失败 orderId=%s error=%s', orderId, e.message);
     });
 
     return { success: true, order_id: orderId, status: 'cancelled' };
@@ -1687,14 +1729,19 @@ async function returnShipping(openid, refundId, shippingData) {
         throw new Error(`退款状态不允许填写物流: ${refundRes.data.status}`);
     }
 
+    const { company, trackingNo } = normalizeReturnShippingInput(shippingData);
+    if (!trackingNo) {
+        throw new Error('请填写退货物流单号');
+    }
+
     await db.collection('refunds').doc(refundId).update({
         data: {
             status: 'approved',
-            return_company: shippingData.company || '',
-            return_tracking_no: shippingData.tracking_no || '',
+            return_company: company,
+            return_tracking_no: trackingNo,
             return_shipping: {
-                company: shippingData.company || '',
-                tracking_no: shippingData.tracking_no || '',
+                company,
+                tracking_no: trackingNo,
                 sent_at: db.serverDate(),
             },
             return_shipping_submitted_at: db.serverDate(),

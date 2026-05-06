@@ -32,9 +32,10 @@
   <view wx:if="{{tab === 'activities'}}">
     <view class="section-head">
       <view>
-        <text class="section-title">可发起活动</text>
-        <text class="section-subtitle">查看人数要求和拼团价。</text>
+        <text class="section-title">{{focusApplied ? '当前活动' : '可发起活动'}}</text>
+        <text class="section-subtitle">{{focusApplied ? '已为你定位到活动卡对应的拼团。' : '查看人数要求和拼团价。'}}</text>
       </view>
+      <view class="section-filter" wx:if="{{focusApplied}}" bindtap="onClearActivityFocus">查看全部</view>
     </view>
 
     <view class="skeleton-list" wx:if="{{loading && !activities.length}}">

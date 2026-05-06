@@ -4,6 +4,10 @@
     <view class="header-title-row">
       <text class="header-title">商品分类</text>
     </view>
+    <view class="header-search" bindtap="onOpenSearch">
+      <image class="header-search-icon" src="/assets/icons/search.svg" mode="aspectFit"></image>
+      <text class="header-search-text">搜索商品</text>
+    </view>
   </view>
 
   <view class="main-content">
@@ -75,9 +79,72 @@
         </swiper>
       </view>
 
+      <view class="cat-section cat-section-anchor card-enter" wx:if="{{leadCategory}}" id="cat-{{leadCategory.id}}">
+        <view class="cat-section-header">
+          <text class="cat-section-title">{{leadCategory.name}}</text>
+        </view>
+        <view class="cat-loading" wx:if="{{!loadedCategories[leadCategory.id]}}">
+          <text class="cat-loading-text">加载中...</text>
+        </view>
+        <view class="product-list" wx:elif="{{visibleProducts[leadCategory.id] && visibleProducts[leadCategory.id].length > 0}}">
+          <view
+            class="product-item ripple-dark"
+            wx:for="{{visibleProducts[leadCategory.id]}}"
+            wx:for-item="prod"
+            wx:for-index="prodIndex"
+            wx:key="id"
+            bindtap="onOpenProductDetail"
+            data-id="{{prod.id}}"
+            hover-class="press"
+          >
+            <view class="product-img-wrap">
+              <image
+                class="product-img"
+                src="{{prod.image || prod.display_image || prod.image_url || prod.image_ref || '/assets/images/placeholder.svg'}}"
+                mode="aspectFill"
+                lazy-load="{{prodIndex > 5}}"
+                binderror="onProductImageError"
+                data-category-id="{{leadCategory.id}}"
+                data-id="{{prod.id}}"
+              ></image>
+            </view>
+            <view class="product-info">
+              <view class="product-tag-row" wx:if="{{prod.product_tag && prod.product_tag !== 'normal'}}">
+                <text class="ptag ptag-hot" wx:if="{{prod.product_tag === 'hot'}}">爆品</text>
+                <text class="ptag ptag-discount" wx:if="{{prod.product_tag === 'discount'}}">折扣</text>
+                <text class="ptag ptag-new" wx:if="{{prod.product_tag === 'new'}}">新品</text>
+              </view>
+              <text class="product-name">{{prod.name}}</text>
+              <view class="product-meta-row">
+                <text class="product-sales" wx:if="{{prod.sales_label}}">{{prod.sales_label}}</text>
+                <text class="product-heat" wx:if="{{prod.heat_label}}">{{prod.heat_label}}</text>
+              </view>
+              <text class="product-spec-summary" wx:if="{{prod.specSummary}}">{{prod.specSummary}}</text>
+              <view class="product-discount-tag" wx:if="{{prod.discount_label}}">
+                <text class="discount-tag-text">{{prod.discount_label}}</text>
+              </view>
+              <view class="product-bottom">
+                <view class="price-stack">
+                  <text class="price-symbol">¥</text>
+                  <text class="product-price">{{prod.price}}</text>
+                  <text class="price-origin" wx:if="{{prod.market_price}}">¥{{prod.market_price}}</text>
+                </view>
+              </view>
+              <text class="product-points-tip" wx:if="{{prod.lowestTip}}">到手约¥{{prod.lowestTip}}</text>
+            </view>
+            <view class="add-btn btn-spring" catchtap="onOpenProductDetail" data-id="{{prod.id}}">
+              <image class="add-btn-icon" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
+            </view>
+          </view>
+        </view>
+        <view class="cat-empty" wx:else>
+          <text class="cat-empty-text">暂无商品</text>
+        </view>
+      </view>
+
       <view class="cat-section cat-section-anchor card-enter" wx:if="{{productBundles.length > 0}}" id="cat-bundle-zone">
         <view class="cat-section-header">
-          <text class="cat-section-title">组合专区</text>
+          <text class="cat-section-title">特惠组合</text>
         </view>
         <view class="bundle-zone-list">
           <view
@@ -169,7 +236,7 @@
             </view>
             <!-- 右侧加购按钮 -->
             <view class="add-btn btn-spring" catchtap="onOpenProductDetail" data-id="{{prod.id}}">
-              <text class="add-btn-text">+</text>
+              <image class="add-btn-icon" src="/assets/icons/arrow-right.svg" mode="aspectFit"></image>
             </view>
           </view>
         </view>

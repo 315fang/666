@@ -291,6 +291,7 @@ test('system refund uses growth snapshot basis and debt-based commission clawbac
                 id: 'buyer-id',
                 openid: 'buyer-openid',
                 agent_wallet_balance: 0,
+                wallet_balance: 0,
                 points: 40,
                 growth_value: 30,
                 total_spent: 100,
@@ -335,6 +336,7 @@ test('system refund uses growth snapshot basis and debt-based commission clawbac
 
         const buyer = db.data.users.find((row) => row.openid === 'buyer-openid');
         assert.equal(buyer.agent_wallet_balance, 100);
+        assert.equal(buyer.wallet_balance, 100);
         assert.equal(buyer.points, 30);
         assert.equal(buyer.growth_value, 10);
         assert.equal(buyer.total_spent, 0);

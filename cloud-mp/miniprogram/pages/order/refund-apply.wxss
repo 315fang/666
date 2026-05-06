@@ -13,6 +13,10 @@
   margin: 24rpx 0 16rpx;
 }
 
+.section-title-inline {
+  margin-top: 0;
+}
+
 .type-group {
   display: flex;
   gap: 20rpx;
@@ -180,6 +184,8 @@
   font-size: 22rpx;
   color: #94A3B8;
   flex-shrink: 0;
+  max-width: 220rpx;
+  text-align: right;
 }
 
 .submit-bar {

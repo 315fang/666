@@ -146,6 +146,42 @@ test('deadline process releases frozen order points after completion and refund 
     assert.equal(collections.orders[0].points_award_status, 'released');
 });
 
+test('deadline process rolls back user points when release marker update fails', async () => {
+    const collections = baseCollections({ userPoints: 0 });
+    const db = createDb(collections);
+    const originalCollection = db.collection;
+    db.collection = (name) => {
+        const collection = originalCollection(name);
+        if (name !== 'point_logs') return collection;
+        return {
+            ...collection,
+            doc: (id) => {
+                const doc = collection.doc(id);
+                return {
+                    ...doc,
+                    update: async ({ data } = {}) => {
+                        if (data && data.status === 'released') {
+                            throw new Error('mock release marker failure');
+                        }
+                        return doc.update({ data });
+                    }
+                };
+            }
+        };
+    };
+    const mod = loadDeadlineProcess(db);
+
+    const result = await mod.main();
+
+    assert.equal(result.pointsReleased, 0);
+    assert.equal(result.errors.length, 1);
+    assert.equal(collections.users[0].points, 0);
+    assert.equal(collections.point_logs[0].status, 'frozen');
+    assert.equal(collections.point_logs[0].release_error, 'mock release marker failure');
+    assert.equal(collections.point_logs[0].releasing_at, undefined);
+    assert.equal(collections.point_logs[0].release_recovery_required, undefined);
+});
+
 test('deadline process releases only the non-refunded portion of frozen order points', async () => {
     const collections = baseCollections({ userPoints: 0, refundedCash: 40 });
     const mod = loadDeadlineProcess(createDb(collections));

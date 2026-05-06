@@ -1179,23 +1179,35 @@ async function decreaseGoodsFundLedger(openid, amount, refId, remark) {
         }
     });
 
-    await db.collection('wallet_logs').add({
-        data: {
-            user_id: user.id || user._legacy_id || user._id || '',
-            account_id: account.id || account._id || '',
-            change_type: 'deduct',
-            amount,
-            balance_before: before,
-            balance_after: after,
-            ref_type: 'order_payment',
-            ref_id: refId,
-            remark,
-            created_at: db.serverDate(),
-            updated_at: db.serverDate()
-        }
-    });
+    try {
+        await db.collection('wallet_logs').add({
+            data: {
+                user_id: user.id || user._legacy_id || user._id || '',
+                account_id: account.id || account._id || '',
+                change_type: 'deduct',
+                amount,
+                balance_before: before,
+                balance_after: after,
+                ref_type: 'order_payment',
+                ref_id: refId,
+                remark,
+                created_at: db.serverDate(),
+                updated_at: db.serverDate()
+            }
+        });
+    } catch (err) {
+        await db.collection('wallet_accounts').doc(String(account._id)).update({
+            data: {
+                balance: _.inc(amount),
+                updated_at: db.serverDate()
+            }
+        }).catch((rollbackErr) => {
+            console.error('[OrderCreate] ⚠️ 货款账本日志失败后账户回滚失败 account=%s error=%s', account._id, rollbackErr.message);
+        });
+        throw err;
+    }
 
-    return true;
+    return { deducted: true, account_id: account._id || account.id };
 }
 
 async function rollbackGoodsFundLedger(openid, amount, refId, remark) {
@@ -2299,6 +2311,7 @@ const freshBalance = toNumber(u.agent_wallet_balance, 0);
     if (use_goods_fund) {
         const orderId = result._id;
         let goodsFundDeducted = false;
+        let goodsFundLedgerDeducted = false;
         try {
             // 原子扣减：where agent_wallet_balance >= payAmount，防并发超扣
             const deductRes = await db.collection('users')
@@ -2306,6 +2319,7 @@ const freshBalance = toNumber(u.agent_wallet_balance, 0);
                 .update({
                     data: {
                         agent_wallet_balance: _.inc(-payAmount),
+                        wallet_balance: _.inc(-payAmount),
                         goods_fund_total_spent: _.inc(payAmount),
                         updated_at: db.serverDate()
                     }
@@ -2346,7 +2360,8 @@ const freshBalance = toNumber(u.agent_wallet_balance, 0);
                 throw new Error('货款余额不足，请刷新后重试');
             }
             goodsFundDeducted = true;
-            await decreaseGoodsFundLedger(openid, payAmount, orderNo, '货款支付订单');
+            const ledgerResult = await decreaseGoodsFundLedger(openid, payAmount, orderNo, '货款支付订单');
+            goodsFundLedgerDeducted = !!ledgerResult?.deducted;
             // 拼团订单货款支付后进入 pending_group（待成团），自提单进入 pickup_pending。
             const isGroupOrder = !!(groupActivity || group_no || group_activity_id);
             const postPayStatus = isGroupOrder
@@ -2388,15 +2403,18 @@ const freshBalance = toNumber(u.agent_wallet_balance, 0);
                 await db.collection('users').where({ openid }).update({
                     data: {
                         agent_wallet_balance: _.inc(payAmount),
+                        wallet_balance: _.inc(payAmount),
                         goods_fund_total_spent: _.inc(-payAmount),
                         updated_at: db.serverDate()
                     }
                 }).catch((walletErr) => {
                     console.error('[OrderCreate] ⚠️ 货款余额回滚失败 openid=%s amount=%s error=%s', openid, payAmount, walletErr.message);
                 });
-                await rollbackGoodsFundLedger(openid, payAmount, orderNo, '货款支付回滚').catch((rollbackErr) => {
-                    console.error('[OrderCreate] 货款账本回滚失败:', rollbackErr.message);
-                });
+                if (goodsFundLedgerDeducted) {
+                    await rollbackGoodsFundLedger(openid, payAmount, orderNo, '货款支付回滚').catch((rollbackErr) => {
+                        console.error('[OrderCreate] 货款账本回滚失败:', rollbackErr.message);
+                    });
+                }
                 await db.collection('orders').doc(orderId).update({
                     data: { status: 'cancelled', cancel_reason: '货款支付处理失败', updated_at: db.serverDate() }
                 }).catch((orderCancelErr) => {

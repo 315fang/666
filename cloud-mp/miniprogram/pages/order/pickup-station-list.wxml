@@ -13,7 +13,7 @@
   </view>
 
   <view class="station-summary">
-    <text class="summary-title">可选门店</text>
+    <text class="summary-title">自提门店</text>
     <text class="summary-count">{{filteredStations.length}} / {{stations.length}}</text>
   </view>
 

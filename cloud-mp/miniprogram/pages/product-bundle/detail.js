@@ -48,6 +48,12 @@ function getOptionDefaultQty(option = {}) {
     );
 }
 
+function sanitizeFlexBundleSubtitle(text) {
+    const value = String(text || '').trim();
+    if (!value) return '';
+    return /点击|下一步|上方|搭配进度|切换|步骤|第[一二三四五六七八九十0-9]+步/.test(value) ? '' : value;
+}
+
 function getGroupSelectedTotal(groupKey, selectedKeys = [], selectedQtyMap = {}) {
     return (Array.isArray(selectedKeys) ? selectedKeys : []).reduce((sum, optionKey) => {
         return sum + Math.max(1, Number(selectedQtyMap[selectionQtyKey(groupKey, optionKey)] || 1));
@@ -147,25 +153,18 @@ function buildGroupStatusText(selectedCount, minSelect, maxSelect) {
     return '已完成';
 }
 
-function getOptionImage(option = {}) {
-    return uniqImageCandidates([option.sku, option.product, option.image, option.image_url])[0] || '';
-}
-
 Page({
     data: {
         id: '',
         loading: true,
         loadError: false,
         bundle: null,
-        activeGroupKey: '',
-        activeGroupIndex: 0,
-        selectionSlots: [],
         completedGroupCount: 0,
         totalGroupCount: 0,
         requiredSelectedCount: 0,
         requiredTotalCount: 0,
         bottomProgressText: '',
-        bottomActionText: '去结算',
+        bottomActionText: '去付款',
         selectedMap: {},
         selectedQtyMap: {},
         selectedCount: 0,
@@ -225,18 +224,23 @@ Page({
             })));
             const bundle = {
                 ...rawBundle,
+                subtitle: rawBundle.scene_type === 'flex_bundle'
+                    ? sanitizeFlexBundleSubtitle(rawBundle.subtitle)
+                    : rawBundle.subtitle,
+                hero_subtitle: rawBundle.scene_type === 'flex_bundle'
+                    ? sanitizeFlexBundleSubtitle(rawBundle.hero_subtitle)
+                    : rawBundle.hero_subtitle,
                 cover_preview_url: await resolveRenderableImageUrl(coverSource, ''),
                 groups
             };
             wx.setNavigationBarTitle({
-                title: bundle.scene_type === 'flex_bundle' ? '特惠随心选' : '组合套装'
+                title: bundle.scene_type === 'flex_bundle' ? '随心搭配' : '组合套装'
             });
             const { selectedMap, selectedQtyMap } = buildInitialSelection(groups);
             this.setData({
                 bundle,
                 selectedMap,
                 selectedQtyMap,
-                activeGroupKey: groups[0] ? groups[0].group_key : '',
                 loading: false,
                 loadError: false
             });
@@ -247,14 +251,13 @@ Page({
         }
     },
 
-    recalcSelection(options = {}) {
+    recalcSelection() {
         const bundle = this.data.bundle;
         if (!bundle) return;
         const selectedMap = cloneSelectedMap(this.data.selectedMap || {});
         const selectedQtyMap = cloneSelectedQtyMap(this.data.selectedQtyMap || {});
         const orderItems = [];
         const sourceGroups = Array.isArray(bundle.groups) ? bundle.groups : [];
-        let activeGroupKey = this.data.activeGroupKey || (sourceGroups[0] && sourceGroups[0].group_key) || '';
         let originalAmount = 0;
         let totalQuantity = 0;
         let selectedCount = 0;
@@ -344,49 +347,6 @@ Page({
             });
         });
 
-        const activeGroup = nextBundle.groups.find((group) => group.group_key === activeGroupKey);
-        const shouldAutoAdvance = options.autoAdvance
-            && activeGroup
-            && activeGroup.complete
-            && (
-                activeGroup.min_select_count === activeGroup.max_select_count
-                || activeGroup.selected_count >= activeGroup.max_select_count
-            );
-        if (shouldAutoAdvance) {
-            const activeIndex = nextBundle.groups.findIndex((group) => group.group_key === activeGroup.group_key);
-            const nextIncomplete = nextBundle.groups
-                .slice(activeIndex + 1)
-                .find((group) => !group.complete)
-                || nextBundle.groups.find((group) => !group.complete);
-            if (nextIncomplete) activeGroupKey = nextIncomplete.group_key;
-        }
-        if (!nextBundle.groups.some((group) => group.group_key === activeGroupKey)) {
-            activeGroupKey = nextBundle.groups[0] ? nextBundle.groups[0].group_key : '';
-        }
-        let activeGroupIndex = 0;
-        nextBundle.groups = nextBundle.groups.map((group, index) => {
-            const active = group.group_key === activeGroupKey;
-            if (active) activeGroupIndex = index;
-            return { ...group, active };
-        });
-
-        const selectionSlots = nextBundle.groups.map((group, index) => {
-            const selectedOptions = (group.options || []).filter((option) => option.selected);
-            const firstOption = selectedOptions[0] || null;
-            const selectedQtyTotal = selectedOptions.reduce((sum, option) => sum + Math.max(1, Number(option.selected_quantity || 1)), 0);
-            return {
-                group_key: group.group_key,
-                group_title: group.group_title,
-                index: index + 1,
-                active: group.active,
-                complete: group.complete,
-                selected_count: selectedQtyTotal,
-                image: firstOption ? getOptionImage(firstOption) : '',
-                extra_count: Math.max(0, selectedQtyTotal - (firstOption ? Math.max(1, Number(firstOption.selected_quantity || 1)) : 0)),
-                status_text: group.status_text
-            };
-        });
-
         const bundleDiscount = Math.max(0, roundMoney(originalAmount - roundMoney(bundle.bundle_price)));
         const priceValid = orderItems.length > 0 ? roundMoney(bundle.bundle_price) <= roundMoney(originalAmount) : true;
         const completeSelection = selectionValid && orderItems.length > 0;
@@ -394,12 +354,9 @@ Page({
         const missingText = missingGroup
             ? `还差「${missingGroup.group_title}」${Math.max(1, missingGroup.min_select_count - missingGroup.selected_count)}件`
             : '已完成搭配';
-        const bottomActionText = completeSelection && priceValid ? '去结算' : missingText;
+        const bottomActionText = completeSelection && priceValid ? '去付款' : missingText;
         this.setData({
             bundle: nextBundle,
-            activeGroupKey,
-            activeGroupIndex,
-            selectionSlots,
             completedGroupCount,
             totalGroupCount: nextBundle.groups.length,
             requiredSelectedCount,
@@ -412,19 +369,10 @@ Page({
             bundleDiscount,
             bundleDiscountText: formatMoney(bundleDiscount),
             selectionValid: completeSelection && priceValid,
-            selectionMessage: completeSelection && !priceValid ? '组合价配置异常' : missingText,
-            bottomProgressText: completeSelection && priceValid
-                ? `已选 ${selectedCount} 项 / ${totalQuantity} 件`
-                : `已完成 ${requiredSelectedCount}/${requiredTotalCount}`,
-            bottomActionText: completeSelection && !priceValid ? '组合价异常' : bottomActionText
+            selectionMessage: completeSelection && !priceValid ? '价格暂不可用' : missingText,
+            bottomProgressText: `已选 ${selectedCount} 项 / ${totalQuantity} 件`,
+            bottomActionText: completeSelection && !priceValid ? '价格待确认' : bottomActionText
         });
-    },
-
-    onSwitchGroup(e) {
-        const groupKey = e.currentTarget.dataset.groupKey;
-        if (!groupKey || groupKey === this.data.activeGroupKey) return;
-        this.setData({ activeGroupKey: groupKey });
-        this.recalcSelection();
     },
 
     onToggleOption(e) {
@@ -461,7 +409,7 @@ Page({
             selectedMap[groupKey] = current.concat(optionKey);
         }
         this.setData({ selectedMap, selectedQtyMap });
-        this.recalcSelection({ autoAdvance: !exists });
+        this.recalcSelection();
     },
 
     onIncreaseOptionQty(e) {
@@ -526,6 +474,7 @@ Page({
         wx.setStorageSync('directBuyInfo', {
             bundle_mode: 1,
             bundle_id: bundle.id,
+            bundle_scene_type: bundle.scene_type || '',
             bundle_title: bundle.title,
             bundle_subtitle: bundle.subtitle || '',
             bundle_cover_image: bundle.cover_image || '',

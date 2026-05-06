@@ -5,7 +5,7 @@
     <view class="hero-copy">
       <text class="hero-badge">✨ 精选套餐</text>
       <text class="hero-title">特惠随心选</text>
-      <text class="hero-subtitle">固定套餐价，自由搭配你的专属套装；结算按整套套餐价统一处理。</text>
+      <text class="hero-subtitle">特惠优选价，自由搭配你的专属套装；下单按整套优选价结算。</text>
     </view>
   </view>
 
@@ -55,7 +55,7 @@
       </view>
       <view class="bundle-info">
         <view class="bundle-tag-row">
-          <text class="bundle-tag">固定套餐价</text>
+          <text class="bundle-tag">特惠优选价</text>
           <text class="bundle-tag bundle-tag-soft" wx:for="{{item.channel_tags}}" wx:key="index" wx:for-item="tag">{{tag}}</text>
         </view>
         <text class="bundle-title">{{item.title || item.hero_title}}</text>
@@ -65,10 +65,10 @@
             <text class="bundle-price-symbol">¥</text>
             <text class="bundle-price">{{item.bundle_price}}</text>
           </view>
-          <text class="bundle-count">{{item.group_count}} 组 / {{item.option_count}} 个候选</text>
+          <text class="bundle-count">{{item.group_count}} 组 / {{item.option_count}} 款可选</text>
         </view>
         <view class="bundle-entry">
-          <text class="bundle-entry-text">进入组合</text>
+          <text class="bundle-entry-text">去搭配</text>
           <text class="bundle-entry-arrow">›</text>
         </view>
       </view>

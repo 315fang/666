@@ -674,6 +674,43 @@ function isExchangeOrder(order = {}) {
     return String(order.type || order.order_type || '').trim().toLowerCase() === 'exchange';
 }
 
+function isFlexBundleOrder(order = {}) {
+    const bundleMeta = order.bundle_meta && typeof order.bundle_meta === 'object' ? order.bundle_meta : {};
+    if (pickString(bundleMeta.scene_type).toLowerCase() === 'flex_bundle') return true;
+    if (pickString(order.bundle_scene_type).toLowerCase() === 'flex_bundle') return true;
+    return toArray(order.items).some((item) => pickString(item?.bundle_scene_type).toLowerCase() === 'flex_bundle');
+}
+
+function isLimitedSpotRewardRestrictedOrder(order = {}) {
+    const type = pickString(order.type || order.order_type).toLowerCase();
+    if (type === 'limited_sale' || type === 'limited_spot') return true;
+    if (hasValue(order.limited_sale_slot_id) || hasValue(order.limited_sale_item_id)) return true;
+    if (hasValue(order.limited_spot_card_id) || hasValue(order.limited_spot_offer_id)) return true;
+    if (order.limited_sale || order.limited_spot) return true;
+    return toArray(order.items).some((item = {}) => {
+        const activityType = pickString(item.activity_type).toLowerCase();
+        return activityType === 'limited_sale'
+            || activityType === 'limited_spot'
+            || hasValue(item.limited_sale_slot_id)
+            || hasValue(item.limited_sale_item_id)
+            || hasValue(item.limited_spot_card_id)
+            || hasValue(item.limited_spot_offer_id);
+    });
+}
+
+function isExplosiveRewardRestrictedOrder(order = {}) {
+    return toArray(order.items).some((item = {}) => (
+        isTruthyFlag(item.is_explosive)
+        || pickString(item.product_tag).toLowerCase() === 'hot'
+    ));
+}
+
+function isRewardPointsRestrictedOrder(order = {}) {
+    return isFlexBundleOrder(order)
+        || isLimitedSpotRewardRestrictedOrder(order)
+        || isExplosiveRewardRestrictedOrder(order);
+}
+
 function amountFen(value) {
     return Math.round(toNumber(value, 0) * 100);
 }
@@ -774,21 +811,33 @@ async function increaseGoodsFundLedger(openid, amount, refId, remark, refType = 
         }
     });
 
-    await db.collection('wallet_logs').add({
-        data: {
-            user_id: user.id || user._legacy_id || user._id || '',
-            account_id: account.id || account._id || '',
-            change_type: 'recharge',
-            amount,
-            balance_before: before,
-            balance_after: after,
-            ref_type: refType,
-            ref_id: refId,
-            remark,
-            created_at: db.serverDate(),
-            updated_at: db.serverDate()
-        }
-    });
+    try {
+        await db.collection('wallet_logs').add({
+            data: {
+                user_id: user.id || user._legacy_id || user._id || '',
+                account_id: account.id || account._id || '',
+                change_type: 'recharge',
+                amount,
+                balance_before: before,
+                balance_after: after,
+                ref_type: refType,
+                ref_id: refId,
+                remark,
+                created_at: db.serverDate(),
+                updated_at: db.serverDate()
+            }
+        });
+    } catch (err) {
+        await db.collection('wallet_accounts').doc(String(account._id)).update({
+            data: {
+                balance: _.inc(-amount),
+                updated_at: db.serverDate()
+            }
+        }).catch((rollbackErr) => {
+            console.error('[payment-callback] ⚠️ 货款充值账本日志失败后账户回滚失败 account=%s error=%s', account._id, rollbackErr.message);
+        });
+        throw err;
+    }
 
     return true;
 }
@@ -1672,7 +1721,9 @@ async function ensurePointsAwarded(orderId, order) {
             0,
             toNumber(pointRules.purchase_multiplier_by_role?.[benefitBuyerRole], pointRules.purchase_multiplier_by_role?.[0] || DEFAULT_POINT_RULES.purchase_multiplier_by_role[0])
         );
-        const pointsEarned = calculateOrderPayPoints(payAmount, purchasePointsPerHundred);
+        const pointsEarned = isRewardPointsRestrictedOrder(order)
+            ? 0
+            : calculateOrderPayPoints(payAmount, purchasePointsPerHundred);
 
         const purchaseGrowthRule = growthRules.purchase || DEFAULT_GROWTH_RULES.purchase;
         const growthBaseAmount = purchaseGrowthRule.use_original_amount
@@ -2984,10 +3035,12 @@ async function reverseBuyerAssetsForRefund(orderId, order = {}, refund = {}) {
     if (pointsDelta !== 0) userUpdates.points = _.inc(pointsDelta);
     if (growthDelta !== 0) userUpdates.growth_value = _.inc(growthDelta);
 
-    await db.collection('users')
+    const userUpdateRes = await db.collection('users')
         .where({ openid: order.openid })
-        .update({ data: userUpdates })
-        .catch((err) => { console.error('[RefundCallback] 用户数据回退失败:', err.message); });
+        .update({ data: userUpdates });
+    if (!userUpdateRes.stats || userUpdateRes.stats.updated === 0) {
+        throw new Error(`退款买家资产回退失败：用户未更新(${order.openid})`);
+    }
 
     if (refund && refund._id) {
         try {
@@ -3045,19 +3098,128 @@ async function reverseBuyerAssetsForRefund(orderId, order = {}, refund = {}) {
     }
 }
 
+function normalizeDocData(data) {
+    if (Array.isArray(data)) return data[0] || null;
+    return data || null;
+}
+
+async function getRechargeOrderByNo(orderNo) {
+    const res = await db.collection('wallet_recharge_orders')
+        .where({ order_no: orderNo })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return res.data && res.data[0] ? res.data[0] : null;
+}
+
+async function creditRechargeUserBalanceOnce(recharge, amount) {
+    if (recharge.balance_credited_at) return false;
+    if (typeof db.runTransaction !== 'function') {
+        throw new Error('充值到账失败：当前数据库不支持事务');
+    }
+
+    return await db.runTransaction(async (tx) => {
+        const latestSnap = await tx.collection('wallet_recharge_orders')
+            .doc(String(recharge._id))
+            .get()
+            .catch(() => ({ data: null }));
+        const latest = normalizeDocData(latestSnap.data);
+        if (!latest) throw new Error('充值到账失败：充值单不存在');
+        if (latest.status === 'paid' || latest.balance_credited_at) return false;
+        if (latest.status !== 'crediting') throw new Error(`充值到账失败：充值单状态异常(${latest.status || 'unknown'})`);
+
+        const creditRes = await tx.collection('users')
+            .where({ openid: latest.openid || recharge.openid })
+            .update({
+                data: {
+                    agent_wallet_balance: _.inc(amount),
+                    wallet_balance: _.inc(amount),
+                    goods_fund_total_recharged: _.inc(amount),
+                    updated_at: db.serverDate(),
+                },
+            });
+        if (!creditRes.stats || creditRes.stats.updated === 0) {
+            throw new Error('充值到账失败：用户不存在或余额未更新');
+        }
+
+        await tx.collection('wallet_recharge_orders')
+            .doc(String(recharge._id))
+            .update({
+                data: {
+                    balance_credited_at: db.serverDate(),
+                    updated_at: db.serverDate(),
+                },
+            });
+        return true;
+    });
+}
+
+async function hasWalletLedgerLog(refId, refType) {
+    const res = await db.collection('wallet_logs')
+        .where({ ref_id: refId, ref_type: refType })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return !!(res.data && res.data[0]);
+}
+
+async function syncRechargeLedgerOnce(recharge, amount, orderNo) {
+    if (recharge.ledger_synced_at) return false;
+    const refType = 'wx_recharge';
+    const alreadyLogged = await hasWalletLedgerLog(orderNo, refType);
+    if (!alreadyLogged) {
+        await increaseGoodsFundLedger(recharge.openid, amount, orderNo, '货款余额充值', refType);
+    }
+    await db.collection('wallet_recharge_orders').doc(String(recharge._id)).update({
+        data: {
+            ledger_synced_at: db.serverDate(),
+            updated_at: db.serverDate(),
+        },
+    });
+    return !alreadyLogged;
+}
+
+async function hasGoodsFundRechargeLog(orderNo) {
+    const res = await db.collection('goods_fund_logs')
+        .where({ order_no: orderNo, type: 'recharge' })
+        .limit(1)
+        .get()
+        .catch(() => ({ data: [] }));
+    return !!(res.data && res.data[0]);
+}
+
+async function writeRechargeGoodsFundLogOnce(recharge, amount, orderNo) {
+    if (recharge.goods_fund_log_written_at) return false;
+    const alreadyLogged = await hasGoodsFundRechargeLog(orderNo);
+    if (!alreadyLogged) {
+        await db.collection('goods_fund_logs').add({
+            data: {
+                openid: recharge.openid,
+                type: 'recharge',
+                amount,
+                recharge_order_id: recharge._id,
+                order_no: orderNo,
+                remark: '货款余额充值',
+                created_at: db.serverDate(),
+            },
+        });
+    }
+    await db.collection('wallet_recharge_orders').doc(String(recharge._id)).update({
+        data: {
+            goods_fund_log_written_at: db.serverDate(),
+            updated_at: db.serverDate(),
+        },
+    });
+    return !alreadyLogged;
+}
+
 /**
  * 处理货款充值回调（order_no 以 RCH 开头，来自 wallet_recharge_orders）
  */
 async function handleRechargeCallback(outTradeNo, transaction) {
     console.log(`[RechargeCallback] 处理充值回调: ${outTradeNo}`);
 
-    const rechargeRes = await db.collection('wallet_recharge_orders')
-        .where({ order_no: outTradeNo })
-        .limit(1)
-        .get()
-        .catch(() => ({ data: [] }));
-
-    const recharge = rechargeRes.data && rechargeRes.data[0];
+    let recharge = await getRechargeOrderByNo(outTradeNo);
     if (!recharge) {
         console.warn(`[RechargeCallback] 充值订单不存在: ${outTradeNo}`);
         return { code: 'SUCCESS', message: 'Recharge order not found' };
@@ -3069,57 +3231,64 @@ async function handleRechargeCallback(outTradeNo, transaction) {
     }
 
     const amount = toNumber(recharge.amount, 0);
-    const openid = recharge.openid;
+    if (amount <= 0) throw new Error(`充值金额异常: ${amount}`);
 
-    // 原子更新充值单状态（防并发）
-    const updateRes = await db.collection('wallet_recharge_orders')
-        .where({ _id: recharge._id, status: 'pending' })
+    if (recharge.status === 'pending') {
+        const lockRes = await db.collection('wallet_recharge_orders')
+            .where({ _id: recharge._id, status: 'pending' })
+            .update({
+                data: {
+                    status: 'crediting',
+                    paid_at: db.serverDate(),
+                    trade_id: transaction.transaction_id || '',
+                    updated_at: db.serverDate(),
+                },
+            }).catch(() => ({ stats: { updated: 0 } }));
+
+        if (!lockRes.stats || lockRes.stats.updated === 0) {
+            recharge = await getRechargeOrderByNo(outTradeNo);
+            if (recharge && recharge.status === 'paid') {
+                return { code: 'SUCCESS', message: 'Already processed' };
+            }
+            if (!recharge || recharge.status !== 'crediting') {
+                throw new Error(`充值单状态锁定失败: ${outTradeNo}`);
+            }
+        } else {
+            recharge = await getRechargeOrderByNo(outTradeNo);
+        }
+    }
+
+    if (!recharge) {
+        throw new Error(`充值单重读失败: ${outTradeNo}`);
+    }
+    if (recharge.status !== 'crediting') {
+        return { code: 'SUCCESS', message: 'Recharge order not payable state' };
+    }
+
+    await creditRechargeUserBalanceOnce(recharge, amount);
+    recharge = await getRechargeOrderByNo(outTradeNo);
+    await syncRechargeLedgerOnce(recharge, amount, outTradeNo);
+    recharge = await getRechargeOrderByNo(outTradeNo);
+    await writeRechargeGoodsFundLogOnce(recharge, amount, outTradeNo);
+
+    const paidRes = await db.collection('wallet_recharge_orders')
+        .where({ _id: recharge._id, status: 'crediting' })
         .update({
             data: {
                 status: 'paid',
-                paid_at: db.serverDate(),
-                trade_id: transaction.transaction_id || '',
+                paid_at: recharge.paid_at || db.serverDate(),
+                trade_id: transaction.transaction_id || recharge.trade_id || '',
                 updated_at: db.serverDate(),
             },
-        }).catch(() => ({ stats: { updated: 0 } }));
-
-    if (!updateRes.stats || updateRes.stats.updated === 0) {
-        return { code: 'SUCCESS', message: 'Already processed' };
+        });
+    if (!paidRes.stats || paidRes.stats.updated === 0) {
+        const latest = await getRechargeOrderByNo(outTradeNo);
+        if (!latest || latest.status !== 'paid') {
+            throw new Error(`充值单完成标记失败: ${outTradeNo}`);
+        }
     }
 
-    // 到账：原子增加 agent_wallet_balance
-    await db.collection('users')
-        .where({ openid })
-        .update({
-            data: {
-                agent_wallet_balance: _.inc(amount),
-                goods_fund_total_recharged: _.inc(amount),
-                updated_at: db.serverDate(),
-            },
-        }).catch((err) => {
-            console.error('[RechargeCallback] 到账失败:', err.message);
-        });
-    await increaseGoodsFundLedger(openid, amount, outTradeNo, '货款余额充值', 'wx_recharge').catch((err) => { console.error('[RechargeCallback] 货款充值账本同步失败:', err.message || err); });
-
-    // 写流水日志
-    try {
-        await db.collection('goods_fund_logs').add({
-            data: {
-                openid,
-                type: 'recharge',
-                amount,
-                recharge_order_id: recharge._id,
-                order_no: outTradeNo,
-                remark: '货款余额充值',
-                created_at: db.serverDate(),
-            },
-        });
-    } catch (e) {
-        console.error('[payment-callback] ⚠️ 充值流水日志写入失败', e.message);
-        await db.collection('rollback_error_logs').add({ data: { module: 'payment-callback', operation: 'recharge_goods_fund_log', error: e.message, order_no: outTradeNo, created_at: db.serverDate() } }).catch(() => {});
-    }
-
-    console.log(`[RechargeCallback] 充值成功: ${outTradeNo}, 金额: ${amount}, openid: ${openid}`);
+    console.log(`[RechargeCallback] 充值成功: ${outTradeNo}, 金额: ${amount}, openid: ${recharge.openid}`);
     return { code: 'SUCCESS', message: 'Recharge processed' };
 }
 
@@ -3528,6 +3697,8 @@ module.exports = {
     _test: {
         calculateOrderPayPoints,
         resolvePointBenefitRoleLevel,
+        isFlexBundleOrder,
+        isRewardPointsRestrictedOrder,
         ensurePointsAwarded,
         ensureCommissionsCreated,
         ensurePeerBonusCreated,

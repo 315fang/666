@@ -6,6 +6,7 @@ const {
     shouldUseWalletForOrder,
     clearWalletPreference,
     onPayOrder,
+    onPayOrderWithWallet: payOrderWithWallet,
     startPayStatusPolling
 } = require('./orderDetailPayment');
 const {
@@ -226,39 +227,7 @@ Page({
 
     // 货款余额支付（代理商专属，从详情页直接扣余额）
     async onPayOrderWithWallet() {
-        const { order, walletBalance } = this.data;
-        if (!order) return;
-        if (walletBalance <= 0) {
-            wx.showToast({ title: '货款余额不足', icon: 'none' });
-            return;
-        }
-        if (this._payingWallet) return;
-        this._payingWallet = true;
-        wx.showLoading({ title: '支付中...', mask: true });
-        try {
-            const { post } = require('../../utils/request');
-            const res = await post(`/orders/${order.id}/prepay`, { use_wallet_balance: true });
-            wx.hideLoading();
-            if (res.code !== 0) {
-                wx.showToast({ title: res.message || '货款支付失败', icon: 'none' });
-                return;
-            }
-            const payParams = res.data || {};
-            if (payParams.paid_by_wallet) {
-                wx.showToast({ title: '货款支付成功', icon: 'success' });
-                this.startPayStatusPolling(order.id);
-                this._loadWalletBalance(); // 刷新余额显示
-            } else if (payParams.wallet_balance_insufficient) {
-                wx.showToast({ title: `货款余额不足（¥${Number(payParams.wallet_balance || 0).toFixed(2)}），请充值后重试`, icon: 'none', duration: 3000 });
-            } else {
-                wx.showToast({ title: '货款支付失败，请重试', icon: 'none' });
-            }
-        } catch (err) {
-            wx.hideLoading();
-            wx.showToast({ title: err.message || '支付失败，请重试', icon: 'none' });
-        } finally {
-            this._payingWallet = false;
-        }
+        return payOrderWithWallet(this);
     },
 
     // 确认收货

@@ -232,17 +232,29 @@ async function cancelTimedOutPendingOrders(defaultMinutes, now) {
                 continue;
             }
 
+            const assetRollbackErrors = [];
             if (toNumber(order.points_used, 0) > 0 && order.openid) {
-                await db.collection('users').where({ openid: order.openid }).update({
-                    data: {
-                        points: _.inc(toNumber(order.points_used, 0)),
-                        updated_at: db.serverDate(),
-                    },
-                }).catch((e) => console.error('[OrderTimeoutCancel] 退积分失败:', order._id, e.message));
+                try {
+                    const pointsRes = await db.collection('users').where({ openid: order.openid }).update({
+                        data: {
+                            points: _.inc(toNumber(order.points_used, 0)),
+                            updated_at: db.serverDate(),
+                        },
+                    });
+                    if (!pointsRes.stats || pointsRes.stats.updated === 0) {
+                        throw new Error('用户积分未更新');
+                    }
+                } catch (e) {
+                    console.error('[OrderTimeoutCancel] 退积分失败:', order._id, e.message);
+                    assetRollbackErrors.push(`退积分失败: ${e.message}`);
+                }
             }
 
-try { await restoreUsedCoupon(order); } catch (e) {
+            try {
+                await restoreUsedCoupon(order);
+            } catch (e) {
                 console.error('[OrderTimeoutCancel] ⚠️ 恢复优惠券失败 order=%s error=%s', order._id, e.message);
+                assetRollbackErrors.push(`恢复优惠券失败: ${e.message}`);
             }
 
             if (order.stock_deducted_at && Array.isArray(order.items)) {
@@ -272,6 +284,31 @@ try { await restoreUsedCoupon(order); } catch (e) {
             await releasePickupStationInventory(order).catch((e) => {
                 console.error('[OrderTimeoutCancel] 释放门店预占库存失败:', order._id, e.message);
             });
+
+            if (assetRollbackErrors.length) {
+                const assetError = assetRollbackErrors.join('; ');
+                await db.collection('orders').doc(String(order._id)).update({
+                    data: {
+                        asset_reversal_status: 'failed',
+                        asset_reversal_error: assetError,
+                        asset_reversal_failed_at: db.serverDate(),
+                        updated_at: db.serverDate()
+                    }
+                }).catch((e) => {
+                    console.error('[OrderTimeoutCancel] ⚠️ 资产失败标记写入失败 order=%s error=%s', order._id, e.message);
+                });
+                errors.push({ order_id: order._id, error: assetError });
+            } else {
+                await db.collection('orders').doc(String(order._id)).update({
+                    data: {
+                        asset_reversal_status: 'completed',
+                        asset_reversed_at: db.serverDate(),
+                        updated_at: db.serverDate()
+                    }
+                }).catch((e) => {
+                    console.error('[OrderTimeoutCancel] ⚠️ 资产完成标记写入失败 order=%s error=%s', order._id, e.message);
+                });
+            }
 
             cancelledCount += 1;
         } catch (err) {

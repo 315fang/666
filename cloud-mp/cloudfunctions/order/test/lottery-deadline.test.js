@@ -85,7 +85,9 @@ function createDb() {
     return { db, records, updates };
 }
 
-function createLotteryDrawDb() {
+function createLotteryDrawDb(options = {}) {
+    const costPoints = options.costPoints ?? 0;
+    const failRewardPointLog = !!options.failRewardPointLog;
     const userUpdates = [];
     const pointLogs = [];
     const records = [];
@@ -131,7 +133,7 @@ function createLotteryDrawDb() {
                 return query([{
                     _id: 'lottery-config',
                     config_key: 'lottery_config',
-                    config_value: { enabled: true, max_daily_draws: 3, cost_points: 0 }
+                    config_value: { enabled: true, max_daily_draws: 3, cost_points: costPoints }
                 }]);
             }
             if (name === 'app_configs') return query([]);
@@ -181,6 +183,9 @@ function createLotteryDrawDb() {
             if (name === 'point_logs') {
                 return {
                     add: async ({ data } = {}) => {
+                        if (failRewardPointLog && data && data.source === 'lottery') {
+                            throw new Error('mock reward point log failure');
+                        }
                         pointLogs.push(data);
                         return { _id: `point-log-${pointLogs.length}` };
                     }
@@ -229,4 +234,17 @@ test('point lottery rewards do not increase growth value', async () => {
     assert.equal(pointLogs[0].amount, 12);
     assert.ok(userUpdates.some((patch) => patch.points && patch.points.value === 12));
     assert.equal(userUpdates.some((patch) => patch.growth_value), false);
+});
+
+test('lottery refunds draw cost when automatic point reward fails', async () => {
+    const { db, user, pointLogs } = createLotteryDrawDb({ costPoints: 5, failRewardPointLog: true });
+    const lottery = loadLottery(db);
+
+    const result = await lottery.drawLottery('buyer-openid', { lottery_id: 'default' });
+
+    assert.equal(result.success, true);
+    assert.equal(result.fulfillment_status, 'failed');
+    assert.equal(user.points, 20);
+    assert.ok(pointLogs.some((row) => row.source === 'lottery_draw' && row.amount === 5));
+    assert.ok(pointLogs.some((row) => row.source === 'lottery_draw_refund' && row.amount === 5));
 });

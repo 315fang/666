@@ -506,15 +506,7 @@ async function releaseInviteFrozenFunds(db, invite = {}, reason = 'manual_releas
 
     const inviter = await findUserByOpenid(db, invite.inviter_openid);
     if (!inviter) {
-        return {
-            ...invite,
-            freeze_status: DIRECTED_INVITE_FREEZE_STATUS.RELEASED,
-            lock_status: DIRECTED_INVITE_LOCK_STATUS.LOCKED,
-            released_at: nowIso(),
-            release_reason: reason,
-            lock_reason: reason,
-            updated_at: nowIso()
-        };
+        throw new Error('释放冻结货款失败：邀约用户不存在');
     }
 
     const now = nowIso();
@@ -527,52 +519,100 @@ async function releaseInviteFrozenFunds(db, invite = {}, reason = 'manual_releas
         frozen: nextFrozen,
         now
     });
-    await db.collection('users').doc(String(inviter._id || inviter.id)).update({
-        data: {
-            agent_wallet_balance: commandIncOrValue(db, frozenAmount, nextUser.agent_wallet_balance),
-            wallet_balance: commandIncOrValue(db, frozenAmount, nextUser.wallet_balance),
-            agent_wallet_frozen_amount: commandIncOrValue(db, -frozenAmount, nextUser.agent_wallet_frozen_amount),
-            goods_fund_frozen_amount: commandIncOrValue(db, -frozenAmount, nextUser.goods_fund_frozen_amount),
-            updated_at: now
-        }
-    }).catch((err) => {
-        console.error('[directed-invite] 释放冻结货款更新用户余额失败:', err.message || err);
-        return null;
-    });
-
+    let userReleased = false;
+    let walletReleased = false;
     const walletAccount = await findWalletAccountByUser(db, inviter);
-    if (walletAccount) {
-        const walletBalanceAfter = roundMoney(toNumber(walletAccount.balance, beforeBalance) + frozenAmount);
-        const walletFrozenAfter = roundMoney(Math.max(0, toNumber(walletAccount.frozen_balance, beforeFrozen) - frozenAmount));
-        await db.collection('wallet_accounts').doc(String(walletAccount._id || walletAccount.id)).update({
+    const rollbackUserRelease = async () => {
+        if (!userReleased) return;
+        await db.collection('users').doc(String(inviter._id || inviter.id)).update({
             data: {
-                balance: commandIncOrValue(db, frozenAmount, walletBalanceAfter),
-                frozen_balance: commandIncOrValue(db, -frozenAmount, walletFrozenAfter),
+                agent_wallet_balance: commandIncOrValue(db, -frozenAmount, beforeBalance),
+                wallet_balance: commandIncOrValue(db, -frozenAmount, beforeBalance),
+                agent_wallet_frozen_amount: commandIncOrValue(db, frozenAmount, beforeFrozen),
+                goods_fund_frozen_amount: commandIncOrValue(db, frozenAmount, beforeFrozen),
                 updated_at: now
             }
-        }).catch((err) => { console.error('[directed-invite] 释放冻结货款更新钱包账户失败:', err.message || err); });
-    } else {
-        await saveWalletAccount(db, nextUser, null, {
-            balance: nextBalance,
-            frozen: nextFrozen,
-            now
         });
-    }
+    };
+    const rollbackWalletRelease = async () => {
+        if (!walletReleased) return;
+        if (walletAccount) {
+            await db.collection('wallet_accounts').doc(String(walletAccount._id || walletAccount.id)).update({
+                data: {
+                    balance: commandIncOrValue(db, -frozenAmount, beforeBalance),
+                    frozen_balance: commandIncOrValue(db, frozenAmount, beforeFrozen),
+                    updated_at: now
+                }
+            });
+        } else {
+            await saveWalletAccount(db, inviter, null, {
+                balance: beforeBalance,
+                frozen: beforeFrozen,
+                now
+            });
+        }
+    };
 
     const transferNo = pickString(invite.frozen_transfer_no || invite.transfer_txn_no || `DIRREL_${pickString(invite.invite_id || invite._id)}`);
-    await appendDirectedInviteGoodsFundLogs(db, {
-        openid: pickString(inviter.openid),
-        userId: inviter._id || inviter.id || inviter._legacy_id || inviter.openid,
-        transferNo,
-        inviteId: pickString(invite.invite_id || invite._id),
-        amount: frozenAmount,
-        balanceBefore: beforeBalance,
-        balanceAfter: nextBalance,
-        walletType: 'directed_b1_unfreeze',
-        goodsFundType: 'directed_b1_unfreeze',
-        description: `B1定向邀约释放冻结货款 ${frozenAmount} 元`,
-        now
-    });
+    try {
+        const userUpdateRes = await db.collection('users').doc(String(inviter._id || inviter.id)).update({
+            data: {
+                agent_wallet_balance: commandIncOrValue(db, frozenAmount, nextUser.agent_wallet_balance),
+                wallet_balance: commandIncOrValue(db, frozenAmount, nextUser.wallet_balance),
+                agent_wallet_frozen_amount: commandIncOrValue(db, -frozenAmount, nextUser.agent_wallet_frozen_amount),
+                goods_fund_frozen_amount: commandIncOrValue(db, -frozenAmount, nextUser.goods_fund_frozen_amount),
+                updated_at: now
+            }
+        });
+        if (userUpdateRes && userUpdateRes.stats && userUpdateRes.stats.updated === 0) {
+            throw new Error('释放冻结货款失败：用户余额未更新');
+        }
+        userReleased = true;
+
+        if (walletAccount) {
+            const walletBalanceAfter = roundMoney(toNumber(walletAccount.balance, beforeBalance) + frozenAmount);
+            const walletFrozenAfter = roundMoney(Math.max(0, toNumber(walletAccount.frozen_balance, beforeFrozen) - frozenAmount));
+            const walletUpdateRes = await db.collection('wallet_accounts').doc(String(walletAccount._id || walletAccount.id)).update({
+                data: {
+                    balance: commandIncOrValue(db, frozenAmount, walletBalanceAfter),
+                    frozen_balance: commandIncOrValue(db, -frozenAmount, walletFrozenAfter),
+                    updated_at: now
+                }
+            });
+            if (walletUpdateRes && walletUpdateRes.stats && walletUpdateRes.stats.updated === 0) {
+                throw new Error('释放冻结货款失败：钱包账户未更新');
+            }
+        } else {
+            await saveWalletAccount(db, nextUser, null, {
+                balance: nextBalance,
+                frozen: nextFrozen,
+                now
+            });
+        }
+        walletReleased = true;
+
+        await appendDirectedInviteGoodsFundLogs(db, {
+            openid: pickString(inviter.openid),
+            userId: inviter._id || inviter.id || inviter._legacy_id || inviter.openid,
+            transferNo,
+            inviteId: pickString(invite.invite_id || invite._id),
+            amount: frozenAmount,
+            balanceBefore: beforeBalance,
+            balanceAfter: nextBalance,
+            walletType: 'directed_b1_unfreeze',
+            goodsFundType: 'directed_b1_unfreeze',
+            description: `B1定向邀约释放冻结货款 ${frozenAmount} 元`,
+            now
+        });
+    } catch (error) {
+        await rollbackWalletRelease().catch((rollbackError) => {
+            console.error('[directed-invite] 释放冻结货款钱包账户回滚失败:', rollbackError.message || rollbackError);
+        });
+        await rollbackUserRelease().catch((rollbackError) => {
+            console.error('[directed-invite] 释放冻结货款用户余额回滚失败:', rollbackError.message || rollbackError);
+        });
+        throw error;
+    }
 
     return {
         ...invite,

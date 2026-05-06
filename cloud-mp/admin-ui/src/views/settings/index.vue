@@ -235,7 +235,7 @@ const miniProgramForm = reactive({
     growth_bar_subtitle_template: '距离「{next}」还需 {need} 成长值',
     growth_bar_max_tier_text: '您已达到当前成长体系最高档位',
     growth_privileges_entry_text: '查看权益',
-    growth_privileges_page_title: '权益中心',
+    growth_privileges_page_title: '等级权益',
     membership_center_page_title: '权益中心'
   },
   logistics_config: {

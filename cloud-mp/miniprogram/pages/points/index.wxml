@@ -18,7 +18,7 @@
     <view class="asset-card">
       <view class="asset-card-inner">
         <view class="asset-level-row">
-          <text class="asset-level-name">{{account.level_name || '普通用户'}}</text>
+          <text class="asset-level-name">积分账户</text>
           <view class="asset-streak" wx:if="{{account.streak > 0}}">
             <text class="asset-streak-text">连签 {{account.streak}} 天</text>
           </view>
@@ -29,16 +29,6 @@
         </view>
         <view class="asset-balance-sub" wx:if="{{account.balance_points != null}}">
           <text class="asset-balance-sub-text">可用 {{account.balance_points || 0}} 积分</text>
-        </view>
-        <!-- 成长值进度 -->
-        <view class="asset-progress-wrap" wx:if="{{account.next_level && (account.growth_needed > 0 || account.next_level_threshold)}}">
-          <view class="asset-progress-label">
-            <text class="asset-progress-text">当前成长值 {{account.growth_value || 0}}</text>
-            <text class="asset-progress-text">距 {{account.next_level_name || '下一等级'}} 还差 {{account.growth_needed || 0}} 成长值</text>
-          </view>
-          <view class="asset-progress-bar">
-            <view class="asset-progress-fill" style="width: {{account.growth_progress || 0}}%"></view>
-          </view>
         </view>
       </view>
     </view>
@@ -72,13 +62,6 @@
 
     <!-- 任务列表 -->
     <view class="tab-panel" wx:if="{{activeTab === 'tasks'}}">
-      <view class="benefit-card" wx:if="{{effectiveBenefits.length}}">
-        <text class="benefit-title">当前已生效权益</text>
-        <view class="benefit-item" wx:for="{{effectiveBenefits}}" wx:key="*this">
-          <text class="benefit-dot">•</text>
-          <text class="benefit-text">{{item}}</text>
-        </view>
-      </view>
       <view class="task-item" wx:for="{{tasks}}" wx:key="id">
         <view class="task-left">
           <view class="task-icon-wrap">

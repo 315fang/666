@@ -3,8 +3,8 @@
     <div v-if="order" class="logistics-drawer" v-loading="loading">
       <el-descriptions :column="1" border size="small" style="margin-bottom:20px">
         <el-descriptions-item label="订单号">{{ order.order_no || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="快递公司">{{ order.logistics_company || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="运单号">{{ order.tracking_no || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="快递公司">{{ data?.logistics_company || order.logistics_company || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="运单号">{{ data?.tracking_no || order.tracking_no || '-' }}</el-descriptions-item>
         <el-descriptions-item label="收件人">
           {{ resolvedAddress(order)?.receiver_name || resolvedAddress(order)?.name || displayBuyerName(order.buyer) }} · {{ resolvedAddress(order)?.phone || '-' }}
         </el-descriptions-item>
@@ -20,6 +20,14 @@
           </el-tag>
           <span v-else>-</span>
         </el-descriptions-item>
+        <template v-if="order.latest_refund?.type === 'return_refund'">
+          <el-descriptions-item label="退货物流">
+            {{ [order.latest_refund.return_company, order.latest_refund.return_tracking_no].filter(Boolean).join(' / ') || '待买家填写' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="退货状态">
+            {{ order.latest_refund.return_received_at ? '已确认收回' : (order.latest_refund.return_tracking_no ? '买家已寄回' : '待买家填写') }}
+          </el-descriptions-item>
+        </template>
       </el-descriptions>
 
       <div v-if="data?.traces?.length">

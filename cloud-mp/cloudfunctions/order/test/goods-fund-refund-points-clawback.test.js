@@ -50,7 +50,8 @@ function createDbMock(options = {}) {
         growth_value: options.userGrowthValue ?? 200,
         total_spent: 100,
         order_count: 1,
-        agent_wallet_balance: 0
+        agent_wallet_balance: 0,
+        wallet_balance: 0
     };
     const walletAccount = {
         _id: 'wallet-1',
@@ -274,6 +275,7 @@ test('goods fund refund claws back paid order reward points and clamps growth at
         await module.completeGoodsFundRefundSettlement('order-1', order, refund);
 
         assert.equal(user.agent_wallet_balance, 100);
+        assert.equal(user.wallet_balance, 100);
         assert.equal(walletAccount.balance, 100);
         assert.equal(user.points, 40);
         assert.equal(user.growth_value, 0);
@@ -425,8 +427,8 @@ test('return shipping keeps return refund approved for merchant completion', asy
     const { module, restore } = loadOrderLifecycleWithDb(db);
     try {
         const result = await module.returnShipping('buyer-openid', 'refund-1', {
-            company: '顺丰速运',
-            tracking_no: 'SF123456'
+            return_company: '顺丰速运',
+            return_tracking_no: 'SF123456'
         });
 
         assert.equal(result.success, true);
@@ -434,6 +436,22 @@ test('return shipping keeps return refund approved for merchant completion', asy
         assert.equal(refund.return_company, '顺丰速运');
         assert.equal(refund.return_tracking_no, 'SF123456');
         assert.ok(refund.return_shipping_submitted_at);
+    } finally {
+        restore();
+    }
+});
+
+test('return shipping requires tracking number', async () => {
+    const { db, refund } = createDbMock();
+    refund.type = 'return_refund';
+    refund.status = 'approved';
+    const { module, restore } = loadOrderLifecycleWithDb(db);
+    try {
+        await assert.rejects(
+            () => module.returnShipping('buyer-openid', 'refund-1', { return_company: '顺丰速运' }),
+            /退货物流单号/
+        );
+        assert.equal(refund.return_tracking_no, undefined);
     } finally {
         restore();
     }

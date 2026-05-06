@@ -206,12 +206,12 @@ Page({
             wx.switchTab({ url: '/pages/user/user' });
             return;
         }
-        wx.showToast({ title: '请先领取优惠券', icon: 'none' });
+        wx.showToast({ title: '请先领券', icon: 'none' });
     },
 
     onShareAppMessage() {
         return {
-            title: '优惠券中心',
+            title: '领券中心',
             path: '/pages/coupon/center'
         };
     }

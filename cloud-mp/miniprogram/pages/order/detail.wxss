@@ -550,8 +550,10 @@
   gap: 12rpx;
 }
 
-.settlement-icon {
-  font-size: 36rpx;
+.settlement-icon-img {
+  width: 36rpx;
+  height: 36rpx;
+  opacity: 0.72;
 }
 
 .settlement-text {

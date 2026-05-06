@@ -5,7 +5,7 @@
     <!-- 总贡献卡片 -->
     <view class="summary-card">
       <view class="summary-amount">¥{{totalContribution}}</view>
-      <view class="summary-label">我的累计基金池贡献</view>
+      <view class="summary-label">我的累计基金贡献</view>
       <view class="summary-count">共 {{count}} 笔记录</view>
     </view>
 
@@ -15,7 +15,7 @@
           <view class="section-title">当前池子概览</view>
           <view class="pool-badge {{poolOverview.enabled ? 'enabled' : 'disabled'}}">{{poolOverview.enabled ? '已启用' : '未启用'}}</view>
         </view>
-        <view class="section-tip">这里展示基金池当前余额和累计进出情况，不等于个人可提现金额。</view>
+        <view class="section-tip">这里展示基金池当前余额和累计进出情况，不等于个人可提佣金。</view>
       </view>
 
       <view class="overview-grid">
@@ -55,7 +55,7 @@
 
     <!-- 子账户概览 -->
     <view class="sub-section" wx:if="{{mySubTotals && (mySubTotals.mirror_ops !== '0.00' || mySubTotals.travel !== '0.00' || mySubTotals.parent !== '0.00' || mySubTotals.personal !== '0.00')}}">
-      <view class="section-title">我的四池累计贡献</view>
+      <view class="section-title">四池贡献</view>
       <view class="sub-grid">
         <view class="sub-item" wx:if="{{mySubTotals.mirror_ops !== '0.00'}}">
           <view class="sub-amount">¥{{mySubTotals.mirror_ops}}</view>
@@ -80,7 +80,7 @@
     <view class="entries-section">
       <view class="section-title">贡献记录</view>
       <view class="empty-entries" wx:if="{{entries.length === 0}}">
-        <text>暂无基金池贡献记录</text>
+        <text>暂无基金贡献记录</text>
       </view>
       <view class="entry-list" wx:else>
         <view class="entry-item" wx:for="{{entries}}" wx:key="_id">

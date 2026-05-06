@@ -234,7 +234,7 @@ async function buildBundleOption(option = {}) {
             name: pickString(bundleProduct.name || bundleProduct.display_name || productSnapshot.name),
             category_id: bundleProduct.category_id != null ? bundleProduct.category_id : productSnapshot.category_id,
             category_name: pickString(bundleProduct.category_name || ''),
-            library_label: '组合商品库'
+            library_label: '特惠随心选'
         } : null,
         sku: resolvedSku ? {
             id: lookupId(resolvedSku),

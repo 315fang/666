@@ -475,6 +475,12 @@
   flex-direction: column;
 }
 
+.vip-card-promo .promo-block {
+  align-items: center;
+  min-width: 108rpx;
+  text-align: center;
+}
+
 .promo-block-single {
   align-items: center;
   text-align: center;
@@ -1147,6 +1153,25 @@
 /* ══ 功能行列式 ══ */
 .func-card {
   margin-bottom: 16rpx;
+}
+
+.func-card-head {
+  padding: 24rpx 28rpx 8rpx;
+}
+
+.func-card-title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #132235;
+}
+
+.func-card-sub {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #64748B;
+  line-height: 1.5;
 }
 
 .func-row {

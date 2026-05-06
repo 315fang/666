@@ -1,4 +1,4 @@
-// pages/order/refund-apply.js - 申请退货/退款
+// pages/order/refund-apply.js - 申请退款
 const { get, post } = require('../../utils/request');
 const { parseImages } = require('../../utils/dataFormatter');
 const { resolveCloudImageList, resolveCloudImageUrl } = require('./utils/cloudAsset');

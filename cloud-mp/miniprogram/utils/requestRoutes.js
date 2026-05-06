@@ -156,7 +156,6 @@ const ROUTE_TABLE = {
 
     // ── 佣金预览与定时结算 ────────────────────────
     'GET /commissions/preview': { fn: 'distribution', action: 'commissionPreview' },
-    'POST /commissions/settle-matured': { fn: 'distribution', action: 'settleMatured' },
 
     // ── 积分与钱包 ──────────────────────────────
     'GET /points/sign-in/status': { fn: 'user', action: 'pointsSignInStatus' },

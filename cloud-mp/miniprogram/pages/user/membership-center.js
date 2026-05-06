@@ -260,6 +260,12 @@ Page({
         wx.navigateTo({ url: '/pages/distribution/business-center' });
     },
 
+    goMemberPrivileges() {
+        wx.navigateTo({
+            url: `/pages/user/member-privileges?level=${this.data.currentRoleLevel || 0}`
+        });
+    },
+
     goPoints() {
         wx.navigateTo({ url: '/pages/points/index' });
     },

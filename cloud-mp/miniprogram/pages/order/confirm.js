@@ -88,6 +88,35 @@ function isPointsRestrictedItem(item = {}) {
         || String(item.activity_type || '').trim() !== '';
 }
 
+function isFlexBundleOrderData(data = {}) {
+    const bundleMeta = data.bundleMeta && typeof data.bundleMeta === 'object' ? data.bundleMeta : {};
+    if (String(bundleMeta.scene_type || bundleMeta.bundle_scene_type || '').trim().toLowerCase() === 'flex_bundle') {
+        return true;
+    }
+    return (data.orderItems || []).some((item) => (
+        String(item.bundle_scene_type || '').trim().toLowerCase() === 'flex_bundle'
+    ));
+}
+
+function isRewardPointsRestrictedItem(item = {}) {
+    const activityType = String(item.activity_type || '').trim().toLowerCase();
+    return Number(item.is_explosive) === 1
+        || item.is_explosive === true
+        || String(item.product_tag || '').trim().toLowerCase() === 'hot'
+        || activityType === 'limited_sale'
+        || activityType === 'limited_spot'
+        || !!(item.limited_sale_slot_id || item.limited_sale_item_id || item.limited_spot_card_id || item.limited_spot_offer_id);
+}
+
+function isRewardPointsRestrictedOrderData(data = {}) {
+    const orderType = String(data.orderType || '').trim().toLowerCase();
+    return isFlexBundleOrderData(data)
+        || data.limitedSpotOrder
+        || orderType === 'limited_sale'
+        || orderType === 'limited_spot'
+        || (data.orderItems || []).some((item) => isRewardPointsRestrictedItem(item));
+}
+
 function appendImageCandidates(target, value) {
     if (!value) return;
     if (Array.isArray(value)) {
@@ -189,7 +218,7 @@ Page({
         bundlePrice: '0.00',
         bundleDiscount: '0.00',
         roleLevel: 0,
-        // 优惠券
+        // 券包
         availableCoupons: [],
         unusedCouponCount: 0,
         selectedCoupon: null,
@@ -353,9 +382,11 @@ Page({
         const candidates = Array.isArray(item.image_candidates) && item.image_candidates.length
             ? item.image_candidates
             : collectOrderItemImageCandidates(item);
-        let nextIndex = Math.max(-1, Number(item.image_candidate_index || 0)) + 1;
+        const rawIndex = Number(item.image_candidate_index);
+        const currentIndex = Number.isFinite(rawIndex) ? Math.max(0, rawIndex) : 0;
+        let nextIndex = currentIndex;
         while (nextIndex < candidates.length) {
-            const nextImage = await resolveCloudImageUrl(candidates[nextIndex], '');
+            const nextImage = await resolveCloudImageUrl(candidates[nextIndex], '', { forceRefresh: nextIndex === currentIndex });
             if (nextImage && nextImage !== item.image) {
                 this.setData({
                     [`orderItems[${index}].image`]: nextImage,
@@ -403,6 +434,7 @@ Page({
                     bundleOrder: true,
                     bundleMeta: {
                         id: directBuy.bundle_id || '',
+                        scene_type: directBuy.bundle_scene_type || '',
                         title: directBuy.bundle_title || '',
                         subtitle: directBuy.bundle_subtitle || '',
                         cover_image: directBuy.bundle_cover_image || '',
@@ -578,7 +610,7 @@ Page({
         markDailyShown('light_tip_coupon');
         this.setData({
             lightTipShow: true,
-            lightTipTitle: cu.title || '优惠券说明',
+            lightTipTitle: cu.title || '券包说明',
             lightTipContent: cu.body || ''
         });
     },
@@ -592,7 +624,7 @@ Page({
         }
         this.setData({
             lightTipShow: true,
-            lightTipTitle: cu.title || '优惠券说明',
+            lightTipTitle: cu.title || '券包说明',
             lightTipContent: cu.body || ''
         });
     },
@@ -771,6 +803,7 @@ Page({
     },
 
     calculateExpectedOrderPoints(amount) {
+        if (isRewardPointsRestrictedOrderData(this.data)) return 0;
         const payAmount = Math.max(0, toFiniteNumber(amount, 0));
         if (payAmount <= 0) return 0;
         const perHundred = getPurchasePointsPerHundred(this.data.roleLevel);
@@ -879,7 +912,7 @@ Page({
         }
     },
 
-    // 加载可用优惠券
+    // 加载可用券包
     async loadAvailableCoupons() {
         await loadAvailableCoupons(this);
     },
@@ -897,15 +930,15 @@ Page({
         return true;
     },
 
-    // 点击优惠券行，打开选择器
+    // 点击券包行，打开选择器
     async onCouponTap() {
         if (this.data.exchangeMode) {
-            wx.showToast({ title: '兑换订单不参与普通优惠券', icon: 'none' });
+            wx.showToast({ title: '兑换订单不叠加券包', icon: 'none' });
             return;
         }
         const ready = await this._ensureCouponReady(true);
         if (!ready) {
-            wx.showToast({ title: '登录后可使用优惠券', icon: 'none' });
+            wx.showToast({ title: '登录后可用券包', icon: 'none' });
             return;
         }
         this.setData({ showCouponPicker: true });
@@ -916,13 +949,13 @@ Page({
         this.setData({ showCouponPicker: false });
     },
 
-    // 选择一张优惠券
+    // 选择一张券包
     onSelectCoupon(e) {
         const coupon = e.currentTarget.dataset.coupon;
         return selectCoupon(this, coupon);
     },
 
-    // 清除已选优惠券
+    // 清除已选券包
     onClearCoupon() {
         return clearCoupon(this);
     },

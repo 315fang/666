@@ -34,10 +34,94 @@ const {
 
 const CATEGORY_PRICE_PREVIEW_TTL = 60 * 1000;
 const PRODUCT_PLACEHOLDER = '/assets/images/placeholder.svg';
+const BUNDLE_ZONE_ID = 'bundle-zone';
+const BUNDLE_ZONE_NAME = '特惠组合';
+const HOT_ZONE_NAME = '爆单专区';
+const PRODUCT_IMAGE_MAX_RETRY = 2;
+
+function getCategoryId(category = {}) {
+    return String(category.id != null ? category.id : (category._id != null ? category._id : '')).trim();
+}
+
+function getCategoryName(category = {}) {
+    return String(category.name || category.title || '').trim();
+}
+
+function normalizeDisplayCategory(category = {}) {
+    const id = getCategoryId(category);
+    return id && category.id == null ? { ...category, id } : category;
+}
+
+function isHotZoneCategory(category = {}) {
+    return getCategoryName(category) === HOT_ZONE_NAME;
+}
+
+function getProductIdKey(product = {}) {
+    const id = product.id ?? product._id ?? product._legacy_id;
+    return String(id == null ? '' : id).trim();
+}
+
+function sameProductId(product = {}, productId) {
+    return getProductIdKey(product) === String(productId == null ? '' : productId).trim();
+}
+
+function collectProductImageRecoverySources(product = {}) {
+    const sources = [];
+    const push = (value) => {
+        if (!value) return;
+        if (Array.isArray(value)) {
+            value.forEach(push);
+            return;
+        }
+        sources.push(value);
+    };
+
+    push(product.image_ref || product.file_id || product.fileId);
+    push({
+        file_id: product.image_ref || product.file_id || product.fileId || '',
+        image: '',
+        image_url: '',
+        cover_image: product.cover_image || '',
+        preview_images: product.preview_images || product.previewImages || '',
+        images: product.images || ''
+    });
+    push(product.image_sources);
+    push(product.preview_images || product.previewImages);
+    push(product.images);
+    push(product.display_image || product.image || product.image_url);
+
+    return sources;
+}
+
+function sortDisplayCategories(categories = []) {
+    const rows = (Array.isArray(categories) ? categories : [])
+        .map((item) => normalizeDisplayCategory(item))
+        .filter((item) => !!getCategoryId(item));
+    const hotIndex = rows.findIndex(isHotZoneCategory);
+    if (hotIndex <= 0) return rows;
+    const next = rows.slice();
+    const [hot] = next.splice(hotIndex, 1);
+    return [hot, ...next];
+}
+
+function splitDisplayCategories(categories = []) {
+    const rows = sortDisplayCategories(categories);
+    if (rows.length && isHotZoneCategory(rows[0])) {
+        return {
+            leadCategory: rows[0],
+            restCategories: rows.slice(1)
+        };
+    }
+    return {
+        leadCategory: null,
+        restCategories: rows
+    };
+}
 
 Page({
     data: {
         categories: [],
+        leadCategory: null,
         renderedCategories: [],
         renderedSectionIds: [],
         sidebarCategories: [],
@@ -157,6 +241,10 @@ Page({
         navigator.navigate(item.link_type, item.link_value);
     },
 
+    onOpenSearch() {
+        wx.navigateTo({ url: '/pages/search/search' });
+    },
+
     /**
      * Banner 跳转类型 category：navigator 写入 category_focus_id 后 switchTab，此处选中对应左侧分类
      */
@@ -169,9 +257,9 @@ Page({
         }
         if (!id) return;
         const categories = this.data.categories || [];
-        const exists = id === 'bundle-zone'
+        const exists = id === BUNDLE_ZONE_ID
             ? (this.data.productBundles || []).length > 0
-            : categories.some((c) => String(c.id) === String(id));
+            : categories.some((c) => getCategoryId(c) === String(id));
         if (!exists) return;
         try {
             wx.removeStorageSync('category_focus_id');
@@ -200,15 +288,20 @@ Page({
                 timeout: 10000
             });
             let allCats = catRes.list || catRes.data?.list || catRes.data || [];
-            const filteredCats = Array.isArray(allCats) && allCats.length > 0 ? allCats : [];
+            const filteredCats = sortDisplayCategories(Array.isArray(allCats) && allCats.length > 0 ? allCats : []);
 
             if (filteredCats.length > 0) {
+                const currentCategory = getCategoryId(filteredCats[0]);
                 await new Promise((resolve) => this.setData({
                     categories: filteredCats,
-                    renderedCategories: this._buildRenderedCategories(filteredCats, {}, filteredCats[0].id || filteredCats[0]._id),
-                    renderedSectionIds: this._buildRenderedSectionIds(filteredCats, {}, filteredCats[0].id || filteredCats[0]._id, this.data.productBundles),
+                    ...this._buildRenderedSectionState({
+                        categories: filteredCats,
+                        loadedCategories: {},
+                        currentCategory,
+                        productBundles: this.data.productBundles
+                    }),
                     sidebarCategories: this._buildSidebarCategories(filteredCats, this.data.productBundles),
-                    currentCategory: filteredCats[0].id || filteredCats[0]._id,
+                    currentCategory,
                     loadedCategories: {},
                     allProducts: {},
                     visibleProducts: {}
@@ -221,8 +314,7 @@ Page({
             } else {
                 this.setData({
                     categories: [],
-                    renderedCategories: [],
-                    renderedSectionIds: this._buildRenderedSectionIds([], {}, '', this.data.productBundles),
+                    ...this._buildRenderedSectionState({ categories: [], loadedCategories: {}, currentCategory: '' }),
                     sidebarCategories: this._buildSidebarCategories([])
                 });
             }
@@ -233,27 +325,35 @@ Page({
 
     _buildSidebarCategories(categories) {
         const bundles = Array.isArray(arguments[1]) ? arguments[1] : (this.data.productBundles || []);
-        const base = Array.isArray(categories) ? categories : [];
-        return bundles.length
-            ? [{ id: 'bundle-zone', name: '组合专区', _virtual: true }, ...base]
-            : base;
+        const base = sortDisplayCategories(Array.isArray(categories) ? categories : []);
+        if (!bundles.length) return base;
+        const bundleEntry = { id: BUNDLE_ZONE_ID, name: BUNDLE_ZONE_NAME, _virtual: true };
+        if (base.length && isHotZoneCategory(base[0])) {
+            return [base[0], bundleEntry, ...base.slice(1)];
+        }
+        return [bundleEntry, ...base];
+    },
+
+    _buildLeadCategory(categories) {
+        return splitDisplayCategories(categories).leadCategory;
     },
 
     _buildRenderedCategories(categories, loadedCategories, currentCategory) {
-        const rows = Array.isArray(categories) ? categories : [];
-        return rows.filter((item) => {
-            const id = String(item && item.id != null ? item.id : item && item._id != null ? item._id : '').trim();
-            return !!id;
-        });
+        return splitDisplayCategories(categories).restCategories;
     },
 
     _buildRenderedSectionIds(categories, loadedCategories, currentCategory, productBundles) {
         const ids = [];
-        if (Array.isArray(productBundles) && productBundles.length > 0) {
-            ids.push('bundle-zone');
+        const { leadCategory, restCategories } = splitDisplayCategories(categories);
+        if (leadCategory) {
+            const id = getCategoryId(leadCategory);
+            if (id) ids.push(id);
         }
-        this._buildRenderedCategories(categories, loadedCategories, currentCategory).forEach((item) => {
-            const id = String(item && item.id != null ? item.id : item && item._id != null ? item._id : '').trim();
+        if (Array.isArray(productBundles) && productBundles.length > 0) {
+            ids.push(BUNDLE_ZONE_ID);
+        }
+        restCategories.forEach((item) => {
+            const id = getCategoryId(item);
             if (id) ids.push(id);
         });
         return ids;
@@ -265,6 +365,7 @@ Page({
         const currentCategory = patch.currentCategory !== undefined ? patch.currentCategory : this.data.currentCategory;
         const productBundles = patch.productBundles !== undefined ? patch.productBundles : this.data.productBundles;
         return {
+            leadCategory: this._buildLeadCategory(categories),
             renderedCategories: this._buildRenderedCategories(categories, loadedCategories, currentCategory),
             renderedSectionIds: this._buildRenderedSectionIds(categories, loadedCategories, currentCategory, productBundles)
         };
@@ -273,20 +374,19 @@ Page({
     _getNextCategoryId(currentCategory) {
         const categories = Array.isArray(this.data.categories) ? this.data.categories : [];
         if (!categories.length) return '';
-        if (String(currentCategory || '') === 'bundle-zone') {
-            const first = categories[0];
-            return first ? String(first.id || first._id || '') : '';
-        }
+        const sectionIds = this._buildRenderedSectionIds(categories, {}, currentCategory, this.data.productBundles);
         const currentId = String(currentCategory || '').trim();
-        const currentIndex = categories.findIndex((item) => String(item.id || item._id || '') === currentId);
+        const currentIndex = sectionIds.findIndex((id) => String(id) === currentId);
         if (currentIndex === -1) return '';
-        const next = categories[currentIndex + 1];
-        return next ? String(next.id || next._id || '') : '';
+        for (let i = currentIndex + 1; i < sectionIds.length; i += 1) {
+            if (sectionIds[i] !== BUNDLE_ZONE_ID) return sectionIds[i];
+        }
+        return '';
     },
 
     _primeNeighborCategories(currentCategory) {
         const nextCategoryId = this._getNextCategoryId(currentCategory);
-        if (!nextCategoryId || nextCategoryId === 'bundle-zone') return;
+        if (!nextCategoryId || nextCategoryId === BUNDLE_ZONE_ID) return;
         this.ensureCategoryProductsLoaded(nextCategoryId);
     },
 
@@ -442,7 +542,7 @@ Page({
             isManualClick: true
         });
         this._scheduleHeightCalc();
-        if (categoryId !== 'bundle-zone') {
+        if (categoryId !== BUNDLE_ZONE_ID) {
             this.ensureCategoryProductsLoaded(categoryId);
         }
         this._primeNeighborCategories(categoryId);
@@ -530,35 +630,61 @@ Page({
         });
     },
 
-    onProductImageError(e) {
+    async onProductImageError(e) {
         const categoryId = e.currentTarget.dataset.categoryId;
         const productId = e.currentTarget.dataset.id;
+        const retryKey = `${categoryId || 'all'}:${productId || ''}`;
+        this._productImageRetryCounts = this._productImageRetryCounts || {};
+        const retryCount = Number(this._productImageRetryCounts[retryKey] || 0);
+
+        const allProducts = { ...(this.data.allProducts || {}) };
+        let targetProduct = null;
+        Object.keys(allProducts).some((key) => {
+            const list = Array.isArray(allProducts[key]) ? allProducts[key] : [];
+            targetProduct = list.find((product) => sameProductId(product, productId));
+            return !!targetProduct;
+        });
+
+        if (targetProduct && targetProduct.image !== PRODUCT_PLACEHOLDER && retryCount < PRODUCT_IMAGE_MAX_RETRY) {
+            this._productImageRetryCounts[retryKey] = retryCount + 1;
+            const sources = collectProductImageRecoverySources(targetProduct);
+            for (let i = 0; i < sources.length; i += 1) {
+                const nextImage = await resolveRenderableImageUrl(sources[i], '', { forceRefresh: true }).catch(() => '');
+                if (!nextImage || nextImage === PRODUCT_PLACEHOLDER || nextImage === targetProduct.image) continue;
+                const patched = this._patchProductImage(productId, categoryId, nextImage, false);
+                if (patched) return;
+            }
+        }
+
+        this._patchProductImage(productId, categoryId, PRODUCT_PLACEHOLDER, true);
+    },
+
+    _patchProductImage(productId, categoryId, image, isFallback = false) {
         const allProducts = { ...(this.data.allProducts || {}) };
         let changed = false;
 
         Object.keys(allProducts).forEach((key) => {
             const list = Array.isArray(allProducts[key]) ? allProducts[key] : [];
             allProducts[key] = list.map((product) => {
-                if (String(product?.id) !== String(productId)) return product;
-                if (product.image === PRODUCT_PLACEHOLDER) return product;
+                if (!sameProductId(product, productId)) return product;
+                if (product.image === image) return product;
                 changed = true;
                 return {
                     ...product,
-                    display_image: '',
-                    image_url: '',
-                    image_ref: '',
-                    image: PRODUCT_PLACEHOLDER
+                    image,
+                    display_image: image,
+                    image_missing: !!isFallback
                 };
             });
         });
 
-        if (!changed) return;
+        if (!changed) return false;
 
         const visibleProducts = { ...(this.data.visibleProducts || {}) };
         if (categoryId && Array.isArray(visibleProducts[categoryId])) {
             visibleProducts[categoryId] = visibleProducts[categoryId].map((product) => (
-                String(product?.id) === String(productId)
-                    ? { ...product, display_image: '', image_url: '', image_ref: '', image: PRODUCT_PLACEHOLDER }
+                sameProductId(product, productId)
+                    ? { ...product, image, display_image: image, image_missing: !!isFallback }
                     : product
             ));
         }
@@ -567,6 +693,7 @@ Page({
             allProducts,
             visibleProducts
         });
+        return true;
     },
 
     stopProp() { },

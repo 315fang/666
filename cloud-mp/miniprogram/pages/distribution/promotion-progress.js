@@ -60,10 +60,10 @@ const SOURCE_TYPE_MAP = {
 };
 
 const RULE_DETAILS = [
-    { no: '1.', text: '进行品牌或产品推荐可获得奖励，实时入账我的存款。' },
-    { no: '2.', text: '达到对应代理等级后存款解锁，可按照等级提取佣金。' },
-    { no: '3.', text: '如果订单退款、取消，对应存款会显示为失效或扣回。' },
-    { no: '4.', text: '未达到对应代理等级存款无效，提取佣金时税费自理。' }
+    { no: '1.', text: '进行品牌或产品推荐可获得奖励，实时进入奖励存款。' },
+    { no: '2.', text: '达到对应等级后奖励解锁，可按等级转入佣金。' },
+    { no: '3.', text: '如果订单退款、取消，对应奖励会显示为失效或扣回。' },
+    { no: '4.', text: '未达到对应等级时奖励暂不解锁，转入佣金时税费自理。' }
 ];
 
 function normalizePiggyBank(piggyBank = {}) {
@@ -149,11 +149,11 @@ function buildSummary(progress = {}, logsSummary = {}, pendingCommissionApplicat
     if (pendingCommissionApplication) {
         vaultHint = pendingAmount > 0
             ? `¥${formatMoney(pendingAmount)} 转佣金申请审核中。`
-            : '转佣金申请审核中，请等待后台处理。';
+            : '转佣金申请审核中，请等待平台处理。';
     } else if (claimableAmount > 0) {
-        vaultHint = '有奖励可提取转佣金，审核通过后入账。';
+        vaultHint = '有奖励可转入佣金，审核通过后入账。';
     } else if (lockedAmount > 0) {
-        vaultHint = nextName ? `继续升级，下一档可解锁 ¥${formatMoney(nextUnlock)}` : '继续积累，达标后可提取转佣金。';
+        vaultHint = nextName ? `继续升级，下一档可解锁 ¥${formatMoney(nextUnlock)}` : '继续积累，达标后可转入佣金。';
     } else if (unlockedAmount > 0) {
         vaultHint = '奖励已入账，可在钱包继续处理。';
     }
@@ -250,7 +250,7 @@ Page({
         }
         const claimableAmount = toMoneyNumber(this.data.summary && this.data.summary.claimable_amount);
         if (claimableAmount <= 0) {
-            wx.showToast({ title: '暂无可提取转佣金存款', icon: 'none' });
+            wx.showToast({ title: '暂无可转佣金', icon: 'none' });
             return;
         }
         const { post } = require('../../utils/request');
@@ -267,7 +267,7 @@ Page({
                     title: payload.pending ? '已提交审核' : '申请已处理',
                     content: amount > 0
                         ? `¥${formatMoney(amount)} 转佣金申请已提交，审核通过后会入账佣金。`
-                        : '当前没有可提取转佣金的存款，升级后可解锁更多奖励。',
+                        : '当前没有可转入佣金的奖励，升级后可解锁更多奖励。',
                     showCancel: false
                 });
             } else {

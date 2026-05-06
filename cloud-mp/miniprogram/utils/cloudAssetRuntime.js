@@ -1,10 +1,52 @@
 const { getTempUrls } = require('./cloud');
 const { normalizeAssetUrl, parseImages, isTemporarySignedAssetUrl } = require('./dataFormatter');
 
+const TEMP_URL_CACHE_TTL = 55 * 60 * 1000;
 const tempUrlCache = new Map();
 
 function isCloudFileId(value) {
     return /^cloud:\/\//i.test(String(value || '').trim());
+}
+
+function normalizeTempUrlCacheEntry(entry) {
+    if (!entry) return null;
+    if (typeof entry === 'string') {
+        return { url: entry, cachedAt: 0 };
+    }
+    if (typeof entry === 'object' && entry.url) {
+        return {
+            url: String(entry.url || '').trim(),
+            cachedAt: Number(entry.cachedAt || 0) || 0
+        };
+    }
+    return null;
+}
+
+function getCachedTempUrl(cloudId) {
+    const entry = normalizeTempUrlCacheEntry(tempUrlCache.get(cloudId));
+    if (!entry || !entry.url) {
+        tempUrlCache.delete(cloudId);
+        return '';
+    }
+    if (!normalizeAssetUrl(entry.url)) {
+        tempUrlCache.delete(cloudId);
+        return '';
+    }
+    const cachedAt = Number(entry.cachedAt || 0) || 0;
+    if (!cachedAt || Date.now() - cachedAt > TEMP_URL_CACHE_TTL) {
+        tempUrlCache.delete(cloudId);
+        return '';
+    }
+    return entry.url;
+}
+
+function setCachedTempUrl(cloudId, tempUrl) {
+    const url = String(tempUrl || '').trim();
+    if (!url) return;
+    tempUrlCache.set(cloudId, {
+        url,
+        cachedAt: Date.now()
+    });
 }
 
 function toAssetList(value) {
@@ -164,11 +206,12 @@ function pickPreferredAssetRef(record = {}) {
     return '';
 }
 
-async function warmCloudTempUrls(urls = []) {
+async function warmCloudTempUrls(urls = [], options = {}) {
+    const forceRefresh = !!(options && options.forceRefresh);
     const cloudIds = [...new Set(
         (Array.isArray(urls) ? urls : [])
             .map((item) => pickPreferredAssetRef(item))
-            .filter((item) => isCloudFileId(item) && !tempUrlCache.has(item))
+            .filter((item) => isCloudFileId(item) && (forceRefresh || !getCachedTempUrl(item)))
     )];
     if (!cloudIds.length) return;
 
@@ -177,7 +220,7 @@ async function warmCloudTempUrls(urls = []) {
         const list = Array.isArray(tempUrls) ? tempUrls : [tempUrls];
         cloudIds.forEach((cloudId, index) => {
             const tempUrl = String(list[index] || '').trim();
-            if (tempUrl) tempUrlCache.set(cloudId, tempUrl);
+            if (tempUrl) setCachedTempUrl(cloudId, tempUrl);
         });
     } catch (err) {
         console.warn('[cloudAssetRuntime] getTempUrls failed:', err);
@@ -196,7 +239,7 @@ async function warmRenderableImageUrls(values = []) {
             .map((item) => {
                 if (pickDirectAssetUrl(item)) return '';
                 const preferred = pickPreferredAssetRef(item);
-                return isCloudFileId(preferred) && !tempUrlCache.has(preferred) ? preferred : '';
+                return isCloudFileId(preferred) && !getCachedTempUrl(preferred) ? preferred : '';
             })
             .filter(Boolean)
     )];
@@ -204,34 +247,34 @@ async function warmRenderableImageUrls(values = []) {
     await warmCloudTempUrls(cloudIds);
 }
 
-async function resolveCloudImageUrl(value, fallback = '') {
+async function resolveCloudImageUrl(value, fallback = '', options = {}) {
     const preferred = Array.isArray(value) ? (toAssetList(value)[0] || '') : pickPreferredAssetRef(value);
     const directUrl = pickDirectAssetUrl(value);
     const safeFallback = directUrl || toRenderableImageList(fallback)[0] || pickDirectAssetUrl(fallback) || '';
     if (!preferred) return safeFallback;
     if (!isCloudFileId(preferred)) return preferred;
 
-    if (!tempUrlCache.has(preferred)) {
-        await warmCloudTempUrls([preferred]);
+    if (options.forceRefresh || !getCachedTempUrl(preferred)) {
+        await warmCloudTempUrls([preferred], options);
     }
 
-    return tempUrlCache.get(preferred) || safeFallback;
+    return getCachedTempUrl(preferred) || safeFallback;
 }
 
-async function resolveRenderableImageUrl(value, fallback = '') {
+async function resolveRenderableImageUrl(value, fallback = '', options = {}) {
     const renderable = Array.isArray(value) ? (toAssetList(value)[0] || '') : pickRenderableAssetRef(value);
     const safeFallback = toRenderableImageList(fallback)[0] || pickDirectAssetUrl(fallback) || '';
     if (!renderable) return safeFallback;
     if (!isCloudFileId(renderable)) return renderable;
 
-    if (!tempUrlCache.has(renderable)) {
-        await warmCloudTempUrls([renderable]);
+    if (options.forceRefresh || !getCachedTempUrl(renderable)) {
+        await warmCloudTempUrls([renderable], options);
     }
 
-    return tempUrlCache.get(renderable) || safeFallback;
+    return getCachedTempUrl(renderable) || safeFallback;
 }
 
-async function resolveRenderableImageList(value, fallbackList = []) {
+async function resolveRenderableImageList(value, fallbackList = [], options = {}) {
     const candidates = expandAssetCandidates(value)
         .map((item) => pickRenderableAssetRef(item))
         .filter(Boolean);
@@ -246,27 +289,31 @@ async function resolveRenderableImageList(value, fallbackList = []) {
         .filter(Boolean);
     if (!normalizedList.length) return safeFallbackList;
 
-    await warmRenderableImageUrls(normalizedList);
+    if (options.forceRefresh) {
+        await warmCloudTempUrls(normalizedList, options);
+    } else {
+        await warmRenderableImageUrls(normalizedList);
+    }
 
     const resolved = normalizedList.map((item) => {
         if (!isCloudFileId(item)) return item;
-        return tempUrlCache.get(item) || '';
+        return getCachedTempUrl(item) || '';
     }).filter(Boolean);
 
     return resolved.length ? resolved : safeFallbackList;
 }
 
-async function resolveCloudImageList(value, fallbackList = []) {
+async function resolveCloudImageList(value, fallbackList = [], options = {}) {
     const normalizedList = toAssetList(value);
     const safeFallbackList = toRenderableImageList(fallbackList);
     if (!normalizedList.length) return safeFallbackList;
 
-    await warmCloudTempUrls(normalizedList);
+    await warmCloudTempUrls(normalizedList, options);
 
     const resolved = normalizedList
         .map((item) => {
             if (!isCloudFileId(item)) return item;
-            return tempUrlCache.get(item) || '';
+            return getCachedTempUrl(item) || '';
         })
         .filter(Boolean);
 

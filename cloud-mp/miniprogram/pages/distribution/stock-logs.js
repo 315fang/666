@@ -119,7 +119,7 @@ Page({
 
     // 快捷充值
     onRecharge() {
-        wx.showToast({ title: '请在货款账户页完成支付充值', icon: 'none' });
+        wx.showToast({ title: '请在货款余额页完成支付充值', icon: 'none' });
         wx.navigateTo({ url: '/pages/wallet/agent-wallet' });
     }
 });

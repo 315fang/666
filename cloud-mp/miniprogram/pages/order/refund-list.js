@@ -1,4 +1,4 @@
-// pages/order/refund-list.js - 退货/退款列表
+// pages/order/refund-list.js - 退款售后列表
 const { get, post, put } = require('../../utils/request');
 const { parseImages } = require('../../utils/dataFormatter');
 const { resolveCloudImageList, resolveCloudImageUrl } = require('./utils/cloudAsset');

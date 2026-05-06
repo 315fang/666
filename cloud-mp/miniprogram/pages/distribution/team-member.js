@@ -7,33 +7,62 @@ function formatDate(dateText) {
     return String(dateText).split('T')[0];
 }
 
-function buildDetailItems(member) {
-    const items = [
-        { label: '团队层级', value: member.level_label || '未知' },
-        { label: '成员身份', value: member.role_name || 'VIP用户' },
-        { label: '当前关系', value: member.current_relation_text || member.relation_text || '团队成员' },
-        { label: '邀请人', value: member.inviter_text || '暂未记录' },
-        { label: '加入来源', value: member.relation_source_text || (member.relation_source === 'directed_b1' ? '定向邀约' : '普通邀请') },
-        { label: '成员ID', value: member.invite_code || '暂无ID' },
-        { label: '手机号', value: member.phone || '未绑定' },
-        { label: '订单数', value: `${Number(member.order_count || 0)} 单` },
-        { label: '累计业绩', value: `¥${member.total_sales || '0.00'}` },
-        { label: '加入时间', value: formatDate(member.joined_at) || '未知' },
-        { label: '线路状态', value: member.line_locked ? '已锁定' : '未锁定' }
+function buildDetailGroups(member) {
+    const groups = [
+        {
+            key: 'profile',
+            title: '成员资料',
+            sub: '只放识别成员所需的基础信息',
+            items: [
+                { label: '成员身份', value: member.role_name || 'VIP用户' },
+                { label: '成员ID', value: member.invite_code || '暂无ID' },
+                { label: '手机号', value: member.phone || '未绑定' },
+                { label: '加入时间', value: formatDate(member.joined_at) || '未知' }
+            ]
+        },
+        {
+            key: 'relation',
+            title: '关系线路',
+            sub: '看清他在当前团队里的位置和来源',
+            items: [
+                { label: '团队层级', value: member.level_label || '未知' },
+                { label: '当前关系', value: member.current_relation_text || member.relation_text || '团队成员' },
+                { label: '邀请人', value: member.inviter_text || '暂未记录' },
+                { label: '加入来源', value: member.relation_source_text || (member.relation_source === 'directed_b1' ? '定向邀约' : '普通邀请') },
+                { label: '线路状态', value: member.line_locked ? '已锁定' : '未锁定' }
+            ]
+        },
+        {
+            key: 'performance',
+            title: '业绩概览',
+            sub: '只展示成员贡献，不展开资金明细',
+            items: [
+                { label: '订单数', value: `${Number(member.order_count || 0)} 单` },
+                { label: '累计业绩', value: `¥${member.total_sales || '0.00'}` }
+            ]
+        }
     ];
     if (member.can_apply_goods_fund_transfer) {
-        items.push({
-            label: '待审核划拨',
-            value: `${Number(member.goods_fund_transfer_pending_count || 0)} 笔`
-        });
+        const transferItems = [
+            {
+                label: '待审核划拨',
+                value: `${Number(member.goods_fund_transfer_pending_count || 0)} 笔`
+            }
+        ];
         if (member.goods_fund_transfer_latest_status_text) {
-            items.push({
+            transferItems.push({
                 label: '最近划拨',
                 value: `${member.goods_fund_transfer_latest_status_text}${member.goods_fund_transfer_latest_amount ? ` / ¥${member.goods_fund_transfer_latest_amount}` : ''}`
             });
         }
+        groups.push({
+            key: 'goods_fund',
+            title: '货款划拨',
+            sub: '资金申请单独处理，避免和成员资料混在一起',
+            items: transferItems
+        });
     }
-    return items;
+    return groups;
 }
 
 Page({
@@ -44,7 +73,7 @@ Page({
         loadError: '',
         memberId: null,
         member: null,
-        detailItems: []
+        detailGroups: []
     },
 
     onLoad(options) {
@@ -64,7 +93,7 @@ Page({
             ...(preview ? {
                 loading: false,
                 member: preview,
-                detailItems: buildDetailItems(preview)
+                detailGroups: buildDetailGroups(preview)
             } : {})
         });
         this.loadMemberDetail();
@@ -87,7 +116,7 @@ Page({
                 };
                 this.setData({
                     member,
-                    detailItems: buildDetailItems(member),
+                    detailGroups: buildDetailGroups(member),
                     loading: false,
                     loadError: ''
                 });
@@ -96,7 +125,7 @@ Page({
             throw new Error(res.message || '加载失败');
         } catch (err) {
             const message = err.message || '加载失败';
-            this.setData({ loading: false, loadError: message, member: null, detailItems: [] });
+            this.setData({ loading: false, loadError: message, member: null, detailGroups: [] });
             wx.showToast({ title: message, icon: 'none' });
         }
     },

@@ -49,7 +49,7 @@ const routes = [
         path: 'bundle-products',
         name: 'BundleProducts',
         component: () => import('@/views/bundle-products/index.vue'),
-        meta: { title: '组合商品库', icon: 'Collection', group: '商品与营销', section: '自由组合', sectionOrder: 2, order: 1, permission: 'products' }
+        meta: { title: '特惠随心选', icon: 'Collection', group: '商品与营销', section: '自由组合', sectionOrder: 2, order: 1, permission: 'products' }
       },
       {
         path: 'orders',

@@ -47,11 +47,19 @@ export const MINI_PROGRAM_TARGETS = [
   },
   {
     key: 'flash_sale:current',
-    title: '当前有效限时商品',
+    title: '爆单专区',
     group: '营销入口',
     link_type: 'flash_sale',
     link_value: '',
     note: '进入当前有效档期'
+  },
+  {
+    key: 'category:bundle-zone',
+    title: '特惠组合',
+    group: '营销入口',
+    link_type: 'category',
+    link_value: 'bundle-zone',
+    note: '分类页特惠组合，适合首页大图跳转'
   },
   {
     key: 'coupon:center',
@@ -60,14 +68,6 @@ export const MINI_PROGRAM_TARGETS = [
     link_type: 'coupon_center',
     link_value: '__coupon_center__',
     note: '惊喜礼遇页'
-  },
-  {
-    key: 'category:bundle-zone',
-    title: '组合专区',
-    group: '营销入口',
-    link_type: 'category',
-    link_value: 'bundle-zone',
-    note: '分类页组合商品专区，适合首页大图跳转'
   },
   {
     key: 'page:flex-bundles',
@@ -116,6 +116,14 @@ export const MINI_PROGRAM_TARGETS = [
     link_type: 'page',
     link_value: '/pages/user/membership-center',
     note: '成长值、积分、券与身份权益'
+  },
+  {
+    key: 'page:member-privileges',
+    title: '等级权益',
+    group: '会员服务',
+    link_type: 'page',
+    link_value: '/pages/user/member-privileges',
+    note: '各等级特权、升级门槛与完整路线'
   },
   {
     key: 'page:wallet',

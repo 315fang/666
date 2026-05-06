@@ -5,7 +5,7 @@
     <!-- ═══ 顶部余额卡 ═══ -->
     <view class="balance-card card-enter">
       <view class="balance-card-inner">
-        <text class="balance-label">可提现佣金（元）</text>
+        <text class="balance-label">可提佣金（元）</text>
         <view class="balance-amount-row">
           <text class="balance-symbol">¥</text>
           <text class="balance-amount">{{balance}}</text>
@@ -108,9 +108,9 @@
     <!-- ═══ 代理商货款入口 ═══ -->
     <view class="goods-fund-entry card-enter delay-3" wx:if="{{isAgent}}" bindtap="onGoGoodsFund">
       <view class="gfe-left">
-        <text class="gfe-icon">💰</text>
+        <image class="gfe-icon" src="/assets/icons/credit-card.svg" mode="aspectFit"></image>
         <view class="gfe-info">
-          <text class="gfe-title">货款账户</text>
+          <text class="gfe-title">货款余额</text>
           <text class="gfe-sub">代理商进货资金，与佣金独立核算</text>
         </view>
       </view>

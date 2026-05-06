@@ -2255,6 +2255,19 @@ function getMiniProgramDefault() {
     return configContract.normalizeMiniProgramConfig({});
 }
 
+function mergeConfigObjects(base = {}, override = {}) {
+    const result = { ...toPlainObject(base) };
+    const source = toPlainObject(override);
+    Object.keys(source).forEach((key) => {
+        const baseValue = result[key];
+        const overrideValue = source[key];
+        result[key] = toPlainObject(baseValue) === baseValue && toPlainObject(overrideValue) === overrideValue
+            ? mergeConfigObjects(baseValue, overrideValue)
+            : overrideValue;
+    });
+    return result;
+}
+
 function getMiniProgramConfigSnapshot() {
     const configRows = getCollection('configs');
     const appConfigs = getCollection('app_configs');
@@ -2265,7 +2278,9 @@ function getMiniProgramConfigSnapshot() {
         : (fromConfigRow && typeof fromConfigRow.config_value === 'object'
             ? fromConfigRow.config_value
             : getMiniProgramDefault());
-    return configContract.normalizeMiniProgramConfig(getSingleton('mini-program-config', fallback));
+    const singleton = getSingleton('mini-program-config', undefined);
+    const source = singleton === undefined ? fallback : mergeConfigObjects(fallback, singleton);
+    return configContract.normalizeMiniProgramConfig(source);
 }
 
 function getSettingsSnapshot() {
@@ -2334,11 +2349,15 @@ function buildLatestRefundSummary(order = {}, refunds = []) {
     const paymentMethod = orderContract.normalizePaymentMethodCode(
         latest.payment_method || latest.refund_channel || orderContract.resolveOrderPaymentMethod(order)
     );
+    const refundType = pickString(latest.type);
+    const returnAddress = refundType === 'return_refund' ? resolveReturnAddressForRefund(latest) : null;
+    const returnAddressText = returnAddress ? buildReturnAddressText(returnAddress) : '';
     return {
         id: primaryId(latest),
         refund_no: pickString(latest.refund_no),
         order_id: pickString(latest.order_id),
         order_no: pickString(latest.order_no || orderNo),
+        type: refundType,
         status,
         status_text: orderContract.getRefundStatusText(status),
         status_desc: orderContract.getRefundStatusDesc(status),
@@ -2346,6 +2365,13 @@ function buildLatestRefundSummary(order = {}, refunds = []) {
         payment_method: paymentMethod,
         refund_channel: pickString(latest.refund_channel || paymentMethod),
         refund_target_text: orderContract.getRefundTargetText(paymentMethod, latest.refund_target_text),
+        return_company: pickString(latest.return_company || latest.return_shipping?.company),
+        return_tracking_no: pickString(latest.return_tracking_no || latest.return_shipping?.tracking_no),
+        return_address: returnAddress,
+        return_address_text: returnAddressText,
+        return_address_available: !!returnAddressText,
+        return_received_at: normalizeDateValue(latest.return_received_at),
+        return_received_by: pickString(latest.return_received_by),
         wx_refund_status: pickString(latest.wx_refund_status || latest.wx_status),
         wx_refund_id: pickString(latest.wx_refund_id),
         wx_success_time: normalizeDateValue(latest.wx_success_time),
@@ -2441,6 +2467,197 @@ function summarizeOrderStatusGroups(rows = []) {
     return summary;
 }
 
+function firstNonEmptyString(...values) {
+    for (const value of values) {
+        const text = pickString(value).trim();
+        if (text) return text;
+    }
+    return '';
+}
+
+function parseLogisticsFromRemark(remark) {
+    const text = pickString(remark);
+    if (!text) return { company: '', trackingNo: '' };
+    const match = text.match(/物流[:：]\s*([^\s\[\|]+)\s*([A-Za-z0-9-]+)/);
+    if (!match) return { company: '', trackingNo: '' };
+    return {
+        company: pickString(match[1]).trim(),
+        trackingNo: pickString(match[2]).trim()
+    };
+}
+
+function normalizeLogisticsTrace(trace = {}) {
+    if (!trace || typeof trace !== 'object') return null;
+    const time = normalizeDateValue(
+        trace.time
+        || trace.datetime
+        || trace.accept_time
+        || trace.created_at
+        || trace.updated_at
+        || trace.timestamp
+    );
+    const desc = firstNonEmptyString(
+        trace.desc,
+        trace.status_text,
+        trace.statusText,
+        trace.context,
+        trace.content,
+        trace.message,
+        trace.remark,
+        trace.status
+    );
+    if (!time && !desc) return null;
+    return {
+        ...trace,
+        time,
+        desc: desc || '物流信息更新中',
+        status: firstNonEmptyString(trace.status, trace.state),
+        location: firstNonEmptyString(trace.location, trace.address)
+    };
+}
+
+function sortLogisticsTraces(traces = []) {
+    return traces
+        .map((trace, index) => ({
+            trace,
+            index,
+            timestamp: new Date(trace.time || '').getTime()
+        }))
+        .sort((left, right) => {
+            const leftValid = Number.isFinite(left.timestamp);
+            const rightValid = Number.isFinite(right.timestamp);
+            if (leftValid && rightValid && left.timestamp !== right.timestamp) {
+                return right.timestamp - left.timestamp;
+            }
+            if (leftValid !== rightValid) return leftValid ? -1 : 1;
+            return left.index - right.index;
+        })
+        .map((item) => item.trace);
+}
+
+function collectStoredLogisticsTraces(order = {}) {
+    const logistics = toPlainObject(order.logistics || order.logistics_info || order.shipping || {});
+    return [
+        order.logistics_traces,
+        order.shipping_traces,
+        order.tracking_traces,
+        order.trace_list,
+        order.traces,
+        logistics.traces,
+        logistics.trace_list
+    ].flatMap((value) => toArray(value))
+        .map(normalizeLogisticsTrace)
+        .filter(Boolean);
+}
+
+function buildFallbackLogisticsTraces(order = {}, snapshot = {}) {
+    const rawStatus = pickString(order.status);
+    return [
+        normalizeDateValue(order.created_at) ? { time: normalizeDateValue(order.created_at), desc: '订单已创建', status: 'created' } : null,
+        normalizeDateValue(order.paid_at || order.pay_time) ? { time: normalizeDateValue(order.paid_at || order.pay_time), desc: '支付成功', status: 'paid' } : null,
+        (snapshot.shipped_at || rawStatus === 'shipped' || rawStatus === 'completed')
+            ? { time: snapshot.shipped_at || normalizeDateValue(order.updated_at), desc: '商家已发货', status: 'shipped' }
+            : null,
+        (snapshot.completed_at || rawStatus === 'completed')
+            ? { time: snapshot.completed_at || normalizeDateValue(order.updated_at), desc: '已签收', status: 'completed' }
+            : null,
+        rawStatus === 'cancelled'
+            ? { time: normalizeDateValue(order.cancelled_at || order.updated_at), desc: '订单已取消', status: 'cancelled' }
+            : null
+    ].filter(Boolean);
+}
+
+function resolveLogisticsStatus(order = {}, traces = []) {
+    const rawStatus = pickString(order.status).trim().toLowerCase();
+    const explicit = firstNonEmptyString(order.logistics_status, order.shipping_status, order.tracking_status).toLowerCase();
+    const latestTraceStatus = firstNonEmptyString(traces[0]?.status).toLowerCase();
+    const status = explicit || latestTraceStatus;
+    if (['delivered', 'signed', 'completed'].includes(status) || rawStatus === 'completed') {
+        return { status: 'delivered', statusText: '已签收' };
+    }
+    if (['exception', 'failed', 'problem', 'cancelled'].includes(status) || ['refunding', 'refunded', 'cancelled'].includes(rawStatus)) {
+        return { status: 'exception', statusText: rawStatus === 'cancelled' ? '订单已取消' : '物流异常 / 售后处理中' };
+    }
+    if (['manual'].includes(status) || toBoolean(order.manual_mode || order.logistics_manual_mode)) {
+        return { status: 'manual', statusText: '手工发货' };
+    }
+    if (['in_transit', 'shipped', 'transit'].includes(status) || rawStatus === 'shipped') {
+        return { status: 'in_transit', statusText: '运输中' };
+    }
+    if (['delivering', 'dispatching', 'collecting'].includes(status) || ['agent_confirmed', 'shipping_requested'].includes(rawStatus)) {
+        return { status: 'delivering', statusText: '准备发货' };
+    }
+    return {
+        status: status || 'unknown',
+        statusText: firstNonEmptyString(order.logistics_status_text, order.shipping_status_text, orderContract.getOrderStatusText(rawStatus), '物流信息更新中')
+    };
+}
+
+function buildOrderLogisticsSnapshot(order = {}) {
+    const logistics = toPlainObject(order.logistics || order.logistics_info || order.shipping || {});
+    const parsedRemark = parseLogisticsFromRemark(order.remark);
+    const logisticsCompany = firstNonEmptyString(
+        order.logistics_company,
+        order.shipping_company,
+        order.express_company,
+        order.delivery_company,
+        order.courier_company,
+        order.carrier,
+        logistics.logistics_company,
+        logistics.shipping_company,
+        logistics.company,
+        parsedRemark.company
+    );
+    const trackingNo = firstNonEmptyString(
+        order.tracking_no,
+        order.shipping_tracking_no,
+        order.shipping_no,
+        order.express_no,
+        order.waybill_no,
+        order.tracking_number,
+        order.courier_no,
+        order.delivery_no,
+        logistics.tracking_no,
+        logistics.shipping_tracking_no,
+        logistics.shipping_no,
+        logistics.express_no,
+        logistics.waybill_no,
+        logistics.tracking_number,
+        parsedRemark.trackingNo
+    );
+    const shippedAt = normalizeDateValue(order.shipped_at || order.shipping_at || order.delivered_at || logistics.shipped_at);
+    const completedAt = normalizeDateValue(order.completed_at || order.confirmed_at || logistics.completed_at);
+    const storedTraces = collectStoredLogisticsTraces(order);
+    const traces = sortLogisticsTraces(storedTraces.length ? storedTraces : buildFallbackLogisticsTraces(order, { shipped_at: shippedAt, completed_at: completedAt }));
+    const statusInfo = resolveLogisticsStatus(order, traces);
+    const latestTraceTime = traces.find((trace) => trace.time)?.time || '';
+    const updatedAt = normalizeDateValue(
+        order.logistics_updated_at
+        || order.shipping_updated_at
+        || logistics.updated_at
+        || latestTraceTime
+        || order.updated_at
+    ) || nowIso();
+
+    return {
+        order_id: primaryId(order),
+        order_no: pickString(order.order_no),
+        logistics_company: logisticsCompany,
+        shipping_company: logisticsCompany,
+        tracking_no: trackingNo,
+        status: statusInfo.status,
+        statusText: statusInfo.statusText,
+        status_text: statusInfo.statusText,
+        shipped_at: shippedAt || null,
+        completed_at: completedAt || null,
+        estimated_delivery: normalizeDateValue(order.estimated_delivery || logistics.estimated_delivery) || null,
+        manual_mode: statusInfo.status === 'manual',
+        traces,
+        updated_at: updatedAt,
+        query_time: updatedAt
+    };
+}
+
 function buildOrderRecord(order, users, products, commissions, goodsFundLogs = [], refunds = []) {
     const orderLookupId = primaryId(order) || order.order_no || '';
     const buyer = findUserByAnyId(users, order.openid)
@@ -2496,6 +2713,7 @@ function buildOrderRecord(order, users, products, commissions, goodsFundLogs = [
     const paymentMethod = orderContract.resolveOrderPaymentMethod(order);
     const canonicalPayAmount = toNumber(order.pay_amount ?? order.actual_price ?? order.total_amount, 0);
     const latestRefund = buildLatestRefundSummary(order, refunds);
+    const logisticsSnapshot = buildOrderLogisticsSnapshot(order);
     const normalizedBuyer = buyer ? {
         ...buyer,
         id: primaryId(buyer),
@@ -2559,6 +2777,13 @@ function buildOrderRecord(order, users, products, commissions, goodsFundLogs = [
         refund_error: latestRefund?.error || pickString(order.auto_refund_error),
         address: parseAddressSnapshot(order.address_snapshot),
         address_snapshot: parseAddressSnapshot(order.address_snapshot),
+        logistics_company: logisticsSnapshot.logistics_company,
+        shipping_company: logisticsSnapshot.shipping_company,
+        tracking_no: logisticsSnapshot.tracking_no,
+        shipping_traces: logisticsSnapshot.traces,
+        logistics_status: logisticsSnapshot.status,
+        logistics_status_text: logisticsSnapshot.statusText,
+        _logistics: logisticsSnapshot,
         pickup_station: order.pickupStation || order.pickup_station || null,
         direct_referrer_id: order.direct_referrer_id || normalizedDirectReferrer?.id || '',
         direct_referrer_openid: order.direct_referrer_openid || normalizedDirectReferrer?.openid || '',
@@ -4189,12 +4414,50 @@ async function completeDepositGoodsFundApplication(req, res, current, currentSta
 
     const currentGoodsFund = roundMoney(toNumber(user.agent_wallet_balance != null ? user.agent_wallet_balance : user.wallet_balance, 0));
     const nextGoodsFund = roundMoney(currentGoodsFund + amountToTransfer);
+    const userOpenid = pickString(current.openid || user.openid);
+    const walletAccounts = getCollection('wallet_accounts');
+    const existingWalletAccount = findWalletAccountByUser(walletAccounts, user);
+    const walletAccountId = primaryId(existingWalletAccount) || buildWalletAccountDocId(user);
+    const previousWalletBalance = roundMoney(toNumber(existingWalletAccount?.balance, currentGoodsFund));
     const userPatch = {
         agent_wallet_balance: nextGoodsFund,
         wallet_balance: nextGoodsFund,
         updated_at: nowIso()
     };
+    const syncWalletAccount = async (balance) => {
+        if (!walletAccountId) return true;
+        const walletWriteModel = buildWalletAccountWriteModel({
+            existingAccount: existingWalletAccount,
+            accountId: walletAccountId,
+            userId: getWalletAccountUserIds(user)[0],
+            openid: userOpenid,
+            patch: {
+                balance: roundMoney(balance),
+                updated_at: nowIso()
+            },
+            createdAt: pickString(existingWalletAccount?.created_at || nowIso())
+        });
+        if (dataStore._internals?.db) {
+            const walletCollectionName = typeof dataStore?.getCollectionName === 'function'
+                ? dataStore.getCollectionName('wallet_accounts')
+                : (typeof dataStore?._internals?.getCollectionName === 'function'
+                    ? dataStore._internals.getCollectionName('wallet_accounts')
+                    : 'wallet_accounts');
+            await dataStore._internals.db.collection(walletCollectionName).doc(String(walletAccountId)).set({
+                data: walletWriteModel.cloudData
+            });
+            return true;
+        }
+        const currentWallets = getCollection('wallet_accounts');
+        const index = currentWallets.findIndex((item) => rowMatchesLookup(item, walletAccountId, [item.user_id, item.openid]));
+        const walletPayload = walletWriteModel.localRow;
+        if (index >= 0) currentWallets[index] = walletPayload;
+        else currentWallets.push(walletPayload);
+        saveCollection('wallet_accounts', currentWallets);
+        return true;
+    };
     let userPatched = false;
+    let walletPatched = false;
     try {
         if (dataStore._internals?.db) {
             const writeOk = await directPatchDocument('users', userDocId, userPatch);
@@ -4204,9 +4467,11 @@ async function completeDepositGoodsFundApplication(req, res, current, currentSta
             if (!patchedUser) throw new Error('用户货款余额写入失败');
         }
         userPatched = true;
+        await syncWalletAccount(nextGoodsFund);
+        walletPatched = true;
 
         await appendGoodsFundLogEntry({
-            openid: pickString(current.openid || user.openid),
+            openid: userOpenid,
             user_id: primaryId(user),
             type: 'deposit_transfer',
             amount: amountToTransfer,
@@ -4254,6 +4519,11 @@ async function completeDepositGoodsFundApplication(req, res, current, currentSta
             } else {
                 patchCollectionRow('users', userLookup, (row) => ({ ...row, ...rollbackPatch }));
             }
+        }
+        if (walletPatched) {
+            await syncWalletAccount(previousWalletBalance).catch((rollbackError) => {
+                console.error('[admin-api] ⚠️ 存款转货款钱包账户回滚失败 withdrawal=%s error=%s', req.params.id, rollbackError.message || rollbackError);
+            });
         }
         await persistPatchedRow('withdrawals', req.params.id, claimedApplication, {
             status: 'failed',
@@ -4305,14 +4575,14 @@ function normalizeReturnAddress(source = {}) {
 }
 
 function hasReturnAddress(address = {}) {
-    return !!pickString([
+    return [
         address.receiver_name,
         address.receiver_phone,
         address.province,
         address.city,
         address.district,
         address.detail
-    ].join(' '));
+    ].some((item) => !!pickString(item).trim());
 }
 
 function buildReturnAddressText(address = {}) {
@@ -7740,7 +8010,7 @@ app.put('/admin/api/users/:id/goods-fund', auth, requirePermission('user_balance
     }
     const delta = type === 'subtract' ? -amount : amount;
     const next = roundMoney(current + delta);
-    const patch = { agent_wallet_balance: next, updated_at: nowIso() };
+    const patch = { agent_wallet_balance: next, wallet_balance: next, updated_at: nowIso() };
     const walletAccounts = getCollection('wallet_accounts');
     const existingWalletAccount = findWalletAccountByUser(walletAccounts, user);
     const walletAccountId = primaryId(existingWalletAccount) || buildWalletAccountDocId(user);
@@ -7790,7 +8060,7 @@ app.put('/admin/api/users/:id/goods-fund', auth, requirePermission('user_balance
     try {
         await syncWalletAccount(next, nextTotalRecharge, nextTotalDeduct);
     } catch (error) {
-        const rollbackPatch = { agent_wallet_balance: current, updated_at: nowIso() };
+        const rollbackPatch = { agent_wallet_balance: current, wallet_balance: current, updated_at: nowIso() };
         await persistPatchedRow('users', req.params.id, { ...user, ...patch }, rollbackPatch);
         return fail(res, `货款账本同步失败：${error.message || '未知错误'}`, 500);
     }
@@ -7807,7 +8077,7 @@ app.put('/admin/api/users/:id/goods-fund', auth, requirePermission('user_balance
             operator_name: req.admin?.username || '管理员'
         });
     } catch (error) {
-        const rollbackPatch = { agent_wallet_balance: current, updated_at: nowIso() };
+        const rollbackPatch = { agent_wallet_balance: current, wallet_balance: current, updated_at: nowIso() };
         await persistPatchedRow('users', req.params.id, { ...user, ...patch }, rollbackPatch);
         try {
             await syncWalletAccount(previousWalletBalance, previousTotalRecharge, previousTotalDeduct);
@@ -9034,7 +9304,7 @@ app.put('/admin/api/withdrawals/:id/sync', auth, requirePermission('withdrawals'
 });
 
 app.put('/admin/api/withdrawals/:id/complete', auth, requirePermission('withdrawals'), async (req, res) => {
-    await ensureFreshCollections(['withdrawals', 'users', 'upgrade_piggy_bank_logs', 'commissions', 'wallet_logs']);
+    await ensureFreshCollections(['withdrawals', 'users', 'upgrade_piggy_bank_logs', 'commissions', 'wallet_logs', 'wallet_accounts']);
     const current = findByLookup(ensureWithdrawalNumericIds(), req.params.id);
     if (!current) return fail(res, '提现记录不存在', 404);
     const currentStatus = pickString(current.status);
@@ -9219,6 +9489,10 @@ registerRefundRoutes(app, {
     verifyRefundNotifyRequest,
     getOrderAmount,
     pickupStockAdmin,
+    getMiniProgramConfigSnapshot,
+    normalizeReturnAddress,
+    hasReturnAddress,
+    buildReturnAddressText,
     patchCollectionRow,
     primaryId,
     applyUserMoneyChange
@@ -10018,12 +10292,8 @@ app.get('/admin/api/logistics/order/:id', auth, requirePermission('orders'), asy
     const order = findByLookup(getCollection('orders'), req.params.id, (item) => [item.order_no]);
     if (!order) return fail(res, '订单不存在', 404);
     ok(res, {
-        order_id: order.id,
-        logistics_company: order.logistics_company || '',
-        tracking_no: order.tracking_no || '',
-        refresh: toBoolean(req.query.refresh),
-        traces: [],
-        updated_at: nowIso()
+        ...buildOrderLogisticsSnapshot(order),
+        refresh: toBoolean(req.query.refresh)
     });
 });
 

@@ -59,7 +59,7 @@ function registerBundleProductRoutes(app, deps) {
         const sourceProductLookup = raw.source_product_id || raw.sourceProductId || raw.product_id || raw.productId || existingRow?.source_product_id || existingRow?.product_id;
         const sourceProduct = pickProduct(sourceProductLookup);
         if (!sourceProduct) {
-            throw new Error('请选择要加入组合商品库的商品');
+            throw new Error('请选择要加入特惠随心选的商品');
         }
 
         const sourceProductId = lookupId(sourceProduct);
@@ -113,7 +113,7 @@ function registerBundleProductRoutes(app, deps) {
             stock: row.stock ?? sourceProduct?.stock ?? 0,
             status: toBoolean(row.status ?? row.enabled ?? row.is_active, true) ? 1 : 0,
             library_source: 'bundle_products',
-            library_label: '组合商品库'
+            library_label: '特惠随心选'
         };
     }
 

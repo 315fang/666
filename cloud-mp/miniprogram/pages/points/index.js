@@ -29,6 +29,7 @@ function getPointDeductionRule() {
 }
 
 function buildEffectiveBenefits(account = {}, featureFlags = {}) {
+    void account;
     const { yuanPerPoint, maxRatio } = getPointDeductionRule();
     const benefits = [
         `下单时可使用积分抵扣，当前 1 积分可抵 ${yuanPerPoint} 元，最多可抵订单金额的 ${Math.round(maxRatio * 100)}%`,
@@ -36,11 +37,6 @@ function buildEffectiveBenefits(account = {}, featureFlags = {}) {
     ];
     if (featureFlags.enable_lottery_entry === true) {
         benefits.splice(1, 0, '可用于积分抽奖');
-    }
-    if (account.next_level) {
-        benefits.push(`成长值用于会员等级展示，距 ${account.next_level.name} 还差 ${account.next_level.growth_needed || 0} 成长值`);
-    } else {
-        benefits.push('已达到当前成长体系最高展示档位');
     }
     return benefits;
 }
@@ -52,7 +48,7 @@ function getPointsTip(featureFlags = {}) {
         : '下单积分抵扣，以及部分活动商品的积分兑换';
     return {
         title: mod.title || '签到与积分',
-        body: `当前已生效的积分能力包括：每日签到得积分、${pointsUsageText}。成长值用于会员等级展示，未明确开放的额外特权暂不生效。`
+        body: `当前已生效的积分能力包括：每日签到得积分、${pointsUsageText}。会员等级和成长值说明请在权益中心查看。`
     };
 }
 
@@ -117,7 +113,7 @@ const POINT_LOG_SOURCE_LABELS = {
     invite_success: '邀请奖励',
     lottery_draw: '积分抽奖',
     lottery_prize: '抽奖奖励',
-    admin_adjustment: '后台调整'
+    admin_adjustment: '平台调整'
 };
 
 const POINT_DECREASE_TYPES = new Set(['spend', 'deduct', 'consume', 'use', 'expired', 'expire']);

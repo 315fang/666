@@ -257,7 +257,7 @@
       <el-form-item label="权益中心标题">
         <el-input v-model="miniProgramForm.membership_config.membership_center_page_title" placeholder="如：权益中心" style="max-width:360px;" />
       </el-form-item>
-      <el-form-item label="兼容说明页标题">
+      <el-form-item label="等级权益页标题">
         <el-input v-model="miniProgramForm.membership_config.growth_privileges_page_title" style="max-width:360px;" />
       </el-form-item>
 

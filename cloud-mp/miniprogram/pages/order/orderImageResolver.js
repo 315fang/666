@@ -100,9 +100,11 @@ async function resolveOrderImageFields(order = {}) {
 
 async function resolveNextProductImage(product = {}) {
     const candidates = Array.isArray(product.image_candidates) ? product.image_candidates : collectOrderImageCandidates(product);
-    let nextIndex = Math.max(-1, Number(product.image_candidate_index || 0)) + 1;
+    const rawIndex = Number(product.image_candidate_index);
+    const currentIndex = Number.isFinite(rawIndex) ? Math.max(0, rawIndex) : 0;
+    let nextIndex = currentIndex;
     while (nextIndex < candidates.length) {
-        const nextImage = await resolveCloudImageUrl(candidates[nextIndex], '');
+        const nextImage = await resolveCloudImageUrl(candidates[nextIndex], '', { forceRefresh: nextIndex === currentIndex });
         if (nextImage && nextImage !== product.image) {
             return {
                 image: nextImage,

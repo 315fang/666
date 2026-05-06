@@ -50,7 +50,11 @@ function registerRefundRoutes(app, deps) {
         syncRefundStatusViaPayment,
         verifyRefundNotifyRequest,
         getOrderAmount,
-        pickupStockAdmin
+        pickupStockAdmin,
+        getMiniProgramConfigSnapshot,
+        normalizeReturnAddress,
+        hasReturnAddress,
+        buildReturnAddressText
     } = deps;
 
     function normalizeBatchIds(value) {
@@ -81,6 +85,53 @@ function registerRefundRoutes(app, deps) {
         const configRows = [...getCollection('configs'), ...getCollection('app_configs')];
         const row = configRows.find((item) => ['agent_system_peer_bonus', 'agent_system_peer-bonus'].includes(pickString(item.config_key || item.key)));
         return parseConfigValue(row, {}) || {};
+    }
+
+    function normalizeReturnAddressSnapshot(source = {}) {
+        if (typeof normalizeReturnAddress === 'function') {
+            return normalizeReturnAddress(source);
+        }
+        return {
+            receiver_name: pickString(source.receiver_name || source.receiverName),
+            receiver_phone: pickString(source.receiver_phone || source.receiverPhone),
+            province: pickString(source.province),
+            city: pickString(source.city),
+            district: pickString(source.district),
+            detail: pickString(source.detail || source.address),
+            postal_code: pickString(source.postal_code || source.postalCode),
+            note: pickString(source.note || source.remark)
+        };
+    }
+
+    function returnAddressHasValue(address = {}) {
+        if (typeof hasReturnAddress === 'function') return hasReturnAddress(address);
+        return [
+            address.receiver_name,
+            address.receiver_phone,
+            address.province,
+            address.city,
+            address.district,
+            address.detail
+        ].some((item) => !!pickString(item).trim());
+    }
+
+    function buildReturnAddressSnapshotPatch(refund = {}) {
+        if (pickString(refund.type).toLowerCase() !== 'return_refund') return {};
+
+        const existing = normalizeReturnAddressSnapshot(refund.return_address || refund.returnAddress || {});
+        if (returnAddressHasValue(existing)) return {};
+
+        const config = typeof getMiniProgramConfigSnapshot === 'function' ? getMiniProgramConfigSnapshot() : {};
+        const logisticsConfig = config && typeof config.logistics_config === 'object' ? config.logistics_config : {};
+        const snapshot = normalizeReturnAddressSnapshot(logisticsConfig.return_address || config.return_address || {});
+        if (!returnAddressHasValue(snapshot)) return {};
+
+        const text = typeof buildReturnAddressText === 'function' ? buildReturnAddressText(snapshot) : '';
+        return {
+            return_address: snapshot,
+            return_address_text: text,
+            return_address_snapshot_at: nowIso()
+        };
     }
 
     function resolveRefundDevFeeRecipient(orderId, order = {}) {
@@ -194,6 +245,8 @@ function registerRefundRoutes(app, deps) {
             : rows;
         if (keyword) {
             rows = rows.filter((item) => [
+                item.refund_no,
+                item.display_id,
                 item.order?.order_no,
                 item.user?.nickname,
                 item.user?.phone,
@@ -201,6 +254,9 @@ function registerRefundRoutes(app, deps) {
                 item.user_id,
                 item.order_item?.product?.name,
                 item.reason,
+                item.return_company,
+                item.return_tracking_no,
+                item.return_address_text,
                 item.id
             ].filter(Boolean).join(' ').toLowerCase().includes(keyword));
         }
@@ -226,7 +282,7 @@ function registerRefundRoutes(app, deps) {
             : requireNonEmptyStringField(req.body?.remark, 'remark', '审核备注', { maxLength: 200, required: false });
         if (!remarkCheck.ok) return failWithFieldErrors(res, [remarkCheck.error], '退款审核参数不合法');
 
-        await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+        await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus', 'configs', 'app_configs']);
         const refund = findByLookup(getCollection('refunds'), req.params.id);
         if (!refund) return fail(res, '退款记录不存在', 404);
         if (refund.status !== 'pending') {
@@ -236,7 +292,9 @@ function registerRefundRoutes(app, deps) {
         const updateData = {
             status: 'approved',
             approved_at: nowIso(),
-            remark: remarkCheck.value || pickString(refund.remark)
+            remark: remarkCheck.value || pickString(refund.remark),
+            ...buildReturnAddressSnapshotPatch(refund),
+            updated_at: nowIso()
         };
         const writeOk = await directPatchDocument('refunds', String(refund._id), updateData);
         if (!writeOk) {
@@ -268,7 +326,7 @@ function registerRefundRoutes(app, deps) {
         if (!ids.length) return fail(res, '请选择要操作的售后记录', 400);
         const remark = pickString(req.body?.remark).trim();
 
-        await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus']);
+        await ensureFreshCollections(['refunds', 'orders', 'users', 'products', 'skus', 'configs', 'app_configs']);
         const blockedIds = [];
         let affected = 0;
         for (const id of ids) {
@@ -281,6 +339,7 @@ function registerRefundRoutes(app, deps) {
                 status: 'approved',
                 approved_at: nowIso(),
                 remark: remark || pickString(refund.remark),
+                ...buildReturnAddressSnapshotPatch(refund),
                 updated_at: nowIso()
             };
             const persisted = await persistPatchedRow('refunds', id, refund, patch);
@@ -490,6 +549,7 @@ function registerRefundRoutes(app, deps) {
                     await db.collection('users').where({ openid: buyerOpenid }).update({
                         data: {
                             agent_wallet_balance: _.inc(refundAmount),
+                            wallet_balance: _.inc(refundAmount),
                             updated_at: new Date().toISOString()
                         }
                     });
@@ -531,6 +591,7 @@ function registerRefundRoutes(app, deps) {
                         await db.collection('users').where({ openid: buyerOpenid }).update({
                             data: {
                                 agent_wallet_balance: _.inc(-refundAmount),
+                                wallet_balance: _.inc(-refundAmount),
                                 updated_at: new Date().toISOString()
                             }
                         }).catch((err) => { console.error('[admin-refunds] ⚠️ 货款退款回滚用户余额失败:', err.message || err); });
@@ -569,6 +630,7 @@ function registerRefundRoutes(app, deps) {
                         users[userIdx] = {
                             ...users[userIdx],
                             agent_wallet_balance: nextGoodsFund,
+                            wallet_balance: nextGoodsFund,
                             updated_at: nowIso()
                         };
                         saveCollection('users', users);
@@ -605,6 +667,7 @@ function registerRefundRoutes(app, deps) {
                                 users[rollbackIdx] = {
                                     ...users[rollbackIdx],
                                     agent_wallet_balance: previousGoodsFund,
+                                    wallet_balance: previousGoodsFund,
                                     updated_at: nowIso()
                                 };
                                 saveCollection('users', users);

@@ -1,6 +1,7 @@
 'use strict';
 const cloud = require('wx-server-sdk');
 const db = cloud.database();
+const _ = db.command;
 const { buildGrowthProgress, loadTierConfig } = require('./shared/growth');
 const { toNumber } = require('./shared/utils');
 
@@ -31,11 +32,12 @@ async function addPoints(openid, points) {
     const user = await getUser(openid);
     if (!user) return null;
 
-    const currentPoints = (user.points || 0) + points;
+    const pointDelta = Math.trunc(toNumber(points, 0));
+    if (pointDelta === 0) return getGrowthProgress(openid);
+
     await db.collection('users').where({ openid }).update({
         data: {
-            points: currentPoints,
-            growth_value: currentPoints,
+            points: _.inc(pointDelta),
             updated_at: db.serverDate()
         }
     });

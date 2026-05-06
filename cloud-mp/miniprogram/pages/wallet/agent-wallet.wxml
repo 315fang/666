@@ -12,7 +12,7 @@
 
   <!-- ══ 非代理商提示页 ══ -->
   <view class="no-access-page" wx:if="{{!loading && !isAgent}}">
-    <view class="no-access-icon">🔒</view>
+    <image class="no-access-icon" src="/assets/icons/shield.svg" mode="aspectFit"></image>
     <text class="no-access-title">仅代理商可使用</text>
     <text class="no-access-sub">货款余额功能仅开放给代理商等级及以上用户</text>
     <text class="no-access-sub">当前等级：{{roleLevel >= 2 ? '团长' : (roleLevel >= 1 ? '会员' : '普通用户')}}</text>

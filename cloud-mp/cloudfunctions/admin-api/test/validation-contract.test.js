@@ -890,6 +890,7 @@ test('PUT /admin/api/refunds/:id/complete marks return-refund goods as received 
         openid: userOpenid,
         nickname: '退货退款确认收货测试用户',
         agent_wallet_balance: 0,
+        wallet_balance: 0,
         status: 1
     }));
     dataStore.saveCollection?.('users', dataStore.getCollection('users').concat({
@@ -964,11 +965,118 @@ test('PUT /admin/api/refunds/:id/complete marks return-refund goods as received 
         assert.equal(refund?.return_tracking_no, `${tempPrefix}-tracking`);
         const user = dataStore.getCollection('users').find((row) => String(row.openid) === userOpenid);
         assert.equal(Number(user?.agent_wallet_balance), 20);
+        assert.equal(Number(user?.wallet_balance), 20);
         const devFee = dataStore.getCollection('commissions').find((row) => String(row.type) === 'refund_dev_fee' && String(row.refund_id) === refundId);
         assert.equal(devFee?.openid, storeOpenid);
         assert.equal(devFee?.user_id, `${tempPrefix}-store-user`);
         assert.equal(Number(devFee?.amount), 0.3);
         assert.equal(devFee?.source_commission_id, `${tempPrefix}-same-level`);
+    } finally {
+        cleanup();
+    }
+});
+
+test('PUT /admin/api/refunds/:id/approve snapshots return address and GET /refunds searches return tracking', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const dataStore = app.locals.dataStore;
+    const tempPrefix = 'test-return-refund-snapshot';
+    const orderId = `${tempPrefix}-order`;
+    const orderNo = `${tempPrefix}-no`;
+    const refundId = `${tempPrefix}-refund`;
+    const userOpenid = `${tempPrefix}-openid`;
+    const trackingNo = `${tempPrefix}-tracking`;
+    const configId = `${tempPrefix}-config`;
+    const cleanup = () => {
+        dataStore.saveCollection?.('users', dataStore.getCollection('users')
+            .filter((row) => String(row.openid || row.id || row._id) !== userOpenid));
+        dataStore.saveCollection?.('orders', dataStore.getCollection('orders')
+            .filter((row) => String(row._id || row.id || row.order_no) !== orderId && String(row.order_no || '') !== orderNo));
+        dataStore.saveCollection?.('refunds', dataStore.getCollection('refunds')
+            .filter((row) => String(row._id || row.id) !== refundId));
+        dataStore.saveCollection?.('configs', dataStore.getCollection('configs')
+            .filter((row) => String(row._id || row.id) !== configId));
+    };
+
+    cleanup();
+    dataStore.saveCollection?.('configs', dataStore.getCollection('configs').concat({
+        _id: configId,
+        id: configId,
+        config_key: 'mini_program_config',
+        key: 'mini_program_config',
+        config_value: {
+            logistics_config: {
+                return_address: {
+                    receiver_name: '测试售后仓',
+                    receiver_phone: '13800000000',
+                    province: '浙江省',
+                    city: '杭州市',
+                    district: '西湖区',
+                    detail: '测试路 1 号',
+                    postal_code: '310000',
+                    note: '请保留快递底单'
+                }
+            }
+        },
+        active: true,
+        updated_at: '2099-01-01T00:00:00.000Z',
+        created_at: '2099-01-01T00:00:00.000Z'
+    }));
+    dataStore.saveCollection?.('users', dataStore.getCollection('users').concat({
+        _id: `${tempPrefix}-user`,
+        id: `${tempPrefix}-user`,
+        openid: userOpenid,
+        nickname: '退货地址快照用户',
+        phone: '13900000000',
+        status: 1
+    }));
+    dataStore.saveCollection?.('orders', dataStore.getCollection('orders').concat({
+        _id: orderId,
+        id: orderId,
+        order_no: orderNo,
+        openid: userOpenid,
+        status: 'paid',
+        payment_method: 'goods_fund',
+        pay_amount: 20,
+        actual_price: 20,
+        total_amount: 20,
+        paid_at: '2026-04-24T00:00:00.000Z'
+    }));
+    dataStore.saveCollection?.('refunds', dataStore.getCollection('refunds').concat({
+        _id: refundId,
+        id: refundId,
+        order_id: orderId,
+        order_no: orderNo,
+        openid: userOpenid,
+        status: 'pending',
+        type: 'return_refund',
+        amount: 20,
+        cash_refund_amount: 20,
+        refund_quantity_effective: 1,
+        payment_method: 'goods_fund',
+        return_company: '顺丰速运',
+        return_tracking_no: trackingNo,
+        created_at: '2026-04-24T00:10:00.000Z'
+    }));
+
+    try {
+        const approveResponse = await invoke(`/admin/api/refunds/${refundId}/approve`, {
+            method: 'PUT',
+            admin
+        });
+        assert.equal(approveResponse.statusCode, 200, approveResponse.body?.message || JSON.stringify(approveResponse.body));
+        const refund = dataStore.getCollection('refunds').find((row) => String(row._id || row.id) === refundId);
+        assert.equal(refund?.status, 'approved');
+        assert.equal(refund?.return_address?.receiver_name, '测试售后仓');
+        assert.equal(refund?.return_address?.detail, '测试路 1 号');
+
+        const searchResponse = await invoke('/admin/api/refunds', {
+            admin,
+            query: { keyword: trackingNo }
+        });
+        assert.equal(searchResponse.statusCode, 200, searchResponse.body?.message || JSON.stringify(searchResponse.body));
+        const list = searchResponse.body.data?.list || searchResponse.body.data?.data?.list || [];
+        assert.ok(list.some((row) => String(row.id || row._id) === refundId), 'expected return tracking keyword to find refund');
     } finally {
         cleanup();
     }
@@ -1238,6 +1346,61 @@ test('PUT /admin/api/orders/:id/ship returns field_errors for invalid body', asy
     assert.ok(response.body.request_id);
     assert.ok(Array.isArray(response.body.field_errors));
     assert.ok(response.body.field_errors.some((item) => item.field === 'extra_field'));
+});
+
+test('GET /admin/api/logistics/order/:id returns normalized stored logistics aliases and traces', async () => {
+    await ensureReady();
+    const admin = getEnabledAdmin();
+    const dataStore = app.locals.dataStore;
+    const tempPrefix = 'test-admin-logistics-alias';
+    const orderId = `${tempPrefix}-order`;
+    const orderNo = `${tempPrefix}-no`;
+    const trackingNo = `${tempPrefix}-tracking`;
+    const cleanup = () => {
+        dataStore.saveCollection?.('orders', dataStore.getCollection('orders')
+            .filter((row) => String(row._id || row.id || row.order_no) !== orderId && String(row.order_no || '') !== orderNo));
+    };
+
+    cleanup();
+    dataStore.saveCollection?.('orders', dataStore.getCollection('orders').concat({
+        _id: orderId,
+        id: orderId,
+        order_no: orderNo,
+        openid: `${tempPrefix}-openid`,
+        status: 'shipped',
+        pay_amount: 20,
+        total_amount: 20,
+        shipping_company: '中通快递',
+        shipping_tracking_no: trackingNo,
+        created_at: '2026-04-24T00:00:00.000Z',
+        paid_at: '2026-04-24T00:01:00.000Z',
+        shipped_at: '2026-04-24T00:02:00.000Z',
+        shipping_traces: [
+            { time: '2026-04-24T00:03:00.000Z', status_text: '已揽收', status: 'collecting' },
+            { time: '2026-04-24T00:04:00.000Z', desc: '运输中', status: 'in_transit' }
+        ]
+    }));
+
+    try {
+        const detailResponse = await invoke(`/admin/api/orders/${orderId}`, { admin });
+        assert.equal(detailResponse.statusCode, 200, detailResponse.body?.message || JSON.stringify(detailResponse.body));
+        assert.equal(detailResponse.body.data?.tracking_no, trackingNo);
+        assert.equal(detailResponse.body.data?.logistics_company, '中通快递');
+        assert.equal(detailResponse.body.data?._logistics?.traces?.[0]?.desc, '运输中');
+
+        const response = await invoke(`/admin/api/logistics/order/${orderNo}`, { admin });
+        assert.equal(response.statusCode, 200, response.body?.message || JSON.stringify(response.body));
+        assert.equal(response.body.data?.order_id, orderId);
+        assert.equal(response.body.data?.order_no, orderNo);
+        assert.equal(response.body.data?.tracking_no, trackingNo);
+        assert.equal(response.body.data?.logistics_company, '中通快递');
+        assert.equal(response.body.data?.status, 'in_transit');
+        assert.equal(response.body.data?.statusText, '运输中');
+        assert.equal(response.body.data?.traces?.length, 2);
+        assert.equal(response.body.data?.traces?.[0]?.desc, '运输中');
+    } finally {
+        cleanup();
+    }
 });
 
 test('PUT /admin/api/refunds/:id/reject returns field_errors for invalid body', async () => {

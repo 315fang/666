@@ -139,6 +139,75 @@ async function onPayOrder(page, app) {
     }
 }
 
+async function onPayOrderWithWallet(page) {
+    const { order, walletBalance } = page.data;
+    if (!(order && order.id)) return;
+    if (Number(walletBalance || 0) <= 0) {
+        wx.showToast({ title: '货款余额不足', icon: 'none' });
+        return;
+    }
+    if (page._payingWallet) return;
+    page._payingWallet = true;
+
+    let loadingVisible = false;
+    const safeHideLoading = () => {
+        if (loadingVisible) {
+            wx.hideLoading();
+            loadingVisible = false;
+        }
+    };
+
+    try {
+        const portalPassword = await promptPortalPassword({
+            title: '货款支付验证',
+            placeholderText: '请输入6位数字业务密码'
+        });
+        if (!portalPassword) return;
+
+        wx.showLoading({ title: '支付中...', mask: true });
+        loadingVisible = true;
+        const res = await post(`/orders/${order.id}/prepay`, {
+            use_wallet_balance: true,
+            portal_password: portalPassword
+        });
+        safeHideLoading();
+
+        if (res.code !== 0) {
+            wx.showToast({ title: res.message || '货款支付失败', icon: 'none' });
+            return;
+        }
+
+        const payParams = res.data || {};
+        if (payParams.paid_by_wallet) {
+            clearWalletPreference(order.id);
+            wx.showToast({ title: '货款余额支付成功！', icon: 'success' });
+            startPayStatusPolling(page, order.id);
+            if (typeof page._loadWalletBalance === 'function') {
+                page._loadWalletBalance();
+            }
+            return;
+        }
+
+        if (payParams.wallet_balance_insufficient) {
+            wx.showToast({
+                title: `货款余额不足（¥${Number(payParams.wallet_balance || 0).toFixed(2)}），请充值后重试`,
+                icon: 'none',
+                duration: 3000
+            });
+            return;
+        }
+
+        wx.showToast({ title: '货款支付失败，请重试', icon: 'none' });
+    } catch (err) {
+        safeHideLoading();
+        wx.showToast({ title: err.message || '支付失败，请重试', icon: 'none' });
+        console.error('货款支付异常:', err);
+    } finally {
+        safeHideLoading();
+        page._payingWallet = false;
+    }
+}
+
 function startPayStatusPolling(page, orderId) {
     if (page._payPollTimer) clearTimeout(page._payPollTimer);
 
@@ -182,5 +251,6 @@ module.exports = {
     shouldUseWalletForOrder,
     clearWalletPreference,
     onPayOrder,
+    onPayOrderWithWallet,
     startPayStatusPolling
 };

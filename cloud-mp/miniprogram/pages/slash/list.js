@@ -47,6 +47,17 @@ function extractListData(res) {
     return [];
 }
 
+function normalizeActivityId(value) {
+    return value == null ? '' : String(value).trim();
+}
+
+function applyActivityFocus(list = [], activityId = '') {
+    const focusId = normalizeActivityId(activityId);
+    if (!focusId) return { list, focused: false };
+    const matched = list.filter((item) => normalizeActivityId(item.id || item._id) === focusId);
+    return matched.length ? { list: matched, focused: true } : { list, focused: false };
+}
+
 function normalizeUserMessage(message, fallback) {
     const text = message ? String(message).trim() : '';
     if (!text || text === 'ok') return fallback;
@@ -90,6 +101,8 @@ Page({
         navTopPadding: 20,
         navBarHeight: 44,
         activeTab: 'activities',
+        focusActivityId: '',
+        focusApplied: false,
         activities: [],
         myRecords: [],
         loading: true
@@ -97,11 +110,13 @@ Page({
 
     onLoad(options = {}) {
         const initialTab = options.tab === 'my' ? 'my' : 'activities';
+        const focusActivityId = normalizeActivityId(options.activity_id);
         this.setData({
             statusBarHeight: app.globalData.statusBarHeight || 20,
             navTopPadding: app.globalData.navTopPadding || (app.globalData.statusBarHeight || 20),
             navBarHeight: app.globalData.navBarHeight || 44,
-            activeTab: initialTab
+            activeTab: initialTab,
+            focusActivityId
         });
         this.loadData(initialTab);
     },
@@ -120,7 +135,9 @@ Page({
             try {
                 const res = await get('/slash/activities');
                 const raw = getActivityList(res);
-                this.setData({ activities: raw.map(enrichSlashActivity), loading: false });
+                const enriched = raw.map(enrichSlashActivity);
+                const focused = applyActivityFocus(enriched, this.data.focusActivityId);
+                this.setData({ activities: focused.list, focusApplied: focused.focused, loading: false });
             } catch { this.setData({ loading: false }); }
         } else {
             if (!app.globalData.isLoggedIn) { this.setData({ myRecords: [], loading: false }); return; }
@@ -179,6 +196,11 @@ Page({
 
     onGoActivities() {
         this.setData({ activeTab: 'activities', loading: true });
+        this.loadData('activities');
+    },
+
+    onClearActivityFocus() {
+        this.setData({ focusActivityId: '', focusApplied: false, activeTab: 'activities', loading: true });
         this.loadData('activities');
     },
 

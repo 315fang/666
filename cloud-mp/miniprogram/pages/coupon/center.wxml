@@ -3,8 +3,8 @@
     <!-- Hero 区域 -->
     <view class="hero card-enter">
       <view class="hero-glow"></view>
-      <text class="hero-kicker">🎫 优惠服务</text>
-      <text class="hero-title">优惠券中心</text>
+      <text class="hero-kicker">领券服务</text>
+      <text class="hero-title">领券中心</text>
       <text class="hero-subtitle">领券后下单可直接使用。</text>
 
       <view class="hero-metrics">
@@ -19,11 +19,11 @@
       </view>
     </view>
 
-    <!-- 可领取优惠券 -->
+    <!-- 可领券包 -->
     <view class="section card-enter delay-1">
       <view class="section-head">
         <view class="section-copy">
-          <text class="section-title">可领取优惠券</text>
+          <text class="section-title">可领券包</text>
           <text class="section-subtitle">每个账号默认限领一次。</text>
         </view>
         <view class="section-link ripple" bindtap="onOpenMyCoupons">我的券包 ›</view>
@@ -67,12 +67,12 @@
       <view class="state-card" wx:elif="{{loading}}">
         <view class="loading-spinner"></view>
         <text class="state-title">加载中</text>
-        <text class="state-desc">正在加载优惠券。</text>
+        <text class="state-desc">正在加载券包。</text>
       </view>
 
       <view class="state-card" wx:else>
-        <text class="state-emoji">🎫</text>
-        <text class="state-title">暂无可领取优惠券</text>
+        <image class="state-icon" src="/assets/icons/tag.svg" mode="aspectFit"></image>
+        <text class="state-title">暂无券包</text>
         <text class="state-desc">请稍后再试。</text>
       </view>
     </view>
@@ -82,7 +82,7 @@
       <view class="section-head">
         <view class="section-copy">
           <text class="section-title">我的券包</text>
-          <text class="section-subtitle">展示未使用优惠券。</text>
+          <text class="section-subtitle">展示未使用券包。</text>
         </view>
         <view class="section-link ripple" bindtap="onOpenCouponPack">{{mineCoupons.length > 0 ? '查看全部' : (isLoggedIn ? '去领券' : '去登录')}} ›</view>
       </view>
@@ -101,9 +101,9 @@
       </view>
 
       <view class="state-card state-card-light" wx:else>
-        <text class="state-emoji">{{isLoggedIn ? '📭' : '🔐'}}</text>
-        <text class="state-title">{{isLoggedIn ? '暂无已领取优惠券' : '登录后查看券包'}}</text>
-        <text class="state-desc">{{isLoggedIn ? '领取后可在此查看。' : '登录后查看已领取优惠券。'}}</text>
+        <image class="state-icon" src="{{isLoggedIn ? '/assets/icons/inbox.svg' : '/assets/icons/shield.svg'}}" mode="aspectFit"></image>
+        <text class="state-title">{{isLoggedIn ? '暂无券包' : '登录看券'}}</text>
+        <text class="state-desc">{{isLoggedIn ? '领取后可在此查看。' : '登录后查看已领取券包。'}}</text>
       </view>
     </view>
 

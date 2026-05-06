@@ -144,6 +144,63 @@
   grid-column: 1 / -1;
 }
 
+.workbench-panel {
+  margin: 22rpx 24rpx 0;
+  padding: 26rpx;
+  background: #ffffff;
+  border-radius: 28rpx;
+  box-shadow: 0 18rpx 40rpx rgba(21, 80, 156, 0.08);
+}
+
+.workbench-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 18rpx;
+}
+
+.workbench-title {
+  display: block;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #12366a;
+}
+
+.workbench-sub {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #8ea1be;
+}
+
+.workbench-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16rpx;
+}
+
+.workbench-action {
+  min-height: 142rpx;
+  padding: 22rpx;
+  border-radius: 22rpx;
+  background: linear-gradient(180deg, #f6f9ff 0%, #edf4ff 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.workbench-action-title {
+  font-size: 27rpx;
+  font-weight: 700;
+  color: #12366a;
+}
+
+.workbench-action-desc {
+  font-size: 21rpx;
+  line-height: 1.45;
+  color: #6f87aa;
+}
+
 .balance-label {
   font-size: 22rpx;
   color: rgba(255, 255, 255, 0.72);

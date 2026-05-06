@@ -585,6 +585,43 @@ async function syncWalletAccountBalanceFromUser(user = {}, walletAccount = null,
     };
 }
 
+async function applyWalletAccountBalanceDelta(user = {}, openid = '', amount = 0) {
+    const walletAccount = await getWalletAccount(user, openid);
+    if (walletAccount) {
+        const accountId = String(walletAccount._id || walletAccount.id);
+        await db.collection('wallet_accounts').doc(accountId).update({
+            data: {
+                balance: _.inc(amount),
+                updated_at: db.serverDate()
+            }
+        });
+        return { accountId, applied: true };
+    }
+
+    const nextAccount = buildWalletAccountSyncDoc({
+        user,
+        openid,
+        userId: walletAccountUserId(user, openid),
+        balance: roundMoney(resolveGoodsFundBalance(user) + amount),
+        frozenBalance: getGoodsFundFrozenBalance(user, null),
+        now: new Date().toISOString()
+    });
+    await db.collection('wallet_accounts').doc(nextAccount.accountId).set({
+        data: nextAccount.data
+    });
+    return { accountId: nextAccount.accountId, applied: true, created: true };
+}
+
+async function rollbackWalletAccountBalanceDelta(accountSync, amount = 0) {
+    if (!accountSync || !accountSync.applied || !accountSync.accountId) return;
+    await db.collection('wallet_accounts').doc(String(accountSync.accountId)).update({
+        data: {
+            balance: _.inc(-amount),
+            updated_at: db.serverDate()
+        }
+    });
+}
+
 async function listUnifiedGoodsFundLogs(user = {}, openid = '') {
     const ids = goodsFundIdentityCandidates(user, openid);
     const [legacyLogs, cloudLogs] = await Promise.all([
@@ -1012,14 +1049,9 @@ const handleAction = {
             .where({ status: 'frozen', refund_deadline: _.lt(now) })
             .limit(200)
             .get().catch(() => ({ data: [] }));
-        const pendingRes = await db.collection('commissions')
-            .where({ status: 'pending_approval', refund_deadline: _.lt(now) })
-            .limit(200)
-            .get().catch(() => ({ data: [] }));
-        const allComms = [...(frozenRes.data || []), ...(pendingRes.data || [])];
-        let settledCount = 0;
+        const allComms = frozenRes.data || [];
+        let pendingApprovalCount = 0;
         let skippedCount = 0;
-        let totalAmount = 0;
         for (const comm of allComms) {
             if (comm.order_id || comm.order_no) {
                 const orderId = comm.order_id || comm.order_no;
@@ -1036,53 +1068,24 @@ const handleAction = {
                     continue;
                 }
             }
-            const isStorePeerBonus = String(comm.type || '').trim() === 'same_level'
-                && Number(comm.bonus_role_level || comm.level || 0) === 6;
-            if (isStorePeerBonus) {
-                if (String(comm.status || '') !== 'frozen') {
-                    skippedCount++;
-                    continue;
-                }
-                const approvalUpdate = await db.collection('commissions')
-                    .where({ _id: comm._id, status: 'frozen' })
-                    .update({
-                        data: { status: 'pending_approval', pending_approval_at: db.serverDate(), updated_at: db.serverDate() }
-                    })
-                    .catch((e) => {
-                        console.error('[distribution] ⚠️ 实体门店平级奖转待审核失败 commissionId=%s error=%s', comm._id, e.message);
-                        return { stats: { updated: 0 } };
-                    });
-                if (approvalUpdate?.stats?.updated > 0) settledCount++;
-                else skippedCount++;
-                continue;
-            }
-            const amount = toNumber(comm.amount, 0);
-            try {
-                const statusUpdate = await db.collection('commissions')
-                    .where({ _id: comm._id, status: _.in(['frozen', 'pending_approval']) })
-                    .update({
-                        data: { status: 'settled', settled_at: db.serverDate(), updated_at: db.serverDate() }
-                    });
-                if (!statusUpdate || !statusUpdate.stats || statusUpdate.stats.updated === 0) {
-                    skippedCount++;
-                    continue;
-                }
-            } catch (e) {
-                console.error('[distribution] ⚠️ 佣金状态更新失败 commissionId=%s error=%s', comm._id, e.message);
-                continue;
-            }
-            if (amount > 0) {
-                await distributionCommission.settleCommission(comm.openid, amount, {
-                    order_id: comm.order_id,
-                    order_no: comm.order_no,
-                    type: comm.type,
-                    level: comm.level
+            const approvalUpdate = await db.collection('commissions')
+                .where({ _id: comm._id, status: 'frozen' })
+                .update({
+                    data: { status: 'pending_approval', pending_approval_at: db.serverDate(), updated_at: db.serverDate() }
+                })
+                .catch((e) => {
+                    console.error('[distribution] ⚠️ 到期佣金转待审核失败 commissionId=%s error=%s', comm._id, e.message);
+                    return { stats: { updated: 0 } };
                 });
-                totalAmount += amount;
-            }
-            settledCount++;
+            if (approvalUpdate?.stats?.updated > 0) pendingApprovalCount++;
+            else skippedCount++;
         }
-        return success({ settled: settledCount, skipped: skippedCount, total_amount: totalAmount });
+        return success({
+            pending_approval: pendingApprovalCount,
+            settled: 0,
+            skipped: skippedCount,
+            total_amount: 0
+        });
     }),
 
     'withdrawRules': asyncHandler(async () => {
@@ -1185,6 +1188,7 @@ const handleAction = {
                 description: `提现${amount}元${feeDesc}`,
             });
         } catch (logErr) {
+            let rollbackError = null;
             try {
                 await db.collection('users')
                     .where({ openid })
@@ -1504,6 +1508,7 @@ const handleAction = {
                     commission_balance: _.inc(-amount),
                     balance: _.inc(-amount),
                     agent_wallet_balance: _.inc(amount),
+                    wallet_balance: _.inc(amount),
                     updated_at: db.serverDate()
                 },
             });
@@ -1512,6 +1517,26 @@ const handleAction = {
         }
 
         const transferNo = 'CT' + Date.now() + Math.floor(Math.random() * 1000);
+        let walletAccountSync = null;
+
+        try {
+            walletAccountSync = await applyWalletAccountBalanceDelta(user, openid, amount);
+        } catch (accountErr) {
+            await db.collection('users')
+                .where({ openid })
+                .update({
+                    data: {
+                        commission_balance: _.inc(amount),
+                        balance: _.inc(amount),
+                        agent_wallet_balance: _.inc(-amount),
+                        wallet_balance: _.inc(-amount),
+                        updated_at: db.serverDate()
+                    }
+                }).catch((rollbackErr) => {
+                    console.error('[distribution] ⚠️ 佣金转货款账本同步失败后用户余额回滚也失败 openid=%s amount=%s error=%s', openid, amount, rollbackErr.message);
+                });
+            throw serverError(`佣金转货款账本同步失败：${accountErr.message}`);
+        }
 
         try {
             await Promise.all([
@@ -1539,14 +1564,24 @@ const handleAction = {
                             commission_balance: _.inc(amount),
                             balance: _.inc(amount),
                             agent_wallet_balance: _.inc(-amount),
+                            wallet_balance: _.inc(-amount),
                             updated_at: db.serverDate()
                         }
                     });
             } catch (rollbackErr) {
-                console.error('[distribution] ⚠️ 佣金转货款日志失败后余额回滚也失败 openid=%s amount=%s error=%s', openid, amount, rollbackErr.message);
+                rollbackError = rollbackErr;
+                console.error('[distribution] ⚠️ 佣金转货款日志失败后用户余额回滚失败 openid=%s amount=%s error=%s', openid, amount, rollbackErr.message);
+            }
+            try {
+                await rollbackWalletAccountBalanceDelta(walletAccountSync, amount);
+            } catch (accountRollbackErr) {
+                rollbackError = rollbackError || accountRollbackErr;
+                console.error('[distribution] ⚠️ 佣金转货款日志失败后钱包账户回滚失败 openid=%s amount=%s error=%s', openid, amount, accountRollbackErr.message);
+            }
+            if (rollbackError) {
                 try {
                     await db.collection('rollback_error_logs').add({
-                        data: { context: 'commissionToGoodsFund_log_rollback', openid, amount, original_error: logErr.message, rollback_error: rollbackErr.message, created_at: db.serverDate() }
+                        data: { context: 'commissionToGoodsFund_log_rollback', openid, amount, original_error: logErr.message, rollback_error: rollbackError.message, created_at: db.serverDate() }
                     });
                 } catch (_) {}
             }
@@ -2161,7 +2196,7 @@ exports.main = cloudFunctionWrapper(async (event) => {
     // action 必须在任何使用前先声明
     const { action } = event;
 
-    const internalActions = new Set(['createCommissions', 'unfreezeCommissions', 'cancelCommissions']);
+    const internalActions = new Set(['createCommissions', 'unfreezeCommissions', 'cancelCommissions', 'settleMatured']);
     if (internalActions.has(action)) {
         const providedToken = String(event.internal_token || '').trim();
         if (!internalActionToken) {

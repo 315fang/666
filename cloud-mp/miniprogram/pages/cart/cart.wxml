@@ -1,6 +1,7 @@
 <view class="container">
   <view class="cart-header">
-    <text class="header-title">购物袋</text>
+    <text class="header-title">购物清单</text>
+    <text class="header-subtitle" wx:if="{{cartItems.length > 0}}">已选 {{totalCount}} 件，合计 ¥{{totalPrice}}</text>
   </view>
 
   <view class="loading-state" wx:if="{{loading}}">
@@ -31,7 +32,8 @@
 
   <view class="empty-wrap" wx:if="{{!loading && cartItems.length === 0}}">
     <image class="empty-icon" src="/assets/icons/shopping-bag.svg" mode="aspectFit"></image>
-    <text class="empty-text">购物袋空空如也</text>
+    <text class="empty-text">清单为空</text>
+    <navigator url="/pages/category/category" open-type="switchTab" class="empty-action">去逛商品</navigator>
     <view class="recommend-title" wx:if="{{recommendedProducts.length > 0}}">为你推荐</view>
     <view class="recommend-list" wx:if="{{recommendedProducts.length > 0}}">
       <view class="recommend-item" wx:for="{{recommendedProducts}}" wx:key="id" bindtap="onRecommendedTap" data-id="{{item.id}}">
@@ -52,6 +54,6 @@
       <text class="total-price">¥{{totalPrice}}</text>
       <text class="total-count">共{{totalCount}}件</text>
     </view>
-    <view class="checkout-btn {{totalCount === 0 || checkoutLoading ? 'disabled' : ''}}" bindtap="onCheckout">{{checkoutLoading ? '检查中' : '去结算'}}</view>
+    <view class="checkout-btn {{totalCount === 0 || checkoutLoading ? 'disabled' : ''}}" bindtap="onCheckout">{{checkoutLoading ? '检查中' : (totalCount === 0 ? '请选择' : '去结算')}}</view>
   </view>
 </view>

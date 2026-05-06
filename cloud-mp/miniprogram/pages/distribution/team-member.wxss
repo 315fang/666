@@ -165,6 +165,10 @@
   box-shadow: 0 18rpx 40rpx rgba(18, 69, 140, 0.08);
 }
 
+.detail-section + .detail-section {
+  margin-top: 16rpx;
+}
+
 .section-head {
   margin-bottom: 20rpx;
 }
@@ -219,6 +223,10 @@
   justify-content: space-between;
   gap: 20rpx;
   background: linear-gradient(180deg, #f6f9ff 0%, #edf4ff 100%);
+}
+
+.finance-action-card {
+  background: #fff8ec;
 }
 
 .action-title {

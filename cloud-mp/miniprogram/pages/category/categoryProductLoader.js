@@ -138,6 +138,21 @@ function pickMappedProductImage(item) {
     }) || normalizeAssetUrl(resolveProductImage(item));
 }
 
+function buildProductImageSources(item = {}) {
+    return [
+        {
+            file_id: item.image_ref || item.file_id || item.fileId || '',
+            image: item.display_image || item.image || '',
+            image_url: item.image_url || '',
+            cover_image: item.cover_image || ''
+        },
+        item.preview_images,
+        item.previewImages,
+        item.images,
+        resolveProductImage(item, '')
+    ];
+}
+
 function mapProductsForCategory(page, list) {
     const pointBalance = page.data.userPointBalance || 0;
     const bestCoupon = page.data.userBestCoupon || 0;
@@ -163,6 +178,7 @@ function mapProductsForCategory(page, list) {
         return {
             ...item,
             image: pickMappedProductImage(item),
+            image_sources: buildProductImageSources(item),
             specSummary: buildSpecSummary(item),
             price: retailPrice,
             market_price: marketPrice > retailPrice ? marketPrice : 0,

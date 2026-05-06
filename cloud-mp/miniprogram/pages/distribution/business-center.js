@@ -2,11 +2,18 @@ const app = getApp();
 const { get } = require('../../utils/request');
 const { requireLogin } = require('../../utils/auth');
 const { fetchUserProfile } = require('../../utils/userProfile');
+const { getConfigSection } = require('../../utils/miniProgramConfig');
 const { USER_ROLES } = require('../../config/constants');
 
 function formatMoney(value) {
     const n = Number(value || 0);
     return Number.isFinite(n) ? n.toFixed(2) : '0.00';
+}
+
+function getBusinessCenterMinRoleLevel() {
+    const membershipConfig = getConfigSection('membership_config') || {};
+    const minRoleLevel = Number(membershipConfig.business_center_min_role_level);
+    return Number.isFinite(minRoleLevel) ? minRoleLevel : 1;
 }
 
 Page({
@@ -28,6 +35,7 @@ Page({
         frozenAmount: '0.00',
         canDirectedInvite: false,
         isStoreManager: false,
+        showPickupVerify: false,
         storeManagerStationName: ''
     },
 
@@ -60,6 +68,10 @@ Page({
             canDirectedInvite: roleLevel >= 4
         });
         await Promise.all([this.loadBalances(), this.loadOverview(), this.loadPickupScope()]);
+        if (roleLevel < getBusinessCenterMinRoleLevel() && !this.data.isStoreManager && !this.data.showPickupVerify) {
+            wx.showToast({ title: '当前身份暂未开放团队中心', icon: 'none' });
+            setTimeout(() => wx.switchTab({ url: '/pages/user/user' }), 600);
+        }
     },
 
     async loadPickupScope() {
@@ -76,6 +88,7 @@ Page({
                 : (managerStations[0]?.name || '');
             this.setData({
                 isStoreManager,
+                showPickupVerify: !!scope?.has_verify_access || managerStations.length > 0,
                 storeManagerStationName: stationName,
                 canDirectedInvite: roleLevel >= 4 || managerStations.length > 0
             });
@@ -83,6 +96,7 @@ Page({
             const roleLevel = Number(this.data.userInfo?.role_level || 0);
             this.setData({
                 isStoreManager: roleLevel >= USER_ROLES.STORE,
+                showPickupVerify: roleLevel >= USER_ROLES.STORE,
                 storeManagerStationName: ''
             });
         }
@@ -92,6 +106,9 @@ Page({
         let goodsAmount = '0.00';
         let purseAmount = '0.00';
         let showGoods = false;
+        const userInfo = this.data.userInfo || app.globalData.userInfo || {};
+        const roleLevel = Number(userInfo.role_level || 0);
+        const participates = userInfo.participate_distribution === 1 || userInfo.participate_distribution === true;
 
         try {
             const [agentRes, walletRes, profileResult] = await Promise.all([
@@ -106,7 +123,7 @@ Page({
                         : (agentRes.data.agent_wallet_balance != null ? agentRes.data.agent_wallet_balance : agentRes.data.balance)
                 ) || 0;
                 goodsAmount = formatMoney(bal);
-                showGoods = bal > 0;
+                showGoods = bal > 0 || roleLevel >= USER_ROLES.AGENT || participates;
             }
             const info = walletRes?.code === 0
                 ? walletRes.data
@@ -126,7 +143,7 @@ Page({
         }
 
         this.setData({
-            showGoodsWallet: showGoods,
+            showGoodsWallet: showGoods || roleLevel >= USER_ROLES.AGENT || participates,
             goodsBalanceDisplay: goodsAmount,
             purseBalanceDisplay: purseAmount
         });
@@ -180,6 +197,14 @@ Page({
 
     goMyStation() {
         wx.navigateTo({ url: '/pages/stations/my-station' });
+    },
+
+    goPickupVerify() {
+        wx.navigateTo({ url: '/pages/pickup/verify' });
+    },
+
+    goPickupOrders() {
+        wx.navigateTo({ url: '/pages/pickup/orders' });
     },
 
     goInvitePosterPage() {

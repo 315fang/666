@@ -89,9 +89,14 @@
             </view>
           </view>
           <view class="vip-card-promo">
-            <view class="promo-block promo-block-single" bindtap="onGrowthPrivilegesTap">
+            <view class="promo-block" bindtap="onGrowthPrivilegesTap">
               <text class="promo-title">权益中心</text>
-              <view class="promo-subtitle">查看全部权益 <text class="promo-arrow">›</text></view>
+              <view class="promo-subtitle">查看权益 <text class="promo-arrow">›</text></view>
+            </view>
+            <view class="promo-divider"></view>
+            <view class="promo-block" bindtap="goPoints">
+              <text class="promo-title">积分签到</text>
+              <view class="promo-subtitle">每日签到 <text class="promo-arrow">›</text></view>
             </view>
           </view>
         </view>
@@ -108,11 +113,11 @@
               <view class="vip-asset-value"><text class="vip-asset-sym">¥</text>{{isLoggedIn ? (balance || '0') : '--'}}</view>
             </view>
             <view class="vip-asset-item ripple" bindtap="onCommissionWalletTap">
-              <text class="vip-asset-title">佣金钱包</text>
+              <text class="vip-asset-title">可提佣金</text>
               <view class="vip-asset-value"><text class="vip-asset-sym">¥</text>{{isLoggedIn ? (commissionBalance || '0') : '--'}}</view>
             </view>
             <view class="vip-asset-item ripple" bindtap="onPiggyBankTap">
-              <text class="vip-asset-title">我的存款</text>
+              <text class="vip-asset-title">奖励存款</text>
               <view class="vip-asset-value"><text class="vip-asset-sym">¥</text>{{isLoggedIn ? (piggyBankBalance || '0') : '--'}}</view>
             </view>
           </view>
@@ -199,52 +204,37 @@
     </view>
   </view>
 
-  <view class="section-card favorite-strip card-enter delay-4 ripple" bindtap="onQuadFavoriteTap" hover-class="favorite-strip-hover">
-    <view class="favorite-strip-copy">
-      <text class="favorite-strip-title">近期浏览与收藏</text>
-      <text class="favorite-strip-sub">{{quadFavorite.sub}}</text>
-    </view>
-    <image class="favorite-strip-thumb" wx:if="{{quadFavorite.hasImage}}" src="{{quadFavorite.image}}" mode="aspectFill"></image>
-    <view class="favorite-strip-icon-wrap" wx:else>
-      <image class="favorite-strip-icon" src="/assets/icons/heart.svg" mode="aspectFit"></image>
-    </view>
-    <text class="favorite-strip-arrow">›</text>
-  </view>
-
-  <!-- ══ 我的功能 ══ -->
-  <view class="section-card func-card card-enter delay-5">
-    <view class="func-row ripple" bindtap="goTeamCenter" hover-class="row-press">
+  <view class="section-card func-card account-service-card card-enter delay-4">
+    <view class="func-row ripple" wx:if="{{showBusinessCenter}}" bindtap="goTeamCenter" hover-class="row-press">
       <image class="func-icon" src="/assets/icons/users.svg" mode="aspectFit"></image>
       <text class="func-label">团队中心</text>
       <text class="func-arrow">›</text>
     </view>
-    <view class="func-divider"></view>
-    <view class="func-row ripple" wx:if="{{featureFlags.show_station_entry}}" bindtap="goStationsMap" hover-class="row-press">
-      <image class="func-icon" src="/assets/icons/map-pin.svg" mode="aspectFit"></image>
-      <text class="func-label">自提站点</text>
-      <text class="func-arrow">›</text>
-    </view>
-    <view class="func-divider" wx:if="{{featureFlags.show_station_entry && isStoreManager}}"></view>
+    <view class="func-divider" wx:if="{{showBusinessCenter}}"></view>
     <view class="func-row ripple" wx:if="{{isStoreManager}}" bindtap="goStoreManagerExclusive" hover-class="row-press">
       <image class="func-icon" src="/assets/icons/package.svg" mode="aspectFit"></image>
-      <text class="func-label">店长专属</text>
+      <text class="func-label">店长工作台</text>
       <text class="func-arrow">›</text>
     </view>
-    <view class="func-divider" wx:if="{{featureFlags.show_station_entry || isStoreManager}}"></view>
-    <view class="func-row ripple" bindtap="goInvitePoster" hover-class="row-press">
-      <image class="func-icon" src="/assets/icons/share.svg" mode="aspectFit"></image>
-      <text class="func-label">品牌推荐</text>
-      <text class="func-arrow">›</text>
-    </view>
-    <view class="func-divider" wx:if="{{showPickupVerify}}"></view>
+    <view class="func-divider" wx:if="{{isStoreManager}}"></view>
     <view class="func-row ripple" wx:if="{{showPickupVerify}}" bindtap="goPickupVerify" hover-class="row-press">
       <image class="func-icon" src="/assets/icons/package.svg" mode="aspectFit"></image>
       <text class="func-label">自提核销</text>
       <text class="func-arrow">›</text>
     </view>
-  </view>
-
-  <view class="section-card func-card card-enter delay-6">
+    <view class="func-divider" wx:if="{{showPickupVerify}}"></view>
+    <view class="func-row ripple" wx:if="{{featureFlags.show_station_entry}}" bindtap="goStationsMap" hover-class="row-press">
+      <image class="func-icon" src="/assets/icons/map-pin.svg" mode="aspectFit"></image>
+      <text class="func-label">自提站点</text>
+      <text class="func-arrow">›</text>
+    </view>
+    <view class="func-divider" wx:if="{{featureFlags.show_station_entry}}"></view>
+    <view class="func-row ripple" bindtap="goInvitePoster" hover-class="row-press">
+      <image class="func-icon" src="/assets/icons/share.svg" mode="aspectFit"></image>
+      <text class="func-label">品牌推荐</text>
+      <text class="func-arrow">›</text>
+    </view>
+    <view class="func-divider"></view>
     <view class="func-row ripple" bindtap="onSettingsTap" hover-class="row-press">
       <image class="func-icon" src="/assets/icons/settings.svg" mode="aspectFit"></image>
       <text class="func-label">设置</text>

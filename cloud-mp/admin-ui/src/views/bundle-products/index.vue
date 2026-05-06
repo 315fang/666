@@ -33,7 +33,7 @@
               <div class="product-copy">
                 <div class="product-name">
                   <span>{{ row.name }}</span>
-                  <el-tag size="small" type="success" effect="plain">组合商品库</el-tag>
+                  <el-tag size="small" type="success" effect="plain">特惠随心选</el-tag>
                 </div>
                 <div class="product-sub">原商品：{{ row.product_name || row.source_product_id }}</div>
               </div>
@@ -79,7 +79,7 @@
 
     <el-drawer
       v-model="formVisible"
-      :title="form.id ? '编辑组合商品' : '加入组合商品库'"
+      :title="form.id ? '编辑组合商品' : '加入特惠随心选'"
       size="560px"
       destroy-on-close
       :close-on-click-modal="false"
@@ -236,7 +236,7 @@ async function fetchBundleProducts() {
     applyResponse(res)
   } catch (error) {
     if (!error?.__handledByRequest) {
-      ElMessage.error(error?.message || '加载组合商品库失败')
+      ElMessage.error(error?.message || '加载特惠随心选失败')
     }
   } finally {
     loading.value = false

@@ -65,7 +65,7 @@ module.exports = {
         },
         {
             key: 'flash_sale:current',
-            title: '当前有效限时商品',
+            title: '爆单专区',
             group: '营销入口',
             link_type: 'flash_sale',
             link_value: '',
@@ -73,11 +73,11 @@ module.exports = {
         },
         {
             key: 'category:bundle-zone',
-            title: '组合专区',
+            title: '特惠组合',
             group: '营销入口',
             link_type: 'category',
             link_value: 'bundle-zone',
-            note: '分类页组合专区'
+            note: '分类页特惠组合'
         },
         {
             key: 'page:brand-zone',
@@ -113,11 +113,11 @@ module.exports = {
         },
         {
             key: 'page:product-bundle-detail',
-            title: '组合商品详情',
+            title: '套装详情',
             group: '营销入口',
             link_type: 'page',
             link_value: '/pages/product-bundle/detail',
-            note: '组合商品详情页，链接可追加 id 参数'
+            note: '套装详情页，链接可追加 id 参数'
         },
         {
             key: 'page:points',
@@ -134,6 +134,14 @@ module.exports = {
             link_type: 'page',
             link_value: '/pages/user/membership-center',
             note: '成长值、积分、券与身份权益'
+        },
+        {
+            key: 'page:member-privileges',
+            title: '等级权益',
+            group: '会员服务',
+            link_type: 'page',
+            link_value: '/pages/user/member-privileges',
+            note: '各等级特权、升级门槛与完整路线'
         },
         {
             key: 'page:wallet',

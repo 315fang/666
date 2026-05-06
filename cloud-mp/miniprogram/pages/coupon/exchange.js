@@ -19,7 +19,7 @@ Page({
     const couponId = String(options.coupon_id || '')
     const coupon = wx.getStorageSync('activeExchangeCoupon') || null
     if (!couponId || !coupon || String(coupon._id || coupon.id || coupon.coupon_id || '') !== couponId) {
-      this.setData({ loading: false, emptyText: '兑换券信息不存在，请返回优惠券列表重试' })
+      this.setData({ loading: false, emptyText: '兑换券信息不存在，请返回券包列表重试' })
       return
     }
     this.setData({ couponId, coupon })

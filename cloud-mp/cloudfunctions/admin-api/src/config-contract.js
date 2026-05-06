@@ -46,7 +46,7 @@ const DEFAULT_MINI_PROGRAM_CONFIG = {
     membership_config: {
         login_agreement_hint: '登录后查看订单、积分、佣金等信息',
         growth_privileges_entry_text: '查看权益',
-        growth_privileges_page_title: '权益中心',
+        growth_privileges_page_title: '等级权益',
         membership_center_page_title: '权益中心'
     },
     logistics_config: {

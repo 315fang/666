@@ -353,7 +353,19 @@ function applyGrowthDisplay(page, info) {
 
 function refreshBusinessCenterVisibility(page) {
     const loggedIn = !!(app.globalData && app.globalData.isLoggedIn);
-    page.setData({ showBusinessCenter: loggedIn });
+    if (!loggedIn) {
+        page.setData({ showBusinessCenter: false });
+        return;
+    }
+    const membershipConfig = getConfigSection('membership_config') || {};
+    const minRoleLevel = Number(membershipConfig.business_center_min_role_level);
+    const requiredRoleLevel = Number.isFinite(minRoleLevel) ? minRoleLevel : 1;
+    const userInfo = page.data.userInfo || app.globalData.userInfo || {};
+    const roleLevel = Number(userInfo.role_level || page.data.displayAgentRoleLevel || 0);
+    const hasPickupRole = !!(page.data.isStoreManager || page.data.showPickupVerify);
+    page.setData({
+        showBusinessCenter: roleLevel >= requiredRoleLevel || hasPickupRole
+    });
 }
 
 function hasFreshTimestamp(timestamp, ttl) {
@@ -489,6 +501,7 @@ async function loadDashboardBootstrap(page) {
         storeManagerStationCount: Number(pickupScopeLight.stationCount || 0),
         pickupVerifyScope: pickupScopeLight.hasVerifyAccess ? pickupScopeLight : null
     });
+    refreshBusinessCenterVisibility(page);
 }
 
 async function loadPageLayoutConfig(page) {
@@ -947,6 +960,7 @@ async function loadPickupVerifyScope(page) {
                 storeManagerStationName: managerStations[0]?.name || '',
                 storeManagerStationCount: managerStations.length
             });
+            refreshBusinessCenterVisibility(page);
             return;
         }
     } catch (e) {
@@ -959,6 +973,7 @@ async function loadPickupVerifyScope(page) {
         storeManagerStationName: '',
         storeManagerStationCount: 0
     });
+    refreshBusinessCenterVisibility(page);
 }
 
 function clearUserCache() {

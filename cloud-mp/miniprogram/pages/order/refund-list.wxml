@@ -1,4 +1,4 @@
-<!--pages/order/refund-list.wxml - 退货/退款列表-->
+<!--pages/order/refund-list.wxml - 退款售后-->
 <view class="container">
   <scroll-view class="refund-list" scroll-y bindscrolltolower="onLoadMore">
     <!-- 列表容器 -->

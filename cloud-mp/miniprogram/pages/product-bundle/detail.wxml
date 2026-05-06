@@ -3,7 +3,7 @@
 
   <view class="error-wrap" wx:elif="{{loadError}}">
     <text class="error-title">套装加载失败</text>
-    <text class="error-desc">请稍后重试或联系管理员检查套装配置。</text>
+    <text class="error-desc">请稍后重试，或返回上一页重新进入。</text>
     <view class="retry-btn" bindtap="onRetry">重新加载</view>
   </view>
 
@@ -15,7 +15,7 @@
       </view>
       <view class="hero-content">
         <view class="hero-badge-row">
-          <text class="hero-badge">{{bundle.scene_type === 'flex_bundle' ? '特惠随心选' : '组合套装'}}</text>
+          <text class="hero-badge">{{bundle.scene_type === 'flex_bundle' ? '随心搭配' : '组合套装'}}</text>
           <text class="hero-tag" wx:for="{{bundle.channel_tags}}" wx:key="index">{{item}}</text>
         </view>
         <text class="bundle-title">{{bundle.title || bundle.hero_title}}</text>
@@ -31,45 +31,15 @@
       </view>
     </view>
 
-    <view class="selection-panel">
-      <view class="section-head">
-        <view>
-          <text class="section-title">搭配进度</text>
-          <text class="section-subtitle">{{completedGroupCount}}/{{totalGroupCount}} 组已完成</text>
-        </view>
-        <text class="section-state">{{selectionValid ? '可结算' : selectionMessage}}</text>
-      </view>
-      <scroll-view class="slot-scroll" scroll-x enhanced show-scrollbar="{{false}}">
-        <view
-          class="slot-item {{item.active ? 'slot-item-active' : ''}} {{item.complete ? 'slot-item-complete' : 'slot-item-missing'}}"
-          wx:for="{{selectionSlots}}"
-          wx:key="group_key"
-          data-group-key="{{item.group_key}}"
-          bindtap="onSwitchGroup"
-        >
-          <view class="slot-image-wrap">
-            <image class="slot-image" src="{{item.image}}" mode="aspectFill" wx:if="{{item.image}}"></image>
-            <text class="slot-index" wx:else>{{item.index}}</text>
-            <text class="slot-extra" wx:if="{{item.extra_count > 0}}">+{{item.extra_count}}</text>
-          </view>
-          <view class="slot-info">
-            <text class="slot-title">{{item.group_title}}</text>
-            <text class="slot-status">{{item.status_text}}</text>
-          </view>
-        </view>
-      </scroll-view>
-    </view>
-
     <block wx:for="{{bundle.groups}}" wx:for-item="group" wx:for-index="groupIndex" wx:key="group_key">
-      <view class="picker-panel" wx:if="{{group.active}}">
+      <view class="picker-panel">
         <view class="active-group-head">
           <view>
-            <text class="step-label">第 {{groupIndex + 1}} 步</text>
             <text class="active-group-title">{{group.group_title}}</text>
           </view>
           <view class="active-group-meta">
             <text>{{group.rule_text}}</text>
-            <text>{{group.progress_text}}</text>
+            <text>{{group.status_text}}</text>
           </view>
         </view>
 
@@ -88,7 +58,7 @@
             <view class="option-info">
               <view>
                 <text class="option-name">{{option.product.name}}</text>
-                <text class="option-library-tag" wx:if="{{option.bundle_product_id}}">组合商品库</text>
+                <text class="option-library-tag" wx:if="{{option.bundle_product_id}}">特惠随心选</text>
                 <text class="option-spec" wx:if="{{option.sku && option.sku.spec_value}}">{{option.sku.spec_value}}</text>
               </view>
               <view class="option-bottom">
@@ -126,12 +96,12 @@
         <text class="summary-label">支付金额</text>
         <text class="summary-value summary-price">¥{{bundle.bundle_price}}</text>
       </view>
-      <text class="summary-tip">套装订单不叠加优惠券、积分和其他活动，售后仅支持整套退款。</text>
+      <text class="summary-tip">套装订单不叠加券包、积分和其他活动，售后整套处理。</text>
     </view>
 
     <view class="bottom-bar">
       <view class="bottom-left">
-        <text class="bottom-progress">{{bottomProgressText}}</text>
+        <text class="bottom-progress">已选 {{selectedCount}} 项 / {{totalQuantity}} 件</text>
         <text class="bottom-price">¥{{bundle.bundle_price}}</text>
       </view>
       <view class="buy-btn {{selectionValid ? '' : 'buy-btn-disabled'}}" bindtap="onBuyNow">

@@ -55,7 +55,7 @@ async function submitOrder(page, app, brandAnimation) {
     }
     const pickupStationId = deliveryType === 'pickup' ? resolvePickupStationId(pickupStation) : '';
     if (deliveryType === 'pickup' && !pickupStationId) {
-        wx.showToast({ title: '请选择自提门店', icon: 'none' });
+        wx.showToast({ title: '请选择门店', icon: 'none' });
         return;
     }
     if (deliveryType === 'pickup' && pickupStation && pickupStation.selectable === false) {

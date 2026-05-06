@@ -169,10 +169,22 @@ export function useOrderLogistics({ canManageSettings, tableData, detailData }) 
   function syncOrderLogistics(orderId, nextData) {
     const normalizedId = String(orderId || '')
     if (!normalizedId) return
+    const applyLogisticsFields = (target) => {
+      if (!target || !nextData) return
+      target._logistics = nextData
+      target.logistics_company = nextData.logistics_company || target.logistics_company || ''
+      target.shipping_company = nextData.shipping_company || target.shipping_company || target.logistics_company || ''
+      target.tracking_no = nextData.tracking_no || target.tracking_no || ''
+      target.logistics_status = nextData.status || target.logistics_status || ''
+      target.logistics_status_text = nextData.statusText || nextData.status_text || target.logistics_status_text || ''
+    }
     const target = tableData.value.find((row) => String(row.id) === normalizedId || String(row.order_no) === normalizedId)
-    if (target) target._logistics = nextData
+    applyLogisticsFields(target)
     if (detailData.value && (String(detailData.value.id) === normalizedId || String(detailData.value.order_no) === normalizedId)) {
-      detailData.value._logistics = nextData
+      applyLogisticsFields(detailData.value)
+    }
+    if (logisticsOrder.value && (String(logisticsOrder.value.id) === normalizedId || String(logisticsOrder.value.order_no) === normalizedId)) {
+      applyLogisticsFields(logisticsOrder.value)
     }
   }
 

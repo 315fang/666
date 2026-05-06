@@ -1,8 +1,8 @@
 <view class="page">
   <view class="hero-card" wx:if="{{station}}">
-    <text class="hero-title">{{station.name}}</text>
-    <text class="hero-sub">这里只展示当前门店待核销的自提订单。</text>
-    <button class="hero-btn" bindtap="goVerifyPage">去核销</button>
+    <text class="hero-title">待核订单</text>
+    <text class="hero-sub">{{station.name}} 当前有 {{list.length}} 单待核销。</text>
+    <button class="hero-btn" bindtap="goVerifyPage">开始核销</button>
   </view>
 
   <view class="loading" wx:if="{{loading && list.length === 0}}">加载中...</view>
@@ -15,10 +15,12 @@
       </view>
       <view class="order-main">
         <text class="order-line">买家：{{item.buyer.nick_name || item.buyer.nickname || '用户***'}}<text wx:if="{{item.buyer.phone}}"> {{item.buyer.phone}}</text></text>
-        <text class="order-line">数量：{{item.quantity}} 件</text>
-        <text class="order-line">金额：¥{{item.total_amount}}</text>
-        <text class="order-line">核销码：{{item.pickup_code}}</text>
-        <text class="order-line">发货时间：{{item.shipped_at_text || '--'}}</text>
+        <view class="order-metrics">
+          <text class="order-metric">数量 {{item.quantity}} 件</text>
+          <text class="order-metric">金额 ¥{{item.total_amount}}</text>
+        </view>
+        <text class="order-code">核销码 {{item.pickup_code}}</text>
+        <text class="order-line">发货：{{item.shipped_at_text || '--'}}</text>
       </view>
       <view class="order-footer">
         <text class="order-tap">查看订单详情</text>
@@ -27,7 +29,7 @@
     </view>
 
     <view class="empty" wx:if="{{!loading && list.length === 0}}">
-      <text class="empty-title">当前门店暂无待核销订单</text>
+      <text class="empty-title">暂无待核</text>
       <text class="empty-desc">有新的自提订单发货后，会在这里出现。</text>
     </view>
   </view>
